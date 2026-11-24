@@ -1,0 +1,10 @@
+/target
+/result
+/result-*
+.direnv/
+node_modules/
+/crates/symbolon-app/ui/build/
+/crates/symbolon-app/ui/.svelte-kit/
+/crates/symbolon-app/gen/
+*.symbolon
+*.symbolon.zst
