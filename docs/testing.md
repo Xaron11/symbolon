@@ -37,5 +37,6 @@ These crates are added as dev-dependencies when the first test needs them (M1).
 - **Edge cases are first-class.** Integration trees cover moves, renames, duplicates, Unicode NFC/NFD, case collisions, non-UTF-8 names (Unix), symlinks and cycles, permission errors, files changing during hashing, and empty files.
 - **Failures and partial states.** Cancellation, crashes mid-scan (resume) and vanished devices are tested, not just happy paths. Write operations (M7) get fault-injection tests.
 - **Bug fixes start with a failing test.**
+- **Property tests** run a fixed number of cases in CI (200 for the comparison model). Run more locally after touching the engine: `PROPTEST_CASES=3000 cargo nextest run --release -p symbolon-core --test compare_model`. Failing inputs are shrunk and saved under `proptest-regressions/`; commit those files.
 - **Snapshots** (`insta`) are for stable, human-readable output (CLI tables, JSON reports). Review every snapshot change.
 - **Coverage is a signal, not a target.** Look at what is uncovered in the diff; do not write tests just to move a number.
