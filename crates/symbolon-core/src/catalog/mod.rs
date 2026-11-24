@@ -426,7 +426,9 @@ impl LocationRoot {
                 },
                 |text| strip_verbatim(text).to_owned(),
             ),
-            Self::Foreign { display, .. } | Self::Imported { display, .. } => display.clone(),
+            Self::Foreign { display, .. } | Self::Imported { display, .. } => {
+                strip_verbatim(display).to_owned()
+            }
         }
     }
 }

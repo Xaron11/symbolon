@@ -19,7 +19,7 @@ use symbolon_core::catalog::{
     NewLocation, SCHEMA_VERSION, TransferError,
 };
 use symbolon_core::compare::{Category, CompareOptions, Comparison, Side};
-use symbolon_core::pathkey::RelPath;
+use symbolon_core::pathkey::{PathEncoding, RelPath};
 use symbolon_core::scan::{ScanError, ScanOptions, Scanner};
 use symbolon_core::source::{ReadSeek, Source, SourceEntry, SourceError, WalkItem, WalkOutcome};
 
@@ -369,13 +369,19 @@ fn paths_of_another_encoding_are_not_merged() {
     let laptop = Machine::new();
     laptop.location("photos", FILES);
     let file = laptop.export("photos");
-    Connection::open(&file)
-        .unwrap()
-        .execute_batch(
-            "UPDATE locations SET path_encoding = 'wtf8';
-             UPDATE meta SET value = 'wtf8' WHERE key = 'path_encoding';",
-        )
+    let other = match PathEncoding::native() {
+        PathEncoding::Posix => "wtf8",
+        PathEncoding::Wtf8 => "posix",
+    };
+    let conn = Connection::open(&file).unwrap();
+    conn.execute("UPDATE locations SET path_encoding = ?1", [other])
         .unwrap();
+    conn.execute(
+        "UPDATE meta SET value = ?1 WHERE key = 'path_encoding'",
+        [other],
+    )
+    .unwrap();
+    drop(conn);
     let desktop = Machine::new();
     desktop.location("photos", FILES);
     assert!(matches!(
