@@ -5,8 +5,12 @@
 //! short batches as the scan goes, so `Query` sees partial results immediately, and nothing
 //! committed is lost if the scan is cancelled, crashes or loses its device: the next scan of
 //! the location reuses it. See ADR-0009 for the pipeline.
+//!
+//! Only one scan of a location runs at a time, across threads and processes; starting a
+//! second one fails with [`ScanError::AlreadyScanning`] (ADR-0012).
 
 pub(crate) mod hashing;
+mod lock;
 mod run;
 
 pub(crate) use self::run::{hashing_pool, source_for};
@@ -17,7 +21,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use crossbeam_channel::Receiver;
 
@@ -52,6 +56,17 @@ pub enum ScanError {
     /// The scan thread panicked.
     #[error("the scan thread panicked")]
     Panicked,
+    /// Another scan of the location is running, in this process or another one.
+    #[error("location {label:?} is already being scanned")]
+    AlreadyScanning {
+        /// The location's label.
+        label: String,
+        /// When the running scan started, if it has recorded itself yet.
+        since: Option<SystemTime>,
+    },
+    /// The location's lock file could not be created or locked.
+    #[error("could not lock the location for scanning: {0}")]
+    Lock(#[source] std::io::Error),
 }
 
 /// Database id of a scan.
@@ -291,7 +306,8 @@ impl Scanner {
     ///
     /// [`ScanError::Catalog`] if the location does not exist, [`ScanError::NotScannable`] for a
     /// location recorded on another platform, [`ScanError::Source`] for invalid ignore
-    /// patterns. Errors during the scan are returned by [`ScanHandle::wait`].
+    /// patterns, [`ScanError::AlreadyScanning`] while another scan of the location runs.
+    /// Errors during the scan are returned by [`ScanHandle::wait`].
     pub fn start(
         catalog: &Catalog,
         label: &str,
@@ -299,7 +315,7 @@ impl Scanner {
     ) -> Result<ScanHandle, ScanError> {
         let location = catalog.location(label)?;
         let source = source_for(&location)?;
-        Ok(Self::spawn(catalog.clone(), location, source, options))
+        Self::spawn(catalog, location, source, options)
     }
 
     /// Like [`Scanner::start`], reading through a custom `source` instead of the one the
@@ -307,7 +323,8 @@ impl Scanner {
     ///
     /// # Errors
     ///
-    /// [`ScanError::Catalog`] if the location does not exist.
+    /// [`ScanError::Catalog`] if the location does not exist, [`ScanError::AlreadyScanning`]
+    /// while another scan of the location runs.
     pub fn start_with_source(
         catalog: &Catalog,
         label: &str,
@@ -315,21 +332,24 @@ impl Scanner {
         options: ScanOptions,
     ) -> Result<ScanHandle, ScanError> {
         let location = catalog.location(label)?;
-        Ok(Self::spawn(catalog.clone(), location, source, options))
+        Self::spawn(catalog, location, source, options)
     }
 
     fn spawn(
-        catalog: Catalog,
+        catalog: &Catalog,
         location: crate::catalog::Location,
         source: Arc<dyn Source>,
         options: ScanOptions,
-    ) -> ScanHandle {
+    ) -> Result<ScanHandle, ScanError> {
+        let lock = lock::ScanLock::acquire(catalog, &location)?;
+        let catalog = catalog.clone();
         let (sender, events) = crossbeam_channel::bounded(EVENT_BUFFER);
         let control = Arc::new(Control::default());
         let thread_control = Arc::clone(&control);
         let thread = std::thread::Builder::new()
             .name(format!("symbolon-scan-{}", location.label))
             .spawn(move || {
+                let _lock = lock;
                 run::run(
                     &catalog,
                     &location,
@@ -339,11 +359,11 @@ impl Scanner {
                     &sender,
                 )
             });
-        ScanHandle {
+        Ok(ScanHandle {
             events,
             control,
             thread: thread.ok(),
-        }
+        })
     }
 }
 

@@ -25,6 +25,7 @@
   - [0009 Core scan design](adr/0009-core-scan-design.md)
   - [0010 Comparison engine](adr/0010-comparison-engine.md)
   - [0011 CLI conventions](adr/0011-cli-conventions.md)
+  - [0012 Scan lock](adr/0012-scan-lock.md)
 
 # Development
 
