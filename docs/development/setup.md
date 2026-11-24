@@ -28,7 +28,7 @@ Entering the shell installs the git hooks (pre-commit, commit-msg, pre-push); se
 | `just lint`                        | Everything CI lints: hooks, clippy, rustdoc, unused deps, frontend.    |
 | `just test` / `just test-ui`       | Rust tests (nextest + doctests) / frontend tests (vitest).             |
 | `just coverage --html`             | Coverage report in `target/llvm-cov/html`.                             |
-| `just docs` / `just docs-serve`    | Build this book and the API reference / serve the book live.           |
+| `just docs` / `just docs-serve`    | Build this book and the API reference / serve both with live reload.   |
 | `just deny`                        | License and advisory checks for Rust and npm dependencies.             |
 | `just app-dev`                     | Run the desktop app with hot reload.                                   |
 | `just android-scanner check-agent` | Cross-compile the Android agent and check it is static.                |

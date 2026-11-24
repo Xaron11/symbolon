@@ -12,3 +12,4 @@ node_modules/
 /docs/mermaid.min.js
 /docs/mermaid-init.js
 /.playwright-mcp/
+/docs/api/

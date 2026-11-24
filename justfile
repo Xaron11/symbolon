@@ -100,17 +100,20 @@ android-probe dir="/sdcard/DCIM" serial="": android-scanner
 # Build the book and the API reference into target/book.
 docs: docs-api docs-book
 
+# Build the API reference into docs/api (git-ignored). mdBook copies every non-Markdown file in
+# its source directory into each build, so the API pages survive rebuilds, including `docs-serve`.
 docs-api:
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+    rm -rf docs/api
+    cp -r target/doc docs/api
 
-# Assemble the book; includes the API reference from target/doc if it was built.
 docs-book:
     mdbook-mermaid install docs >/dev/null
     mdbook build docs
-    rm -rf target/book/api
-    if [[ -d target/doc ]]; then cp -r target/doc target/book/api; fi
 
-docs-serve:
+# Serve the book and the API reference with live reload. After changing doc comments, run
+# `just docs-api` in another terminal; the page reloads.
+docs-serve: docs-api
     mdbook-mermaid install docs >/dev/null
     mdbook serve docs --open
 

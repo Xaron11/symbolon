@@ -57,4 +57,4 @@ Exported functions, types and components in `ui/src/lib` have TSDoc comments (`/
 - Write for someone new to the project: start with what and why, then how. Prefer tables and examples over long prose.
 - Mark things that do not exist yet as _(planned)_ with their milestone, and remove the mark when they land.
 
-`just docs-serve` serves the book with live reload. `just docs-check` builds the book and the API reference and checks every internal link and anchor; CI runs the same check, and rumdl lints Markdown structure in the pre-commit hook.
+`just docs-serve` serves the book and the API reference with live reload; after editing doc comments, run `just docs-api` to refresh the API pages. `just docs-check` builds the book and the API reference and checks every internal link and anchor; CI runs the same check, and rumdl lints Markdown structure in the pre-commit hook.
