@@ -6,9 +6,15 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
+# Also report unsound/unmaintained advisories for transitive dependencies (default: direct only).
+unsound = "all"
+unmaintained = "all"
 ignore = [
   # Pulled in only by gtk-rs 0.18 (Tauri's Linux runtime), which is frozen upstream.
   { id = "RUSTSEC-2024-0370", reason = "transitive via tauri -> gtk 0.18, no upgrade available" },
+  # Unsound glib::VariantStrIter (fixed in glib 0.20). Tauri pins gtk-rs 0.18, and no crate in
+  # our graph calls VariantStrIter or Variant::array_iter_str (checked 2026-11-24).
+  { id = "RUSTSEC-2024-0429", reason = "affected API unused in our dependency graph; blocked on tauri moving off gtk 0.18" },
 ]
 
 [licenses]

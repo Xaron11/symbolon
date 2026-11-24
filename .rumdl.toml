@@ -1,0 +1,12 @@
+[global]
+# Prose is one line per paragraph; Prettier owns wrapping.
+disable = ["MD013"]
+
+[per-file-ignores]
+# Not documents: an import directive and a form template.
+"CLAUDE.md" = ["MD041"]
+".github/pull_request_template.md" = ["MD041"]
+# mdBook's table of contents: part titles are level-1 headings, `[Title]()` marks a draft chapter.
+"docs/SUMMARY.md" = ["MD025", "MD042"]
+# Links into the generated API reference; lychee checks them in the built book.
+"docs/development/api.md" = ["MD057"]

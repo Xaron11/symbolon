@@ -58,7 +58,7 @@ Typical scale: up to ~100 GB per location, 20k–200k files, mostly documents, i
 
 ### 4.1 Crates
 
-```
+```text
 symbolon/
 ├── Cargo.toml                  # workspace
 ├── crates/
@@ -206,7 +206,7 @@ Read-only is the priority. When writes arrive (M7), they must be safe by constru
 
 Binary `symbolon` (optional alias `sbn`). Suggested surface, adjust as needed:
 
-```
+```text
 symbolon location add <label> <path|adb:serial:/sdcard/DCIM> [--policy lazy|eager] [--algo blake3]
 symbolon location list
 symbolon scan <label>... [--full]

@@ -30,7 +30,7 @@ just android-scanner  # cross-compile the Android agent (aarch64, static musl)
 nix build             # CLI package
 ```
 
-Workflow, code rules and conventions: [`AGENTS.md`](AGENTS.md). Testing: [`docs/testing.md`](docs/testing.md). Releases and CI: [ADR-0007](docs/adr/0007-development-workflow.md).
+Documentation: the book in [`docs/`](docs/introduction.md) (`just docs-serve`), with concepts, architecture, editor/LSP setup and the API reference. Workflow, code rules and conventions: [`AGENTS.md`](AGENTS.md). Testing: [`docs/testing.md`](docs/testing.md). Releases and CI: [ADR-0007](docs/adr/0007-development-workflow.md).
 
 ## Privacy
 

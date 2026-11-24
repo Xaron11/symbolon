@@ -1,3 +1,7 @@
+//! `symbolon`: command-line client for comparing file locations.
+//!
+//! A thin layer over `symbolon-core`; see the book chapter "Architecture" for how the pieces fit.
+
 use clap::Parser;
 
 /// Compare file locations and report how exactly they differ.

@@ -1,0 +1,25 @@
+[book]
+title = "Symbolon"
+description = "Compare file locations and report how exactly they differ"
+language = "en"
+src = "."
+
+[build]
+build-dir = "../target/book"
+create-missing = false
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+# Follows the system light/dark preference; readers can switch themes from the brush menu.
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/Xaron11/symbolon"
+edit-url-template = "https://github.com/Xaron11/symbolon/edit/main/docs/{path}"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+no-section-label = true
+
+[output.html.fold]
+enable = true
+level = 1
