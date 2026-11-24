@@ -1,0 +1,42 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+default-members = ["crates/symbolon-core", "crates/symbolon-cli", "crates/symbolon-agent"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Xaron11/symbolon"
+publish = false
+
+[workspace.dependencies]
+symbolon-core = { path = "crates/symbolon-core" }
+anyhow = "1.0.105"
+blake3 = "1.8.7"
+clap = { version = "4.6.9", features = ["derive"] }
+mimalloc = "0.1.52"
+rayon = "1.12.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tauri = "2.12.7"
+tauri-build = "2.7.6"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
+[profile.release-agent]
+inherits = "release"
+lto = "fat"
+panic = "abort"
+strip = "symbols"
