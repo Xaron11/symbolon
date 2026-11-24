@@ -10,5 +10,5 @@
 		"noPropertyAccessFromIndexSignature": true,
 		"types": ["$app/types", "node"]
 	},
-	"include": ["src", "vite.config.ts", "prettier.config.js", "eslint.config.js"]
+	"include": ["src", "vite.config.ts", "prettier.config.js", "eslint.config.js", "scripts"]
 }
