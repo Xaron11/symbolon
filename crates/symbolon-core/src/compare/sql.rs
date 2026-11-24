@@ -4,13 +4,13 @@ use rusqlite::functions::FunctionFlags;
 use rusqlite::{Connection, OptionalExtension as _, named_params, params};
 
 use super::{
-    Cell, CompareError, CompareOptions, Row, RowFilter, Side, SideInfo, SideSet, Summary, Totals,
-    parse_row_cursor, row_cursor,
+    Cell, CompareError, CompareOptions, DuplicateSet, DuplicateTotals, Row, RowFilter, Side,
+    SideInfo, SideSet, Summary, Totals, parse_row_cursor, row_cursor,
 };
 use crate::catalog::CatalogError;
 use crate::hash::{Digest, PartialDigest};
 use crate::pathkey::{KeyOptions, PathKey, RelPath};
-use crate::query::{HashState, Page, PageOf};
+use crate::query::{Cursor, HashState, Page, PageOf};
 
 /// `sym_norm(key, nfc, case_insensitive)`: the normalized key; `sym_name(key)`: the last
 /// component. Both are deterministic, so SQLite may use them in grouping.
@@ -27,7 +27,19 @@ pub(super) fn register_functions(conn: &Connection) -> rusqlite::Result<()> {
     conn.create_scalar_function("sym_name", 1, flags, |ctx| {
         let key: String = ctx.get(0)?;
         Ok(PathKey::from_stored(key).file_name().to_owned())
+    })?;
+    conn.create_scalar_function("sym_ext", 1, flags, |ctx| {
+        let name: String = ctx.get(0)?;
+        Ok(extension(&name))
     })
+}
+
+/// Lowercase extension of a file name without the dot; empty for none or for dotfiles.
+fn extension(name: &str) -> String {
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => ext.to_lowercase(),
+        _ => String::new(),
+    }
 }
 
 pub(super) fn resolve_side(conn: &Connection, side: &Side) -> Result<SideInfo, CompareError> {
@@ -67,6 +79,8 @@ pub(super) fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX temp.cmp_files_norm ON cmp_files (norm, side);
         CREATE INDEX temp.cmp_files_row ON cmp_files (row_id, side, rel);
+        CREATE INDEX temp.cmp_files_side_full ON cmp_files (side, full);
+        CREATE INDEX temp.cmp_files_side_size ON cmp_files (side, size);
         CREATE TEMP TABLE cmp_rows (
             id INTEGER PRIMARY KEY,
             sort_key TEXT NOT NULL,
@@ -74,6 +88,8 @@ pub(super) fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             presence INTEGER NOT NULL,
             assumed INTEGER NOT NULL,
             size INTEGER,
+            max_size INTEGER NOT NULL,
+            ext TEXT NOT NULL,
             digest BLOB,
             files INTEGER NOT NULL,
             bytes INTEGER NOT NULL
@@ -133,10 +149,13 @@ pub(super) fn classify(
         (true, i64::try_from(t.as_nanos()).unwrap_or(i64::MAX))
     });
     conn.execute(
-        "INSERT INTO temp.cmp_rows (sort_key, category, presence, assumed, size, digest, files, bytes)
+        "INSERT INTO temp.cmp_rows
+             (sort_key, category, presence, assumed, size, max_size, ext, digest, files, bytes)
          SELECT norm, category, presence,
                 category IN ('identical', 'only_in') AND sides >= 2 AND fulls < n,
                 CASE WHEN sizes = 1 THEN size_max END,
+                size_max,
+                sym_ext(sym_name(norm)),
                 CASE WHEN fulls = n AND distinct_full = 1 THEN any_full END,
                 n, bytes
          FROM (
@@ -195,10 +214,12 @@ fn match_moves(conn: &Connection) -> rusqlite::Result<()> {
            );
          CREATE INDEX temp.cmp_moving_id ON cmp_moving (id);
 
-         INSERT INTO temp.cmp_rows (sort_key, category, presence, assumed, size, digest, files, bytes)
+         INSERT INTO temp.cmp_rows
+             (sort_key, category, presence, assumed, size, max_size, ext, digest, files, bytes)
          SELECT min(f.norm),
                 CASE WHEN count(DISTINCT f.name) = 1 THEN 'moved' ELSE 'renamed' END,
-                sum(DISTINCT 1 << f.side), 0, max(f.size), m.digest, count(*), sum(f.size)
+                sum(DISTINCT 1 << f.side), 0, max(f.size), max(f.size),
+                sym_ext(sym_name(min(f.norm))), m.digest, count(*), sum(f.size)
          FROM temp.cmp_moving m JOIN temp.cmp_files f ON f.row_id = m.id
          GROUP BY m.digest
          ORDER BY min(f.norm);
@@ -215,23 +236,77 @@ fn match_moves(conn: &Connection) -> rusqlite::Result<()> {
     )
 }
 
-pub(super) fn summary(conn: &Connection) -> Result<Summary, CompareError> {
-    let mut stmt = conn.prepare(
+/// A [`RowFilter`] translated into the parameters of [`FILTER`].
+pub(super) struct FilterParams {
+    categories: String,
+    extension: Option<String>,
+    min_size: Option<u64>,
+    max_size: Option<u64>,
+    prefix: Option<String>,
+    presence: Option<i64>,
+}
+
+impl FilterParams {
+    pub(super) fn new(filter: &RowFilter, options: &CompareOptions) -> Self {
+        let prefix = filter.prefix.as_deref().map(|prefix| {
+            RelPath::from_path(std::path::Path::new(prefix)).map_or_else(
+                |_| PathKey::from_stored(prefix.to_owned()).normalized(options.keys),
+                |rel| rel.key().normalized(options.keys),
+            )
+        });
+        Self {
+            categories: filter.categories.iter().fold(String::new(), |mut list, c| {
+                list.push(',');
+                list.push_str(c.name());
+                list.push(',');
+                list
+            }),
+            extension: filter.extension.clone(),
+            min_size: filter.min_size,
+            max_size: filter.max_size,
+            prefix: prefix.filter(|p| !p.is_empty()),
+            presence: filter.presence.map(|set| set.bits().cast_signed()),
+        }
+    }
+}
+
+/// Row conditions shared by paging and summaries; every `NULL` parameter matches everything.
+const FILTER: &str = "
+    (:categories = '' OR instr(:categories, ',' || category || ',') > 0)
+    AND (:ext IS NULL OR ext = :ext)
+    AND (:min_size IS NULL OR max_size >= :min_size)
+    AND (:max_size IS NULL OR max_size <= :max_size)
+    AND (:prefix IS NULL OR sort_key = :prefix
+         OR (sort_key > :prefix || '/' AND sort_key < :prefix || '0'))
+    AND (:presence IS NULL OR presence = :presence)";
+
+pub(super) fn summary(conn: &Connection, filter: &FilterParams) -> Result<Summary, CompareError> {
+    let mut stmt = conn.prepare_cached(&format!(
         "SELECT category, count(*), sum(files), sum(bytes), sum(assumed)
-         FROM temp.cmp_rows GROUP BY category",
-    )?;
+         FROM temp.cmp_rows WHERE {FILTER} GROUP BY category"
+    ))?;
     let mut summary = Summary::default();
-    let rows = stmt.query_map([], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            Totals {
-                rows: row.get(1)?,
-                files: row.get(2)?,
-                bytes: row.get(3)?,
-                assumed_rows: row.get(4)?,
-            },
-        ))
-    })?;
+    let rows = stmt.query_map(
+        named_params! {
+            ":categories": filter.categories,
+            ":ext": filter.extension,
+            ":min_size": filter.min_size,
+            ":max_size": filter.max_size,
+            ":prefix": filter.prefix,
+            ":presence": filter.presence,
+        },
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                Totals {
+                    rows: row.get(1)?,
+                    files: row.get(2)?,
+                    bytes: row.get(3)?,
+                    assumed_rows: row.get(4)?,
+                },
+            ))
+        },
+    )?;
     for row in rows {
         let (category, totals) = row?;
         summary.categories.insert(category.parse()?, totals);
@@ -242,7 +317,7 @@ pub(super) fn summary(conn: &Connection) -> Result<Summary, CompareError> {
 pub(super) fn rows(
     conn: &Connection,
     sides: &[SideInfo],
-    filter: &RowFilter,
+    filter: &FilterParams,
     page: &Page,
 ) -> Result<PageOf<Row>, CompareError> {
     let (after_key, after_id) = page
@@ -251,25 +326,23 @@ pub(super) fn rows(
         .map(parse_row_cursor)
         .transpose()?
         .unwrap_or_else(|| (String::new(), 0));
-    let categories = filter.categories.iter().fold(String::new(), |mut list, c| {
-        list.push(',');
-        list.push_str(c.name());
-        list.push(',');
-        list
-    });
     let limit = page.limit.clamp(1, crate::query::MAX_PAGE);
-    let mut stmt = conn.prepare_cached(
+    let mut stmt = conn.prepare_cached(&format!(
         "SELECT id, sort_key, category, presence, assumed, size FROM temp.cmp_rows
-         WHERE (sort_key, id) > (:key, :id)
-           AND (:categories = '' OR instr(:categories, ',' || category || ',') > 0)
-         ORDER BY sort_key, id LIMIT :limit",
-    )?;
+         WHERE (sort_key, id) > (:key, :id) AND {FILTER}
+         ORDER BY sort_key, id LIMIT :limit"
+    ))?;
     let heads = stmt
         .query_map(
             named_params! {
                 ":key": after_key,
                 ":id": after_id,
-                ":categories": categories,
+                ":categories": filter.categories,
+                ":ext": filter.extension,
+                ":min_size": filter.min_size,
+                ":max_size": filter.max_size,
+                ":prefix": filter.prefix,
+                ":presence": filter.presence,
                 ":limit": limit,
             },
             |row| {
@@ -310,6 +383,104 @@ pub(super) fn rows(
         .then(|| last.map(|(key, id)| row_cursor(&key, id)))
         .flatten();
     Ok(PageOf { items, next })
+}
+
+pub(super) fn duplicates(
+    conn: &Connection,
+    sides: &[SideInfo],
+    side: usize,
+    page: &Page,
+) -> Result<PageOf<DuplicateSet>, CompareError> {
+    let info = sides
+        .get(side)
+        .ok_or_else(|| CatalogError::Corrupt(format!("side {side} out of range")))?;
+    let after = page
+        .after
+        .as_ref()
+        .map(|c| hex_decode(c.as_str()))
+        .transpose()?
+        .unwrap_or_default();
+    let limit = page.limit.clamp(1, crate::query::MAX_PAGE);
+    let groups = conn
+        .prepare_cached(
+            "SELECT full, max(size) FROM temp.cmp_files
+             WHERE side = ?1 AND full IS NOT NULL AND size > 0 AND full > ?2
+             GROUP BY full HAVING count(*) > 1 ORDER BY full LIMIT ?3",
+        )?
+        .query_map(params![side, after, limit], |row| {
+            Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, u64>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut cells_stmt = conn.prepare_cached(
+        "SELECT side, raw, rel, size, mtime_ns, partial, full FROM temp.cmp_files
+         WHERE side = ?1 AND full = ?2 ORDER BY rel",
+    )?;
+    let mut items = Vec::with_capacity(groups.len());
+    for (raw_digest, size) in groups {
+        let cells = cells_stmt
+            .query_map(params![side, raw_digest], RawCell::from_row)?
+            .map(|cell| cell?.into_cell(sides))
+            .collect::<Result<Vec<_>, CompareError>>()?;
+        let digest = Digest::from_bytes(info.hash_algo, &raw_digest)
+            .map_err(|e| CatalogError::Corrupt(e.to_string()))?;
+        items.push(DuplicateSet {
+            side,
+            digest,
+            size,
+            cells,
+        });
+    }
+    let next = (items.len() == limit as usize)
+        .then(|| {
+            items
+                .last()
+                .map(|set| Cursor::from_string(set.digest.to_hex()))
+        })
+        .flatten();
+    Ok(PageOf { items, next })
+}
+
+pub(super) fn duplicate_totals(
+    conn: &Connection,
+    sides: usize,
+) -> Result<Vec<DuplicateTotals>, CompareError> {
+    let mut totals = vec![DuplicateTotals::default(); sides];
+    let mut stmt = conn.prepare_cached(
+        "SELECT side, count(*), sum(n), sum((n - 1) * size) FROM (
+             SELECT side, count(*) AS n, max(size) AS size FROM temp.cmp_files
+             WHERE full IS NOT NULL AND size > 0 GROUP BY side, full HAVING n > 1
+         ) GROUP BY side",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, usize>(0)?,
+            DuplicateTotals {
+                groups: row.get(1)?,
+                files: row.get(2)?,
+                redundant_bytes: row.get(3)?,
+            },
+        ))
+    })?;
+    for row in rows {
+        let (side, side_totals) = row?;
+        if let Some(slot) = totals.get_mut(side) {
+            *slot = side_totals;
+        }
+    }
+    Ok(totals)
+}
+
+fn hex_decode(hex: &str) -> Result<Vec<u8>, CatalogError> {
+    let invalid = || CatalogError::Corrupt("invalid cursor".into());
+    if !hex.len().is_multiple_of(2) {
+        return Err(invalid());
+    }
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(hex.get(i..i + 2).ok_or_else(invalid)?, 16).map_err(|_| invalid())
+        })
+        .collect()
 }
 
 struct RawCell {
@@ -385,5 +556,13 @@ mod tests {
             )
             .unwrap();
         assert_eq!((norm.as_str(), name.as_str()), ("café/readme.md", "c.txt"));
+    }
+
+    #[test]
+    fn extensions_are_lowercase_and_ignore_dotfiles() {
+        assert_eq!(extension("IMG_1.JPG"), "jpg");
+        assert_eq!(extension("archive.tar.gz"), "gz");
+        assert_eq!(extension(".bashrc"), "");
+        assert_eq!(extension("README"), "");
     }
 }

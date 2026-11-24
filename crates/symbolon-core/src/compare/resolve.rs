@@ -292,21 +292,33 @@ impl Comparison {
                          AND (o.presence & r.presence) = 0
                          AND (f.partial IS NULL OR g.partial IS NULL OR g.partial = f.partial)
                    )
+                 UNION
+                 SELECT f.side, f.entry_id, f.raw, f.size, f.mtime_ns, f.partial
+                 FROM temp.cmp_files f
+                 WHERE :duplicates AND f.full IS NULL AND f.size > 0
+                   AND EXISTS (
+                       SELECT 1 FROM temp.cmp_files g
+                       WHERE g.side = f.side AND g.size = f.size AND g.id != f.id
+                         AND (f.partial IS NULL OR g.partial IS NULL OR g.partial = f.partial)
+                   )
              )
              SELECT side, entry_id, raw, size, mtime_ns,
                     size <= :small OR partial IS NOT NULL AS full
              FROM candidates ORDER BY side, raw",
         )?;
-        let rows = stmt.query_map(named_params! { ":small": 2 * PARTIAL_BLOCK }, |row| {
-            Ok((
-                row.get::<_, usize>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, Vec<u8>>(2)?,
-                row.get::<_, u64>(3)?,
-                row.get::<_, Option<i64>>(4)?,
-                row.get::<_, bool>(5)?,
-            ))
-        })?;
+        let rows = stmt.query_map(
+            named_params! { ":small": 2 * PARTIAL_BLOCK, ":duplicates": self.options.duplicates },
+            |row| {
+                Ok((
+                    row.get::<_, usize>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                    row.get::<_, u64>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
+                    row.get::<_, bool>(5)?,
+                ))
+            },
+        )?;
         let mut jobs: BTreeMap<i64, Vec<Job>> = BTreeMap::new();
         let mut seen = HashSet::new();
         for row in rows {

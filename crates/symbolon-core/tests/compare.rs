@@ -834,3 +834,190 @@ mod resolve {
         assert_eq!(fast.hash_needs().unwrap(), Vec::new());
     }
 }
+
+mod filters_and_duplicates {
+    use std::ops::ControlFlow;
+
+    use super::*;
+
+    fn keys(cmp: &Comparison, filter: &RowFilter) -> Vec<String> {
+        cmp.rows(filter, &Page::first(100))
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|r| r.key)
+            .collect()
+    }
+
+    #[test]
+    fn rows_filter_by_extension_size_prefix_and_presence() {
+        let fx = Fixture::new();
+        fx.eager(
+            "a",
+            &[
+                ("Photos/a.JPG", "1"),
+                ("Photos/b.jpg", "2222"),
+                ("docs/c.pdf", "333"),
+                ("docs/x.jpg", "x"),
+            ],
+        );
+        fx.eager("b", &[("Photos/a.JPG", "1"), ("docs/x.jpg", "x")]);
+        fx.eager(
+            "c",
+            &[
+                ("Photos/a.JPG", "1"),
+                ("docs/x.jpg", "y"),
+                ("Photos/b.jpg", "2222"),
+            ],
+        );
+        let ci = KeyOptions {
+            case_insensitive: true,
+            ..KeyOptions::default()
+        };
+        let cmp = fx.compare(&["a", "b", "c"], CompareOptions::default().keys(ci));
+
+        assert_eq!(
+            keys(&cmp, &RowFilter::default().extension(".JPG")),
+            ["docs/x.jpg", "photos/a.jpg", "photos/b.jpg"]
+        );
+        assert_eq!(
+            keys(&cmp, &RowFilter::default().size_range(Some(2), Some(4))),
+            ["docs/c.pdf", "photos/b.jpg"]
+        );
+        assert_eq!(
+            keys(&cmp, &RowFilter::default().prefix("PHOTOS")),
+            ["photos/a.jpg", "photos/b.jpg"],
+            "normalized like keys"
+        );
+        assert_eq!(
+            keys(
+                &cmp,
+                &RowFilter::default().presence(SideSet::from_bits(0b101))
+            ),
+            ["photos/b.jpg"]
+        );
+        let combined = RowFilter::categories([Category::Different])
+            .extension("jpg")
+            .prefix("docs");
+        assert_eq!(keys(&cmp, &combined), ["docs/x.jpg"]);
+
+        let summary = cmp
+            .filtered_summary(&RowFilter::default().extension("jpg"))
+            .unwrap();
+        assert_eq!(summary.files(), 2 + 3 + 3);
+        assert_eq!(summary.get(Category::Identical).rows, 1);
+        assert_eq!(cmp.summary().unwrap().files(), 9);
+    }
+
+    #[test]
+    fn duplicates_are_listed_per_side_without_empty_files() {
+        let fx = Fixture::new();
+        fx.eager(
+            "a",
+            &[
+                ("p/x", "copy"),
+                ("q/x", "copy"),
+                ("r/x", "copy"),
+                ("unique", "u"),
+                ("e1", ""),
+                ("e2", ""),
+                ("out/x", "copy"),
+            ],
+        );
+        fx.eager("b", &[("one", "pair"), ("two", "pair")]);
+        let cmp = fx.compare(&["a:", "b"], CompareOptions::default());
+
+        let a = cmp.duplicates(0, &Page::first(10)).unwrap();
+        assert_eq!(a.items.len(), 1);
+        let keys: Vec<_> = a.items[0]
+            .cells
+            .iter()
+            .map(|c| c.path.key().as_str().to_owned())
+            .collect();
+        assert_eq!(keys, ["out/x", "p/x", "q/x", "r/x"]);
+        assert_eq!(a.items[0].redundant_bytes(), 3 * 4);
+
+        let totals = cmp.duplicate_totals().unwrap();
+        assert_eq!(
+            (totals[0].groups, totals[0].files, totals[0].redundant_bytes),
+            (1, 4, 12)
+        );
+        assert_eq!(
+            (totals[1].groups, totals[1].files, totals[1].redundant_bytes),
+            (1, 2, 4)
+        );
+
+        // Scope: a subpath only sees its own copies.
+        let scoped = fx.compare(&["a:p", "b"], CompareOptions::default());
+        assert_eq!(scoped.duplicate_totals().unwrap()[0].groups, 0);
+    }
+
+    #[test]
+    fn duplicates_of_lazy_locations_are_found_after_resolving() {
+        let fx = Fixture::new();
+        let files = [
+            ("d1/a", "SAME", 1_000),
+            ("d2/a", "SAME", 1_000),
+            ("other", "DIFF", 1_000),
+            ("big", "bigger file", 1_000),
+        ];
+        fx.location("a", HashPolicy::Lazy, HashAlgo::Blake3, &files);
+        fx.location(
+            "b",
+            HashPolicy::Lazy,
+            HashAlgo::Blake3,
+            &[("z", "z", 1_000)],
+        );
+
+        let without = fx.compare(&["a", "b"], CompareOptions::default());
+        assert_eq!(
+            without.hash_needs().unwrap(),
+            Vec::new(),
+            "duplicates were not asked for"
+        );
+
+        let mut with = fx.compare(&["a", "b"], CompareOptions::default().duplicates(true));
+        let needs = with.hash_needs().unwrap();
+        assert_eq!(
+            needs.iter().map(|n| n.full_files).sum::<u64>(),
+            3,
+            "the three 4-byte files: {needs:?}"
+        );
+        with.resolve(&ScanOptions::default(), |_| ControlFlow::Continue(()))
+            .unwrap();
+        let sets = with.duplicates(0, &Page::first(10)).unwrap().items;
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0].cells.len(), 2);
+    }
+
+    #[test]
+    fn duplicate_pages_follow_cursors() {
+        let fx = Fixture::new();
+        let files: Vec<(String, String)> = (0..5)
+            .flat_map(|g| {
+                [
+                    (format!("g{g}/1"), format!("group{g}")),
+                    (format!("g{g}/2"), format!("group{g}")),
+                ]
+            })
+            .collect();
+        let refs: Vec<(&str, &str)> = files
+            .iter()
+            .map(|(p, c)| (p.as_str(), c.as_str()))
+            .collect();
+        fx.eager("a", &refs);
+        fx.eager("b", &[("z", "z")]);
+        let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+        let mut seen = 0;
+        let mut page = Page::first(2);
+        loop {
+            let result = cmp.duplicates(0, &page).unwrap();
+            seen += result.items.len();
+            match result.next {
+                Some(cursor) => page = Page::after(cursor, 2),
+                None => break,
+            }
+        }
+        assert_eq!(seen, 5);
+    }
+}
