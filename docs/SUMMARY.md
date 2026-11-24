@@ -26,6 +26,7 @@
   - [0010 Comparison engine](adr/0010-comparison-engine.md)
   - [0011 CLI conventions](adr/0011-cli-conventions.md)
   - [0012 Scan lock](adr/0012-scan-lock.md)
+  - [0013 Imported locations](adr/0013-imported-locations.md)
 
 # Development
 

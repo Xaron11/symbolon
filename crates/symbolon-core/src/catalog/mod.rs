@@ -9,6 +9,7 @@
 //! newer version.
 
 mod schema;
+mod transfer;
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -20,6 +21,9 @@ use rusqlite::{
 };
 
 pub use self::schema::SCHEMA_VERSION;
+pub use self::transfer::{
+    ExportSummary, ImportAction, ImportConflict, ImportOptions, ImportSummary, TransferError,
+};
 use crate::hash::HashAlgo;
 use crate::pathkey::{self, PathEncoding};
 
@@ -122,7 +126,7 @@ impl Catalog {
         validate_label(&new.label)?;
         let root = match &new.root {
             LocationRoot::Local(root) => root,
-            LocationRoot::Foreign { display, .. } => {
+            LocationRoot::Foreign { display, .. } | LocationRoot::Imported { display, .. } => {
                 return Err(CatalogError::InvalidRoot(PathBuf::from(display)));
             }
         };
@@ -398,6 +402,14 @@ pub enum LocationRoot {
         /// The path as recorded, with non-Unicode bytes shown as `%XX`.
         display: String,
     },
+    /// A location imported from a `.symbolon` file ([`Catalog::import`]): its files are on
+    /// another computer. It can be compared but not scanned here.
+    Imported {
+        /// Encoding of the recorded path.
+        encoding: PathEncoding,
+        /// The root on the computer that exported it, with non-Unicode bytes shown as `%XX`.
+        display: String,
+    },
 }
 
 impl LocationRoot {
@@ -414,7 +426,9 @@ impl LocationRoot {
                 },
                 |text| strip_verbatim(text).to_owned(),
             ),
-            Self::Foreign { display, .. } => display.clone(),
+            Self::Foreign { display, .. } | Self::Imported { display, .. } => {
+                strip_verbatim(display).to_owned()
+            }
         }
     }
 }
@@ -499,7 +513,8 @@ pub struct Location {
 }
 
 const LOCATION_COLUMNS: &str = "id, label, root_kind, root_raw, path_encoding, fingerprint, \
-                                hash_algo, hash_policy, ignore_patterns, created_at";
+     hash_algo, hash_policy, ignore_patterns, created_at, \
+     EXISTS (SELECT 1 FROM imported_locations i WHERE i.location_id = locations.id)";
 
 struct RawLocation {
     id: i64,
@@ -512,6 +527,7 @@ struct RawLocation {
     hash_policy: String,
     ignore_patterns: String,
     created_at: i64,
+    imported: bool,
 }
 
 impl RawLocation {
@@ -527,6 +543,7 @@ impl RawLocation {
             hash_policy: row.get(7)?,
             ignore_patterns: row.get(8)?,
             created_at: row.get(9)?,
+            imported: row.get(10)?,
         })
     }
 
@@ -538,6 +555,10 @@ impl RawLocation {
             .parse()
             .map_err(|_| corrupt("path encoding"))?;
         let root = match self.root_kind.as_str() {
+            "local" if self.imported => LocationRoot::Imported {
+                encoding: path_encoding,
+                display: display_raw(path_encoding, &self.root_raw),
+            },
             "local" if path_encoding == PathEncoding::native() => LocationRoot::Local(
                 pathkey::native_from_bytes(&self.root_raw).ok_or_else(|| corrupt("root"))?,
             ),
