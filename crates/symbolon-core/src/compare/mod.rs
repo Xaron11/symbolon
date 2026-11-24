@@ -9,6 +9,7 @@
 //! (see [`crate::pathkey::KeyOptions`]) and are classified in this order: [`Category::Collision`],
 //! [`Category::Different`], [`Category::Identical`], [`Category::OnlyIn`], [`Category::Unverified`].
 
+mod resolve;
 mod sql;
 
 use std::collections::BTreeMap;
@@ -23,6 +24,8 @@ use crate::catalog::{Catalog, CatalogError};
 use crate::hash::{Digest, HashAlgo, PartialDigest};
 use crate::pathkey::{KeyOptions, PathEncoding, PathKey, RelPath};
 use crate::query::{Cursor, HashState, Page, PageOf};
+
+pub use self::resolve::{HashNeed, ResolveEvent, ResolveSummary};
 
 /// Most sides one comparison can have; presence sets are 64-bit masks.
 pub const MAX_SIDES: usize = 63;
@@ -338,6 +341,7 @@ impl RowFilter {
 /// A comparison of two or more sides; see the module documentation.
 #[derive(Debug)]
 pub struct Comparison {
+    catalog: Catalog,
     conn: Connection,
     sides: Vec<SideInfo>,
     options: CompareOptions,
@@ -373,6 +377,7 @@ impl Comparison {
             return Err(CompareError::AlgorithmMismatch(algos));
         }
         let mut comparison = Self {
+            catalog: catalog.clone(),
             conn,
             sides: infos,
             options,
