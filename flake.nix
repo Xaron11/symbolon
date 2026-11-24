@@ -173,6 +173,15 @@
               inherit cargoArtifacts;
               # Tests run under nextest in CI and `just test`; skip the duplicate run here.
               doCheck = false;
+              nativeBuildInputs = [ pkgs.installShellFiles ];
+              postInstall = pkgs.lib.optionalString (pkgs.stdenv.buildPlatform.canExecute pkgs.stdenv.hostPlatform) ''
+                $out/bin/symbolon man --out man
+                installManPage man/*.1
+                installShellCompletion --cmd symbolon \
+                  --bash <($out/bin/symbolon completions bash) \
+                  --fish <($out/bin/symbolon completions fish) \
+                  --zsh <($out/bin/symbolon completions zsh)
+              '';
               meta = {
                 description = "Compare file locations and report how exactly they differ";
                 license = pkgs.lib.licenses.gpl3Plus;

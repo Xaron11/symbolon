@@ -58,6 +58,19 @@ pub(crate) enum Command {
     Import(ImportArgs),
     /// List files with identical content within each location
     Dupes(DupesArgs),
+    /// Print a shell completion script, for example: symbolon completions bash > ~/.local/share/bash-completion/completions/symbolon
+    Completions {
+        /// The shell
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
+    /// Write man pages for every command into a directory (for packagers)
+    #[command(hide = true)]
+    Man {
+        /// Directory to write the pages into
+        #[arg(long, value_name = "DIR")]
+        out: PathBuf,
+    },
 }
 
 #[derive(Debug, Args)]

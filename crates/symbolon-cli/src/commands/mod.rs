@@ -2,6 +2,7 @@
 
 mod diff;
 mod dupes;
+mod generate;
 mod location;
 mod scan;
 mod transfer;
@@ -22,6 +23,8 @@ pub(crate) fn run(cli: &Cli) -> anyhow::Result<Exit> {
         Command::Export(args) => transfer::export(&cli.global, args),
         Command::Import(args) => transfer::import(&cli.global, args),
         Command::Dupes(args) => dupes::run(&cli.global, args),
+        Command::Completions { shell } => generate::completions(*shell),
+        Command::Man { out } => generate::man_pages(out),
     }
 }
 

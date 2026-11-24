@@ -5,6 +5,7 @@
 mod common;
 mod diff;
 mod dupes;
+mod generate;
 mod location;
 mod scan;
 mod transfer;
