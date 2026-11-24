@@ -277,17 +277,19 @@ impl Comparison {
 
     /// The entries whose digests would decide more rows, excluding `failed` ones.
     fn plan(&self, failed: &HashSet<i64>) -> Result<Plan, CompareError> {
+        self.conn.execute_batch(super::sql::LOOKUP_INDEXES)?;
         let mut stmt = self.conn.prepare_cached(
             "WITH candidates AS (
                  SELECT f.side, f.entry_id, f.raw, f.size, f.mtime_ns, f.partial
-                 FROM temp.cmp_files f JOIN temp.cmp_rows r ON r.id = f.row_id
+                 FROM temp.cmp_files f JOIN temp.cmp_rows r ON r.sort_key = f.norm AND f.row_id IS NULL
                  WHERE r.category = 'unverified' AND f.full IS NULL
                  UNION
                  SELECT f.side, f.entry_id, f.raw, f.size, f.mtime_ns, f.partial
-                 FROM temp.cmp_files f JOIN temp.cmp_rows r ON r.id = f.row_id
+                 FROM temp.cmp_files f JOIN temp.cmp_rows r ON r.sort_key = f.norm AND f.row_id IS NULL
                  WHERE r.category = 'only_in' AND f.full IS NULL
                    AND EXISTS (
-                       SELECT 1 FROM temp.cmp_files g JOIN temp.cmp_rows o ON o.id = g.row_id
+                       SELECT 1 FROM temp.cmp_files g
+                       JOIN temp.cmp_rows o ON o.sort_key = g.norm AND g.row_id IS NULL
                        WHERE g.size = f.size AND o.category = 'only_in'
                          AND (o.presence & r.presence) = 0
                          AND (f.partial IS NULL OR g.partial IS NULL OR g.partial = f.partial)

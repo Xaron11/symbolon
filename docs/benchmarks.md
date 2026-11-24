@@ -42,10 +42,23 @@ A lazy first scan is the walk plus catalog inserts; eager adds hashing. An uncha
 | First scan, eager (walk, store, hash) | 3.2 s    |
 | Rescan, unchanged                     | 0.45 s   |
 
+### Comparing two locations (M2, 2026-11-24)
+
+Entries are read from the catalog only; no file is touched. Generated data: every 50th file differs, every 100th exists only on one side, every 200th was moved.
+
+| Comparison                                   | Time   |
+| -------------------------------------------- | ------ |
+| 50k × 2, exact keys                          | 0.35 s |
+| 50k × 2, NFC and case-insensitive keys       | 0.40 s |
+| 200k × 2, exact keys                         | 1.6 s  |
+| 200k × 2: summary and first page of 500 rows | 0.1 s  |
+
+The first 200k × 2 measurement was 4.2 s. Profiling showed index maintenance during the bulk load, a per-file row-assignment pass, and per-file name computation; building indexes after loading, finding path rows by key instead of assigning every file, computing names only for move candidates, and building lookup indexes only when hashing or listing duplicates brought it to 1.6 s.
+
 ### Against the targets in the specification (§11)
 
 - **Walk 200k files in seconds on SSD:** met. Walking alone runs at about 540k entries/s, so 200k files take under half a second; a full eager first scan of 200k small files is about 6–7 s.
-- **Diff of two 200k-entry locations in well under a few seconds:** measured in M2.
+- **Diff of two 200k-entry locations in well under a few seconds:** met, 1.6 s (release build; the acceptance test fails above 3 s).
 - **GUI responsive during scans:** measured in M6.
 
 On phones and USB sticks, storage throughput dominates instead; see ADR-0003 for measurements over ADB.

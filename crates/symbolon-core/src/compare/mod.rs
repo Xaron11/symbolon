@@ -448,6 +448,9 @@ impl Comparison {
             return Err(CompareError::SideCount(sides.len()));
         }
         let conn = catalog.connect()?;
+        // A page cache for the temporary tables of large comparisons (a budget, not an
+        // allocation).
+        conn.pragma_update(Some("temp"), "cache_size", -131_072)?;
         sql::register_functions(&conn)?;
         let infos = sides
             .iter()
