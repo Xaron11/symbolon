@@ -1,0 +1,54 @@
+version: 2
+
+# Weekly, grouped, and with a cooldown so brand-new releases age a week before we take them.
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      cargo:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build(deps)
+    labels: [dependencies]
+
+  - package-ecosystem: npm
+    directory: /crates/symbolon-app/ui
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      npm:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build(deps)
+    labels: [dependencies]
+
+  - package-ecosystem: github-actions
+    directories: [/, /.github/actions/*]
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci(deps)
+    labels: [dependencies]
+
+  - package-ecosystem: nix
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build(nix)
+    labels: [dependencies]
