@@ -76,6 +76,8 @@ pub struct SourceEntry {
     /// directories.
     pub size: u64,
     /// Modification time in nanoseconds since the Unix epoch, if the source reports one.
+    /// Precision depends on the filesystem and platform (for example 100 ns on Windows, 2 s on
+    /// FAT).
     pub mtime_ns: Option<i64>,
 }
 
@@ -263,7 +265,11 @@ mod tests {
 
     #[test]
     fn times_convert_on_both_sides_of_the_epoch() {
-        assert_eq!(system_time_to_ns(UNIX_EPOCH + Duration::from_nanos(5)), 5);
+        // 1.5 µs: representable on every platform (Windows counts in 100 ns ticks).
+        assert_eq!(
+            system_time_to_ns(UNIX_EPOCH + Duration::from_nanos(1_500)),
+            1_500
+        );
         assert_eq!(
             system_time_to_ns(UNIX_EPOCH - Duration::from_secs(1)),
             -1_000_000_000
