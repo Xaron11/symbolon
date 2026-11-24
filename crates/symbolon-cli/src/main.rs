@@ -1,24 +1,24 @@
 //! `symbolon`: command-line client for comparing file locations.
 //!
-//! A thin layer over `symbolon-core`; see the book chapter "Architecture" for how the pieces fit.
+//! A thin layer over `symbolon-core`; conventions (catalog path, formats, exit codes) are in
+//! ADR-0011.
 
-use clap::Parser;
+mod cli;
+mod commands;
+mod exit;
+mod output;
 
-/// Compare file locations and report how exactly they differ.
-#[derive(Debug, Parser)]
-#[command(name = "symbolon", version = symbolon_core::VERSION)]
-struct Cli {}
+use std::process::ExitCode;
 
-fn main() {
-    let _cli = Cli::parse();
-}
+use clap::Parser as _;
 
-#[cfg(test)]
-mod tests {
-    use clap::CommandFactory;
-
-    #[test]
-    fn cli_definition_is_valid() {
-        super::Cli::command().debug_assert();
+fn main() -> ExitCode {
+    let cli = cli::Cli::parse();
+    match commands::run(&cli) {
+        Ok(exit) => exit.into(),
+        Err(error) => {
+            eprintln!("error: {error:#}");
+            exit::Exit::for_error(&error).into()
+        }
     }
 }
