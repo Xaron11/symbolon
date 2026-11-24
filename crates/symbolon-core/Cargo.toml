@@ -34,6 +34,10 @@ name = "hash"
 harness = false
 
 [[bench]]
+name = "compare"
+harness = false
+
+[[bench]]
 name = "scan"
 harness = false
 required-features = ["local"]

@@ -4,8 +4,8 @@ use rusqlite::functions::FunctionFlags;
 use rusqlite::{Connection, OptionalExtension as _, named_params, params};
 
 use super::{
-    Cell, CompareError, CompareOptions, DuplicateSet, DuplicateTotals, Row, RowFilter, Side,
-    SideInfo, SideSet, Summary, Totals, parse_row_cursor, row_cursor,
+    Category, Cell, CompareError, CompareOptions, DuplicateSet, DuplicateTotals, Row, RowFilter,
+    Side, SideInfo, SideSet, Summary, Totals, parse_row_cursor, row_cursor,
 };
 use crate::catalog::CatalogError;
 use crate::hash::{Digest, PartialDigest};
@@ -70,17 +70,12 @@ pub(super) fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             raw BLOB NOT NULL,
             rel TEXT NOT NULL,
             norm TEXT NOT NULL,
-            name TEXT NOT NULL,
             size INTEGER NOT NULL,
             mtime_ns INTEGER,
             partial BLOB,
             full BLOB,
             row_id INTEGER
         );
-        CREATE INDEX temp.cmp_files_norm ON cmp_files (norm, side);
-        CREATE INDEX temp.cmp_files_row ON cmp_files (row_id, side, rel);
-        CREATE INDEX temp.cmp_files_side_full ON cmp_files (side, full);
-        CREATE INDEX temp.cmp_files_side_size ON cmp_files (side, size);
         CREATE TEMP TABLE cmp_rows (
             id INTEGER PRIMARY KEY,
             sort_key TEXT NOT NULL,
@@ -93,11 +88,30 @@ pub(super) fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             digest BLOB,
             files INTEGER NOT NULL,
             bytes INTEGER NOT NULL
-        );
-        CREATE INDEX temp.cmp_rows_order ON cmp_rows (sort_key, id);
-        CREATE INDEX temp.cmp_rows_digest ON cmp_rows (digest) WHERE digest IS NOT NULL;",
+        );",
     )
 }
+
+/// Indexes are dropped before bulk inserts and built afterwards, which is much faster than
+/// maintaining them row by row.
+const FILE_INDEXES: &str = "
+    CREATE INDEX temp.cmp_files_norm ON cmp_files (norm, side);
+    CREATE INDEX temp.cmp_files_row ON cmp_files (row_id) WHERE row_id IS NOT NULL;";
+/// Only hashing on demand and duplicate listings need these, so they are built on first use.
+pub(super) const LOOKUP_INDEXES: &str = "
+    CREATE INDEX IF NOT EXISTS temp.cmp_files_size ON cmp_files (size, side);
+    CREATE INDEX IF NOT EXISTS temp.cmp_files_full ON cmp_files (side, full);";
+const DROP_FILE_INDEXES: &str = "
+    DROP INDEX IF EXISTS temp.cmp_files_norm;
+    DROP INDEX IF EXISTS temp.cmp_files_size;
+    DROP INDEX IF EXISTS temp.cmp_files_full;
+    DROP INDEX IF EXISTS temp.cmp_files_row;";
+const ROW_INDEXES: &str = "
+    CREATE INDEX temp.cmp_rows_order ON cmp_rows (sort_key, id);
+    CREATE INDEX temp.cmp_rows_digest ON cmp_rows (digest) WHERE digest IS NOT NULL;";
+const DROP_ROW_INDEXES: &str = "
+    DROP INDEX IF EXISTS temp.cmp_rows_order;
+    DROP INDEX IF EXISTS temp.cmp_rows_digest;";
 
 /// Copies every side's files into `cmp_files` within one read transaction (one snapshot).
 pub(super) fn load(
@@ -107,21 +121,20 @@ pub(super) fn load(
 ) -> rusqlite::Result<()> {
     let tx = conn.transaction()?;
     tx.execute_batch("DELETE FROM temp.cmp_files; DELETE FROM temp.cmp_rows;")?;
+    tx.execute_batch(DROP_FILE_INDEXES)?;
     {
         let mut insert = tx.prepare(
-            "INSERT INTO temp.cmp_files (side, entry_id, raw, rel, norm, name, size, mtime_ns, partial, full)
-             SELECT :side, id, rel_path_raw, rel, norm, sym_name(norm), size, mtime_ns, hash_partial, hash_full
+            "INSERT INTO temp.cmp_files (side, entry_id, raw, rel, norm, size, mtime_ns, partial, full)
+             SELECT :side, id, rel_path_raw, rel,
+                    CASE WHEN :nfc OR :ci THEN sym_norm(rel, :nfc, :ci) ELSE rel END,
+                    size, mtime_ns, hash_partial, hash_full
              FROM (
-                 SELECT id, rel_path_raw, rel, sym_norm(rel, :nfc, :ci) AS norm, size, mtime_ns,
-                        hash_partial, hash_full
-                 FROM (
                      SELECT id, rel_path_raw, size, mtime_ns, hash_partial, hash_full,
                             CASE WHEN :prefix = '' THEN path_key
                                  ELSE substr(path_key, length(:prefix) + 2) END AS rel
                      FROM main.entries
                      WHERE location_id = :location AND kind = 'file'
                        AND (:prefix = '' OR (path_key > :prefix || '/' AND path_key < :prefix || '0'))
-                 )
              )",
         )?;
         for (index, side) in sides.iter().enumerate() {
@@ -134,6 +147,7 @@ pub(super) fn load(
             })?;
         }
     }
+    tx.execute_batch(FILE_INDEXES)?;
     tx.commit()
 }
 
@@ -148,6 +162,7 @@ pub(super) fn classify(
     let (fast, tolerance) = options.assume_equal_within.map_or((false, 0), |t| {
         (true, i64::try_from(t.as_nanos()).unwrap_or(i64::MAX))
     });
+    conn.execute_batch(DROP_ROW_INDEXES)?;
     conn.execute(
         "INSERT INTO temp.cmp_rows
              (sort_key, category, presence, assumed, size, max_size, ext, digest, files, bytes)
@@ -191,45 +206,43 @@ pub(super) fn classify(
          ORDER BY norm",
         named_params! { ":all": all, ":fast": fast, ":tolerance": tolerance },
     )?;
-    conn.execute(
-        "UPDATE temp.cmp_files SET row_id =
-             (SELECT id FROM temp.cmp_rows r WHERE r.sort_key = cmp_files.norm)",
-        [],
-    )?;
+    conn.execute_batch(ROW_INDEXES)?;
     match_moves(conn)
 }
 
 /// Replaces verified only-in rows that share a digest with a row of disjoint presence by one
 /// moved or renamed row per digest (ADR-0010).
+///
+/// Files of path rows are found by `norm = sort_key`; only files of move rows carry a `row_id`.
 fn match_moves(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "DROP TABLE IF EXISTS temp.cmp_moving;
          CREATE TEMP TABLE cmp_moving AS
-         SELECT r.id, r.digest FROM temp.cmp_rows r
+         SELECT r.id, r.sort_key, r.digest FROM temp.cmp_rows r
          WHERE r.category = 'only_in' AND r.digest IS NOT NULL
            AND EXISTS (
                SELECT 1 FROM temp.cmp_rows o
                WHERE o.digest = r.digest AND o.category = 'only_in' AND o.id != r.id
                  AND (o.presence & r.presence) = 0
            );
-         CREATE INDEX temp.cmp_moving_id ON cmp_moving (id);
+         CREATE INDEX temp.cmp_moving_key ON cmp_moving (sort_key);
 
          INSERT INTO temp.cmp_rows
              (sort_key, category, presence, assumed, size, max_size, ext, digest, files, bytes)
          SELECT min(f.norm),
-                CASE WHEN count(DISTINCT f.name) = 1 THEN 'moved' ELSE 'renamed' END,
+                CASE WHEN count(DISTINCT sym_name(f.norm)) = 1 THEN 'moved' ELSE 'renamed' END,
                 sum(DISTINCT 1 << f.side), 0, max(f.size), max(f.size),
                 sym_ext(sym_name(min(f.norm))), m.digest, count(*), sum(f.size)
-         FROM temp.cmp_moving m JOIN temp.cmp_files f ON f.row_id = m.id
+         FROM temp.cmp_moving m JOIN temp.cmp_files f ON f.norm = m.sort_key
          GROUP BY m.digest
          ORDER BY min(f.norm);
 
          UPDATE temp.cmp_files SET row_id = (
              SELECT n.id FROM temp.cmp_rows n
              WHERE n.category IN ('moved', 'renamed')
-               AND n.digest = (SELECT m.digest FROM temp.cmp_moving m WHERE m.id = cmp_files.row_id)
+               AND n.digest = (SELECT m.digest FROM temp.cmp_moving m WHERE m.sort_key = cmp_files.norm)
          )
-         WHERE row_id IN (SELECT id FROM temp.cmp_moving);
+         WHERE norm IN (SELECT sort_key FROM temp.cmp_moving);
 
          DELETE FROM temp.cmp_rows WHERE id IN (SELECT id FROM temp.cmp_moving);
          DROP TABLE temp.cmp_moving;",
@@ -358,20 +371,28 @@ pub(super) fn rows(
         )?
         .collect::<Result<Vec<_>, _>>()?;
 
-    let mut cells_stmt = conn.prepare_cached(
+    let mut move_cells = conn.prepare_cached(
         "SELECT side, raw, rel, size, mtime_ns, partial, full FROM temp.cmp_files
          WHERE row_id = ?1 ORDER BY side, rel",
+    )?;
+    let mut path_cells = conn.prepare_cached(
+        "SELECT side, raw, rel, size, mtime_ns, partial, full FROM temp.cmp_files
+         WHERE norm = ?1 AND row_id IS NULL ORDER BY side, rel",
     )?;
     let mut items = Vec::with_capacity(heads.len());
     let mut last = None;
     for (id, key, category, presence, assumed, size) in heads {
-        let cells = cells_stmt
-            .query_map(params![id], RawCell::from_row)?
-            .map(|cell| cell?.into_cell(sides))
-            .collect::<Result<Vec<_>, CompareError>>()?;
+        let category: Category = category.parse()?;
+        let cells = if matches!(category, Category::Moved | Category::Renamed) {
+            move_cells.query_map(params![id], RawCell::from_row)?
+        } else {
+            path_cells.query_map(params![key], RawCell::from_row)?
+        }
+        .map(|cell| cell?.into_cell(sides))
+        .collect::<Result<Vec<_>, CompareError>>()?;
         last = Some((key.clone(), id));
         items.push(Row {
-            category: category.parse()?,
+            category,
             key,
             presence: SideSet::from_bits(presence.cast_unsigned()),
             assumed,
@@ -391,6 +412,7 @@ pub(super) fn duplicates(
     side: usize,
     page: &Page,
 ) -> Result<PageOf<DuplicateSet>, CompareError> {
+    conn.execute_batch(LOOKUP_INDEXES)?;
     let info = sides
         .get(side)
         .ok_or_else(|| CatalogError::Corrupt(format!("side {side} out of range")))?;
@@ -444,6 +466,7 @@ pub(super) fn duplicate_totals(
     conn: &Connection,
     sides: usize,
 ) -> Result<Vec<DuplicateTotals>, CompareError> {
+    conn.execute_batch(LOOKUP_INDEXES)?;
     let mut totals = vec![DuplicateTotals::default(); sides];
     let mut stmt = conn.prepare_cached(
         "SELECT side, count(*), sum(n), sum((n - 1) * size) FROM (
