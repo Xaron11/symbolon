@@ -112,7 +112,10 @@ fn report_warnings(
         return Ok(());
     }
     if !verbose {
-        eprintln!("{label}: {count} warnings; run with --verbose to list them");
+        eprintln!(
+            "{label}: {}; run with --verbose to list them",
+            output::count(count, "warning")
+        );
         return Ok(());
     }
     let query = Query::open(catalog)?;

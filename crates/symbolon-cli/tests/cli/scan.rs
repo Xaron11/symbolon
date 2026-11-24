@@ -111,7 +111,7 @@ fn unreadable_files_are_counted_or_listed() {
     assert_eq!(run.code, 0, "warnings do not fail a scan");
     assert_eq!(
         run.stderr,
-        "photos: 1 warnings; run with --verbose to list them\n"
+        "photos: 1 warning; run with --verbose to list them\n"
     );
 
     let verbose = env.run(&["scan", "photos", "--verbose", "--json"]);
