@@ -33,5 +33,10 @@ tempfile.workspace = true
 name = "hash"
 harness = false
 
+[[bench]]
+name = "scan"
+harness = false
+required-features = ["local"]
+
 [lints]
 workspace = true

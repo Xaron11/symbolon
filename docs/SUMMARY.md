@@ -29,6 +29,7 @@
 - [Getting started](development/setup.md)
 - [Editor and LSP setup](development/editor.md)
 - [Testing](testing.md)
+- [Benchmarks](benchmarks.md)
 - [Writing documentation](development/documentation.md)
 - [Releasing](development/releasing.md)
 - [Changelog](development/changelog.md)

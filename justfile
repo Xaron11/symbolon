@@ -73,6 +73,10 @@ test:
     cargo nextest run --workspace --locked --no-tests=warn
     cargo test --workspace --locked --doc
 
+# M1 acceptance: scan and rescan a 100k-file tree (slow; ignored by `just test`).
+test-acceptance:
+    cargo nextest run -p symbolon-core --test acceptance --run-ignored ignored-only --no-capture
+
 test-ui: ui-install
     pnpm --dir {{ ui }} test
 
