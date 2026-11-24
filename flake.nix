@@ -202,6 +202,7 @@
                 just
                 cargo-deny
                 cargo-llvm-cov
+                cargo-mutants
                 cargo-nextest
                 cargo-shear
                 cargo-tauri
