@@ -176,6 +176,11 @@ fn three_sides_keep_the_presence_matrix() {
     fx.eager("b", &[("all", "same"), ("ab", "pair"), ("diff", "one")]);
     fx.eager("c", &[("all", "same"), ("diff", "two"), ("c_only", "!")]);
     let cmp = fx.compare(&["a", "b", "c"], CompareOptions::default());
+    let labels: Vec<&str> = cmp.sides().iter().map(|s| s.side.label.as_str()).collect();
+    assert_eq!(labels, ["a", "b", "c"]);
+    assert_eq!(cmp.options(), &CompareOptions::default());
+    let fast = CompareOptions::default().assume_equal_within(Duration::from_secs(1));
+    assert_eq!(fx.compare(&["a", "b"], fast.clone()).options(), &fast);
     assert_eq!(
         classes(&cmp),
         BTreeMap::from([
@@ -682,7 +687,10 @@ mod resolve {
         assert_eq!(listed, 4, "same and diff on both sides: {needs:?}");
 
         let summary = resolve(&mut cmp);
-        assert_eq!((summary.hashed_files, summary.warnings), (4, 0));
+        assert_eq!(
+            (summary.hashed_files, summary.hashed_bytes, summary.warnings),
+            (4, 16, 0)
+        );
         let got = classes(&cmp);
         assert_eq!(got["same"].0, Category::Identical);
         assert_eq!(got["diff"].0, Category::Different);
@@ -718,6 +726,9 @@ mod resolve {
             summary.rounds, 2,
             "partial round, then full round for the still-equal pair"
         );
+        // Round 1: four partial digests of 128 KiB; round 2: two full reads of the equal pair.
+        assert_eq!(summary.hashed_files, 6);
+        assert_eq!(summary.hashed_bytes, 4 * 128 * 1024 + 2 * BIG as u64);
         let got = classes(&cmp);
         assert_eq!(got["differs"].0, Category::Different);
         assert_eq!(got["equal"].0, Category::Identical);
@@ -807,6 +818,63 @@ mod resolve {
         assert_eq!(unreachable, ["b"]);
         assert_eq!(summary.unreachable, ["b"]);
         assert_eq!(classes(&cmp)["f"].0, Category::Unverified);
+    }
+
+    #[test]
+    fn files_that_cannot_be_hashed_are_counted_and_reported() {
+        let fx = Fixture::new();
+        lazy(&fx, "a", &[("f", "same".into()), ("g", "also".into())]);
+        lazy(&fx, "b", &[("f", "same".into()), ("g", "also".into())]);
+        fs::remove_file(fx.root("b").join("g")).unwrap();
+        let mut cmp = fx.compare(&["a", "b"], CompareOptions::default());
+        let mut warned = Vec::new();
+        let summary = cmp
+            .resolve(&ScanOptions::default(), |event| {
+                if let ResolveEvent::Warning { warning, .. } = event {
+                    warned.push(warning.path.unwrap().key().as_str().to_owned());
+                }
+                ControlFlow::Continue(())
+            })
+            .unwrap();
+        assert_eq!(warned, ["g"]);
+        assert_eq!((summary.warnings, summary.hashed_files), (1, 3));
+        let got = classes(&cmp);
+        assert_eq!(got["f"].0, Category::Identical);
+        assert_eq!(
+            got["g"].0,
+            Category::Unverified,
+            "b's copy vanished before it could be hashed"
+        );
+    }
+
+    #[test]
+    fn progress_events_report_running_totals() {
+        let fx = Fixture::new();
+        lazy(&fx, "a", &[("f", "aaaa".into()), ("g", "bbbbbb".into())]);
+        lazy(&fx, "b", &[("f", "aaaa".into()), ("g", "bbbbbb".into())]);
+        let mut cmp = fx.compare(&["a", "b"], CompareOptions::default());
+        let mut options = ScanOptions::default();
+        options.progress_interval = Duration::ZERO;
+        let mut last = BTreeMap::new();
+        cmp.resolve(&options, |event| {
+            if let ResolveEvent::Progress {
+                label,
+                files,
+                bytes,
+            } = event
+            {
+                let previous: (u64, u64) = last.get(&label).copied().unwrap_or_default();
+                assert!(
+                    files >= previous.0 && bytes >= previous.1,
+                    "totals never go down"
+                );
+                last.insert(label, (files, bytes));
+            }
+            ControlFlow::Continue(())
+        })
+        .unwrap();
+        assert_eq!(last.get("a"), Some(&(2, 10)));
+        assert_eq!(last.get("b"), Some(&(2, 10)));
     }
 
     #[test]

@@ -679,6 +679,25 @@ mod tests {
     }
 
     #[test]
+    fn paths_and_keys_display_as_keys() {
+        let path = posix(b"dir/bad\xffname");
+        assert_eq!(path.to_string(), "dir/bad%FFname");
+        assert_eq!(format!("{path:?}"), "posix:\"dir/bad%FFname\"");
+        assert_eq!(path.key().to_string(), "dir/bad%FFname");
+        assert_eq!(PathEncoding::Wtf8.to_string(), "wtf8");
+        assert!(!path.is_root());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backslashes_are_ordinary_characters_on_unix() {
+        let child = RelPath::root(PathEncoding::Posix)
+            .join("a\\b".as_ref())
+            .unwrap();
+        assert_eq!(child.key().as_str(), "a\\b");
+    }
+
+    #[test]
     fn parent_and_file_name() {
         let key = posix(b"a/b/c.txt").key();
         assert_eq!(key.parent(), "a/b");

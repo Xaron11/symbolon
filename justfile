@@ -88,6 +88,10 @@ coverage *args:
 schema-fixture:
     cargo test -p symbolon-core --test schema_fixtures -- --ignored write_fixture
 
+# Mutation testing (slow): which code changes do the tests fail to notice? Pass `--file` to narrow.
+mutants *args:
+    cargo mutants -p symbolon-core --test-tool nextest --jobs 4 --timeout 120 --output target/mutants {{ args }}
+
 bench:
     cargo bench --workspace
 

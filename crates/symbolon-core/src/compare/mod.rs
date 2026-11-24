@@ -596,12 +596,17 @@ mod tests {
         );
         assert_eq!(set.iter().collect::<Vec<_>>(), [0, 2]);
         assert!(SideSet::default().is_empty());
+        assert!(!set.is_empty());
+        let top = SideSet::from_bits(1 << 63);
+        assert!(top.contains(63));
+        assert!(!top.contains(64), "out-of-range indices are never members");
     }
 
     #[test]
     fn category_names_round_trip() {
         for category in Category::ALL {
             assert_eq!(category.name().parse::<Category>().unwrap(), category);
+            assert_eq!(category.to_string(), category.name());
         }
     }
 

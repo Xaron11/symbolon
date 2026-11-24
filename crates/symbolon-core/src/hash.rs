@@ -547,6 +547,103 @@ mod tests {
         ));
     }
 
+    /// Yields `chunks` one per read, after failing once with `Interrupted` if asked.
+    struct Chunks {
+        chunks: std::collections::VecDeque<Vec<u8>>,
+        interrupt: bool,
+    }
+
+    impl Read for Chunks {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if std::mem::take(&mut self.interrupt) {
+                return Err(io::ErrorKind::Interrupted.into());
+            }
+            let Some(chunk) = self.chunks.pop_front() else {
+                return Ok(0);
+            };
+            buf[..chunk.len()].copy_from_slice(&chunk);
+            Ok(chunk.len())
+        }
+    }
+
+    #[test]
+    fn content_beyond_the_expected_size_is_detected_across_chunks() {
+        // The first read ends exactly at the expected size; the second brings more.
+        let reader = Chunks {
+            chunks: [vec![1; 100], vec![2; 5]].into(),
+            interrupt: false,
+        };
+        assert!(matches!(
+            hash_reader(HashAlgo::Blake3, reader, 100),
+            Err(HashError::SizeMismatch {
+                expected: 100,
+                actual: 105
+            })
+        ));
+    }
+
+    #[test]
+    fn interrupted_reads_are_retried() {
+        let reader = Chunks {
+            chunks: [b"ab".to_vec(), b"c".to_vec()].into(),
+            interrupt: true,
+        };
+        assert_eq!(
+            hash_reader(HashAlgo::Blake3, reader, 3).unwrap(),
+            hash_bytes(HashAlgo::Blake3, b"abc")
+        );
+    }
+
+    #[test]
+    fn partial_digest_format_is_stable() {
+        // Stored in catalogs: changing these values breaks every existing catalog.
+        let partial = |len: usize| {
+            partial_hash(HashAlgo::Blake3, Cursor::new(data(len)), len as u64)
+                .unwrap()
+                .to_hex()
+        };
+        // The documented format, spelled out: size (u64 LE), then the whole content up to
+        // 2 × PARTIAL_BLOCK, else the first and last PARTIAL_BLOCK.
+        let spelled_out = |len: usize| {
+            let content = data(len);
+            let mut input = (len as u64).to_le_bytes().to_vec();
+            if len <= 2 * BLOCK {
+                input.extend_from_slice(&content);
+            } else {
+                input.extend_from_slice(&content[..BLOCK]);
+                input.extend_from_slice(&content[len - BLOCK..]);
+            }
+            hash_bytes(HashAlgo::Blake3, &input).to_hex()
+        };
+        for len in [100 * 1024, 300 * 1024] {
+            assert_eq!(partial(len), spelled_out(len), "{len}");
+        }
+        assert_eq!(
+            partial(100 * 1024),
+            "813ee48c88433f395fe7100413d067fafa2f8fcba0bea62c380e079fda1a5d72"
+        );
+        assert_eq!(
+            partial(300 * 1024),
+            "2c49b9370cb49bb5e01e500f83a6987b39760fc9d087fe3aa6471377afacc8b9"
+        );
+    }
+
+    #[test]
+    fn digests_print_as_hex_and_debug_names_the_algorithm() {
+        let digest = hash_bytes(HashAlgo::Xxh3, b"abc");
+        assert_eq!(digest.to_string(), "06b05ab6733a618578af5f94892f3950");
+        assert_eq!(
+            format!("{digest:?}"),
+            "xxh3:06b05ab6733a618578af5f94892f3950"
+        );
+        let partial = PartialDigest::from_bytes(HashAlgo::Xxh3, digest.as_bytes()).unwrap();
+        assert_eq!(partial.to_hex(), digest.to_hex());
+        assert_eq!(
+            format!("{partial:?}"),
+            "partial xxh3:06b05ab6733a618578af5f94892f3950"
+        );
+    }
+
     proptest! {
         #[test]
         fn chunking_does_not_change_the_digest(
