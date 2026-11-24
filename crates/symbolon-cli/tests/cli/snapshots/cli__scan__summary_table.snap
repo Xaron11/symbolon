@@ -1,0 +1,6 @@
+---
+source: crates/symbolon-cli/tests/cli/scan.rs
+expression: "env.ok(&[\"scan\", \"photos\"])"
+---
+LABEL  STATUS  FILES  SIZE  HASHED  REUSED  WARNINGS  TIME
+photos  completed  3  7 B  0 (0 B)  3  0  [TIME]

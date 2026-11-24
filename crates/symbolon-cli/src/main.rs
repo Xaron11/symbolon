@@ -6,7 +6,9 @@
 mod cli;
 mod commands;
 mod exit;
+mod interrupt;
 mod output;
+mod progress;
 
 use std::process::ExitCode;
 
