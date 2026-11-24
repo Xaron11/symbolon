@@ -130,7 +130,9 @@ jobs:
       - name: tests with coverage
         if: runner.os == 'Linux'
         run: |
-          cargo llvm-cov nextest ${{ matrix.packages }} --locked --profile ci --no-tests=warn
+          # Ignored tests run here too (the 100k-file acceptance test), except the fixture writer.
+          cargo llvm-cov nextest ${{ matrix.packages }} --locked --profile ci --no-tests=warn \
+            --run-ignored all -E 'not test(=write_fixture)'
           {
             echo '### Coverage'
             echo '```'

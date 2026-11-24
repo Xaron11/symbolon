@@ -26,24 +26,24 @@ const BATCH: usize = 512;
 /// Longest time results wait before being committed, so readers see steady progress.
 const MAX_BATCH_AGE: Duration = Duration::from_millis(250);
 
-const UPSERT_ENTRY: &str = "\
+/// Marks an unchanged entry as seen. Only `seen_scan_id`, which no index covers, is written,
+/// so a rescan of an unchanged location touches no index.
+const MARK_UNCHANGED: &str = "\
+UPDATE entries SET seen_scan_id = ?3
+WHERE location_id = ?1 AND rel_path_raw = ?2 AND kind = ?4 AND size = ?5
+    AND (mtime_ns IS ?6 OR ?6 BETWEEN mtime_ns - ?7 AND mtime_ns + ?7)";
+
+/// Inserts a new entry, or replaces a changed one and clears its digests.
+const UPSERT_CHANGED: &str = "\
 INSERT INTO entries (location_id, rel_path_raw, path_key, parent_key, kind, size, mtime_ns, seen_scan_id)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
 ON CONFLICT (location_id, rel_path_raw) DO UPDATE SET
-    path_key = excluded.path_key,
-    parent_key = excluded.parent_key,
     seen_scan_id = excluded.seen_scan_id,
-    hash_partial = CASE WHEN entries.kind = excluded.kind AND entries.size = excluded.size
-        AND (entries.mtime_ns IS excluded.mtime_ns
-             OR excluded.mtime_ns BETWEEN entries.mtime_ns - ?9 AND entries.mtime_ns + ?9)
-        THEN entries.hash_partial END,
-    hash_full = CASE WHEN entries.kind = excluded.kind AND entries.size = excluded.size
-        AND (entries.mtime_ns IS excluded.mtime_ns
-             OR excluded.mtime_ns BETWEEN entries.mtime_ns - ?9 AND entries.mtime_ns + ?9)
-        THEN entries.hash_full END,
     kind = excluded.kind,
     size = excluded.size,
-    mtime_ns = excluded.mtime_ns";
+    mtime_ns = excluded.mtime_ns,
+    hash_partial = NULL,
+    hash_full = NULL";
 
 const INSERT_WARNING: &str =
     "INSERT INTO scan_warnings (scan_id, rel_path_raw, kind, message) VALUES (?1, ?2, ?3, ?4)";
@@ -261,20 +261,32 @@ impl Scan<'_> {
         let tolerance = i64::try_from(self.options.mtime_tolerance.as_nanos()).unwrap_or(i64::MAX);
         let tx = self.conn.transaction()?;
         {
-            let mut upsert = tx.prepare_cached(UPSERT_ENTRY)?;
+            let mut unchanged = tx.prepare_cached(MARK_UNCHANGED)?;
+            let mut changed = tx.prepare_cached(UPSERT_CHANGED)?;
             for entry in batch.drain(..) {
-                let key = entry.path.key();
-                upsert.execute(params![
-                    self.location.id.get(),
+                let location = self.location.id.get();
+                let seen = unchanged.execute(params![
+                    location,
                     entry.path.as_bytes(),
-                    key.as_str(),
-                    key.parent(),
+                    self.id.get(),
                     entry.kind.name(),
                     entry.size,
                     entry.mtime_ns,
-                    self.id.get(),
                     tolerance,
                 ])?;
+                if seen == 0 {
+                    let key = entry.path.key();
+                    changed.execute(params![
+                        location,
+                        entry.path.as_bytes(),
+                        key.as_str(),
+                        key.parent(),
+                        entry.kind.name(),
+                        entry.size,
+                        entry.mtime_ns,
+                        self.id.get(),
+                    ])?;
+                }
             }
             insert_warnings(&tx, self.id, &mut self.pending_warnings)?;
         }
