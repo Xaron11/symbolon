@@ -16,6 +16,8 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   RUSTFLAGS: -D warnings
+  # No debug info in CI builds: faster compiles and smaller caches. Backtraces keep function names.
+  CARGO_PROFILE_DEV_DEBUG: "0"
   # Caches are written only from main; PRs restore them but never evict them.
   SAVE_CACHE: ${{ github.ref == 'refs/heads/main' }}
 
@@ -36,16 +38,16 @@ jobs:
       - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
       - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
         with:
-          primary-key: nix-devshell-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
-          restore-prefixes-first-match: nix-devshell-${{ runner.os }}-
-          gc-max-store-size-linux: 6G
+          primary-key: nix-ci-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-ci-${{ runner.os }}-
+          gc-max-store-size-linux: 4G
           save: ${{ env.SAVE_CACHE }}
-      - run: nix develop -c just ui-install
+      - run: nix develop .#ci -c just ui-install
       - name: pre-commit hooks on all files
         # zizmor uses the token for online audits (impostor commits, known-vulnerable actions).
         env:
           GH_TOKEN: ${{ github.token }}
-        run: nix develop -c pre-commit run --all-files --show-diff-on-failure
+        run: nix develop .#ci -c pre-commit run --all-files --show-diff-on-failure
 
   clippy:
     name: clippy (${{ matrix.os }})
@@ -98,9 +100,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # symbolon-app has no tests until M6; clippy --all-targets already compiles it. Leaving it
+        # out spares this job the Tauri/GTK build and the webkitgtk install.
         include:
           - os: ubuntu-latest
-            packages: --workspace
+            packages: -p symbolon-core -p symbolon-cli -p symbolon-agent
           - os: windows-latest
             packages: -p symbolon-core -p symbolon-cli
     steps:
@@ -110,6 +114,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           components: llvm-tools-preview
+          tauri-libs: "false"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: test
@@ -131,8 +136,9 @@ jobs:
       - name: tests
         if: runner.os != 'Linux'
         run: cargo nextest run ${{ matrix.packages }} --locked --profile ci --no-tests=warn
+      # Only library crates have doctests.
       - name: doctests
-        run: cargo test ${{ matrix.packages }} --locked --doc
+        run: cargo test -p symbolon-core --locked --doc
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -182,7 +188,7 @@ jobs:
       - run: cargo deny check
 
   nix:
-    name: nix (package, android agent)
+    name: nix (flake check, CLI package)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -194,14 +200,41 @@ jobs:
       - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
         with:
           primary-key: nix-build-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'Cargo.lock') }}
-          restore-prefixes-first-match: |
-            nix-build-${{ runner.os }}-
-            nix-devshell-${{ runner.os }}-
-          gc-max-store-size-linux: 6G
+          restore-prefixes-first-match: nix-build-${{ runner.os }}-
+          gc-max-store-size-linux: 4G
           save: ${{ env.SAVE_CACHE }}
       - run: nix flake check
-      - name: Cross-build and check the Android agent
-        run: nix develop -c just android-scanner check-agent
+
+  android-agent:
+    name: android agent (cross-build, static check)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-android-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-android-${{ runner.os }}-
+          gc-max-store-size-linux: 4G
+          save: ${{ env.SAVE_CACHE }}
+      - name: Restore build cache
+        id: target-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target
+          key: agent-target-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'flake.lock') }}
+          restore-keys: agent-target-
+      - run: nix develop .#android -c just android-scanner check-agent
+      - name: Save build cache
+        if: env.SAVE_CACHE == 'true' && steps.target-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target
+          key: agent-target-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'flake.lock') }}
 
   docs:
     name: docs (book, API, links)
@@ -216,15 +249,15 @@ jobs:
       - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
       - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
         with:
-          primary-key: nix-devshell-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
-          restore-prefixes-first-match: nix-devshell-${{ runner.os }}-
+          primary-key: nix-ci-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-ci-${{ runner.os }}-
           save: "false"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rustdoc
           path: target/doc
       - name: Build the book and check links
-        run: nix develop -c just docs-book docs-links
+        run: nix develop .#ci -c just docs-book docs-links
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: docs-site
@@ -234,7 +267,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [hooks, clippy, test, frontend, deny, nix, docs]
+    needs: [hooks, clippy, test, frontend, deny, nix, android-agent, docs]
     runs-on: ubuntu-latest
     permissions: {}
     steps:
