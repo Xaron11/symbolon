@@ -1,0 +1,39 @@
+---
+source: crates/symbolon-cli/tests/cli/dupes.rs
+expression: "env.ok(&[\"dupes\", \"photos\", \"--json\"])"
+---
+{
+  "totals": [
+    {
+      "side": "photos",
+      "groups": 2,
+      "files": 5,
+      "redundant_bytes": 28
+    }
+  ],
+  "groups": [
+    {
+      "side": "photos",
+      "digest": "388c011f9f3c5551dafb481984b4edfbba1157b9c7b2ce7648e4c45dc0fe95ba",
+      "size": 18,
+      "copies": 2,
+      "redundant_bytes": 18,
+      "paths": [
+        "doc.txt",
+        "old/doc.txt"
+      ]
+    },
+    {
+      "side": "photos",
+      "digest": "5e8bbae7e88e4ae1d5e34720d270c86b3d584c0334cdc6d71539322026828913",
+      "size": 5,
+      "copies": 3,
+      "redundant_bytes": 10,
+      "paths": [
+        "a.jpg",
+        "copy/a.jpg",
+        "copy/again.jpg"
+      ]
+    }
+  ]
+}

@@ -92,7 +92,11 @@ fn filter(args: &DiffArgs) -> RowFilter {
 
 /// Hashes what the comparison needs, with progress on stderr; Ctrl-C stops it, keeping what
 /// was hashed.
-fn resolve(cmp: &mut Comparison, quiet: bool, verbose: bool) -> anyhow::Result<ResolveSummary> {
+pub(super) fn resolve(
+    cmp: &mut Comparison,
+    quiet: bool,
+    verbose: bool,
+) -> anyhow::Result<ResolveSummary> {
     let mut progress = Progress::new(quiet);
     let mut total = (0, 0);
     let summary = cmp.resolve(&ScanOptions::default(), |event| {
