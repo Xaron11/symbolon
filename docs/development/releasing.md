@@ -16,6 +16,8 @@ The next version is derived from the Conventional Commits since the last tag: `f
 3. Run `just tag`. It checks that `main`'s last commit is that release commit, creates an SSH-signed annotated tag `vX.Y.Z`, verifies it against `.github/allowed_signers` and pushes it.
 4. The release workflow verifies the tag signature (against the allowed signers on `main`), checks that the tag matches the workspace version, builds the CLI for Linux and Windows and the Android agent, and publishes a GitHub release with `SHA256SUMS` and the changelog section. `0.x` releases are marked pre-release.
 
+If the release workflow fails after the tag exists (for example because of a bug in the workflow itself), fix it on `main` and re-run it for the existing tag: `gh workflow run release.yml -f tag=vX.Y.Z`. The run uses the workflow from `main`, builds the tagged source and verifies the tag exactly as a push would. Do not delete or move a published tag.
+
 Only repository admins can create `v*` tags, and the signing key must be listed in `.github/allowed_signers`. Never create tags or releases another way.
 
 ## After a release
