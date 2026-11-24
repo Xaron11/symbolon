@@ -2,7 +2,7 @@
 //!
 //! Never edit a released migration; add a new one and a fixture (`docs/schema.md`).
 
-pub(crate) const MIGRATIONS: &[&str] = &[V1];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2];
 
 /// Schema version this build creates and understands.
 #[expect(
@@ -81,4 +81,14 @@ CREATE TABLE scan_warnings (
 ) STRICT;
 
 CREATE INDEX scan_warnings_scan ON scan_warnings (scan_id);
+";
+
+/// Locations imported from `.symbolon` files (ADR-0013): their files are on another computer.
+const V2: &str = r"
+CREATE TABLE imported_locations (
+    location_id INTEGER PRIMARY KEY REFERENCES locations (id) ON DELETE CASCADE,
+    exported_at INTEGER NOT NULL,
+    exported_by TEXT NOT NULL,
+    imported_at INTEGER NOT NULL
+) STRICT;
 ";

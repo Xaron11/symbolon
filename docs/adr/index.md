@@ -16,6 +16,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0010](0010-comparison-engine.md)                  | Comparison categories, move matching, hashing on demand, paged results  |
 | [0011](0011-cli-conventions.md)                    | Catalog location, output formats, exit codes, Ctrl-C                    |
 | [0012](0012-scan-lock.md)                          | One scan per location, enforced with an OS file lock                    |
+| [0013](0013-imported-locations.md)                 | Imported locations, export contents, replacing data on import           |
 
 ## Writing a new ADR
 

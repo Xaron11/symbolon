@@ -10,7 +10,7 @@
 //! second one fails with [`ScanError::AlreadyScanning`] (ADR-0012).
 
 pub(crate) mod hashing;
-mod lock;
+pub(crate) mod lock;
 mod run;
 
 pub(crate) use self::run::{hashing_pool, source_for};
@@ -45,7 +45,9 @@ pub enum ScanError {
     #[error(transparent)]
     Source(#[from] SourceError),
     /// The location was recorded on a platform with another path encoding.
-    #[error("location {0:?} was recorded on another platform and cannot be scanned here")]
+    #[error(
+        "location {0:?} was imported or recorded on another platform and cannot be scanned here"
+    )]
     NotScannable(String),
     /// The location kind needs a source this build does not include (feature `local`).
     #[error("this build cannot scan location {0:?}: the local source is not compiled in")]

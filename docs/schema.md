@@ -1,6 +1,6 @@
 # Catalog schema
 
-The catalog is one SQLite database. Its schema is a public contract: the CLI, the app, `.symbolon` exports and third-party tools read it. This page describes the current version (**v1**) and the rules for changing it. The DDL lives in `crates/symbolon-core/src/catalog/schema.rs`.
+The catalog is one SQLite database. Its schema is a public contract: the CLI, the app, `.symbolon` exports and third-party tools read it. This page describes the current version (**v2**) and the rules for changing it. The DDL lives in `crates/symbolon-core/src/catalog/schema.rs`.
 
 ## Versioning policy
 
@@ -19,11 +19,11 @@ The catalog is one SQLite database. Its schema is a public contract: the CLI, th
 - Digests are raw bytes. The algorithm is a property of the location, not of each digest: every digest of a location uses `locations.hash_algo`.
 - Enumerations are lowercase text with a `CHECK` constraint.
 
-## Tables (v1)
+## Tables (v2)
 
 ### `meta`
 
-Key/value facts about the file: `kind` (`catalog` or `export`), `created_at`, `created_by` (app version).
+Key/value facts about the file: `kind` (`catalog` or `export`), `created_at`, `created_by` (app version). Exports add `exported_at`, `exported_by`, and the exported location's `label`, `hash_algo`, `path_encoding` and `fingerprint` (when known).
 
 ### `locations`
 
@@ -31,7 +31,7 @@ Key/value facts about the file: `kind` (`catalog` or `export`), `created_at`, `c
 | ----------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
 | `id`              | INTEGER | Primary key.                                                                                                  |
 | `label`           | TEXT    | Unique; 1–64 characters, no `:`, `/`, `\`, control characters or surrounding spaces. The location's identity. |
-| `root_kind`       | TEXT    | `local` (Android roots arrive in M5).                                                                         |
+| `root_kind`       | TEXT    | `local` (Android roots arrive in M5). Imported locations are `local` with an `imported_locations` row.        |
 | `root_raw`        | BLOB    | Absolute root path in `path_encoding`.                                                                        |
 | `path_encoding`   | TEXT    | `posix` or `wtf8`; applies to the root and all entry paths.                                                   |
 | `fingerprint`     | TEXT    | Best-effort device identity (M4); nullable.                                                                   |
@@ -39,6 +39,10 @@ Key/value facts about the file: `kind` (`catalog` or `export`), `created_at`, `c
 | `hash_policy`     | TEXT    | `lazy` or `eager`.                                                                                            |
 | `ignore_patterns` | TEXT    | `.gitignore`-style patterns, one per line.                                                                    |
 | `created_at`      | INTEGER |                                                                                                               |
+
+### `imported_locations` (v2)
+
+Locations created by importing a `.symbolon` file ([ADR-0013](adr/0013-imported-locations.md)); their files are on another computer, so they are compared but never scanned. `location_id` (primary key, cascades on delete), `exported_at`, `exported_by` (app version that wrote the file), `imported_at`.
 
 ### `scans`
 
@@ -70,3 +74,7 @@ Indexes: `(location_id, rel_path_raw)` unique, `(location_id, path_key)`, `(loca
 ### `scan_warnings`
 
 Per-entry problems found during a scan (permission denied, vanished, changed while hashing, I/O errors): `scan_id`, `rel_path_raw` (nullable for scan-wide warnings), `kind`, `message`.
+
+## `.symbolon` export files
+
+An export is a database with the same schema, `meta.kind = 'export'` and exactly one location: its newest completed scan and its entries, all marked as seen by that scan. It uses `journal_mode = DELETE`, so it is one self-contained file. `Catalog::export` writes it and `Catalog::import` reads it; the conflict rules are in [ADR-0005](adr/0005-export-format-and-import-conflicts.md) and [ADR-0013](adr/0013-imported-locations.md). Exports contain full paths and hashes of private files: treat them as sensitive.

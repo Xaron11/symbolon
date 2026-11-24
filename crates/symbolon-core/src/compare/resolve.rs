@@ -149,7 +149,7 @@ impl Comparison {
                 let location = self.catalog.location(&label)?;
                 let reachable = match &location.root {
                     LocationRoot::Local(root) => root.is_dir(),
-                    LocationRoot::Foreign { .. } => false,
+                    LocationRoot::Foreign { .. } | LocationRoot::Imported { .. } => false,
                 };
                 let source = match source_for(&location) {
                     Ok(source) if reachable => source,

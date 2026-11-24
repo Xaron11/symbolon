@@ -55,7 +55,9 @@ pub(crate) fn source_for(location: &Location) -> Result<Arc<dyn Source>, ScanErr
         )?)),
         #[cfg(not(feature = "local"))]
         LocationRoot::Local(_) => Err(ScanError::Unsupported(location.label.clone())),
-        LocationRoot::Foreign { .. } => Err(ScanError::NotScannable(location.label.clone())),
+        LocationRoot::Foreign { .. } | LocationRoot::Imported { .. } => {
+            Err(ScanError::NotScannable(location.label.clone()))
+        }
     }
 }
 
