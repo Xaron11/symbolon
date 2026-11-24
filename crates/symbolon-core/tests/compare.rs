@@ -294,6 +294,26 @@ fn case_and_unicode_options_match_keys() {
 
 #[test]
 fn names_that_collapse_on_one_side_are_collisions() {
+    // NFC and NFD spellings are distinct names on Linux and Windows, so this works everywhere.
+    let fx = Fixture::new();
+    fx.eager("a", &[("Cafe\u{301}", "1"), ("Café", "2")]);
+    fx.eager("b", &[("Café", "1")]);
+    let nfc = CompareOptions::default().keys(KeyOptions {
+        nfc: true,
+        ..KeyOptions::default()
+    });
+    let rows = all_rows(&fx.compare(&["a", "b"], nfc));
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        (rows[0].category, rows[0].cells.len()),
+        (Category::Collision, 3)
+    );
+}
+
+/// Case-insensitive filesystems (Windows, macOS) cannot hold `Readme` next to `README`.
+#[cfg(target_os = "linux")]
+#[test]
+fn case_variants_on_one_side_are_collisions() {
     let fx = Fixture::new();
     fx.eager("a", &[("Readme", "1"), ("README", "2")]);
     fx.eager("b", &[("readme", "1")]);
@@ -301,8 +321,7 @@ fn names_that_collapse_on_one_side_are_collisions() {
         case_insensitive: true,
         ..KeyOptions::default()
     });
-    let cmp = fx.compare(&["a", "b"], ci);
-    let rows = all_rows(&cmp);
+    let rows = all_rows(&fx.compare(&["a", "b"], ci));
     assert_eq!(rows.len(), 1);
     assert_eq!(
         (rows[0].category, rows[0].cells.len()),
