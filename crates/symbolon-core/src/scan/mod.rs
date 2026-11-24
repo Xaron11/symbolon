@@ -261,6 +261,11 @@ pub struct ScanSummary {
 }
 
 /// Something that happened during a scan.
+///
+/// Delivery is best-effort except for [`ScanEvent::Started`] (always first) and
+/// [`ScanEvent::Finished`]: events that do not fit in the buffer of a slow client are dropped
+/// (see [`ScanHandle`]). Dropped warnings are still counted and stored for
+/// [`Query::warnings`](crate::query::Query::warnings).
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum ScanEvent {
@@ -349,15 +354,21 @@ impl Scanner {
         let thread = std::thread::Builder::new()
             .name(format!("symbolon-scan-{}", location.label))
             .spawn(move || {
-                let _lock = lock;
-                run::run(
+                let result = run::run(
                     &catalog,
                     &location,
                     &*source,
                     &options,
                     &thread_control,
                     &sender,
-                )
+                );
+                drop(lock);
+                if let Ok(summary) = &result {
+                    // The only event that waits for room: the work is done and the location
+                    // free, so waiting for the client to read costs nothing.
+                    sender.send(ScanEvent::Finished(summary.clone())).ok();
+                }
+                result
             });
         Ok(ScanHandle {
             events,
@@ -367,8 +378,11 @@ impl Scanner {
     }
 }
 
-/// A running scan. Drop the events receiver or call [`ScanHandle::wait`] when done reading
-/// events; an unread, full event buffer pauses the scan until it is drained.
+/// A running scan.
+///
+/// Events are buffered; a client that stops reading never slows the scan down. When the buffer
+/// is full, new events are dropped, except [`ScanEvent::Finished`], which waits for the client
+/// to read or drop the receiver. Authoritative results are in the catalog (`Query`).
 #[derive(Debug)]
 pub struct ScanHandle {
     events: Receiver<ScanEvent>,
