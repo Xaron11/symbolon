@@ -1,6 +1,6 @@
 # Symbolon
 
-> *symbolon* (Greek σύμβολον): a token broken in two, each party keeping a half, later matched to prove identity.
+> _symbolon_ (Greek σύμβολον): a token broken in two, each party keeping a half, later matched to prove identity.
 
 Symbolon answers one question: **do these locations match, and if not, how exactly do they differ?**
 
@@ -10,25 +10,27 @@ It scans two or more locations (directories, mounted disks, pendrives, Android p
 
 ## Layout
 
-| Path | Purpose |
-|---|---|
-| `crates/symbolon-core` | All logic: scanning, catalog, comparison. No UI, no async runtime requirement. |
-| `crates/symbolon-cli` | `symbolon` command-line client. |
-| `crates/symbolon-app` | Tauri 2 desktop app; SvelteKit frontend in `ui/`. |
-| `crates/symbolon-agent` | Static scanner binary pushed to Android devices over ADB. |
+| Path                    | Purpose                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `crates/symbolon-core`  | All logic: scanning, catalog, comparison. No UI, no async runtime requirement. |
+| `crates/symbolon-cli`   | `symbolon` command-line client.                                                |
+| `crates/symbolon-app`   | Tauri 2 desktop app; SvelteKit frontend in `ui/`.                              |
+| `crates/symbolon-agent` | Static scanner binary pushed to Android devices over ADB.                      |
 
 ## Development
 
-Requires [Nix](https://nixos.org) with flakes. Everything else, including the pinned Rust toolchain, comes from the dev shell.
+Requires [Nix](https://nixos.org) with flakes. Everything else, including the pinned Rust toolchain and the git hooks, comes from the dev shell.
 
 ```sh
 direnv allow          # or: nix develop
 just                  # list recipes
-just test lint deny   # what CI runs
+just fmt lint test    # format, lint and test everything (as CI does)
 just app-dev          # desktop app with hot reload
 just android-scanner  # cross-compile the Android agent (aarch64, static musl)
 nix build             # CLI package
 ```
+
+Workflow, code rules and conventions: [`AGENTS.md`](AGENTS.md). Testing: [`docs/testing.md`](docs/testing.md). Releases and CI: [ADR-0007](docs/adr/0007-development-workflow.md).
 
 ## Privacy
 
