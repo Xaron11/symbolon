@@ -204,10 +204,11 @@ impl Source for Gated {
     }
 }
 
-/// Appends to `victim` right before it is opened, as if another program wrote to it.
+/// Appends to the file with key `victim` right before it is opened, as if another program
+/// wrote to it.
 struct Mutating {
     inner: LocalSource,
-    victim: PathBuf,
+    victim: &'static str,
 }
 
 impl Source for Mutating {
@@ -218,8 +219,8 @@ impl Source for Mutating {
         self.inner.walk(visit)
     }
     fn open(&self, path: &RelPath) -> io::Result<Box<dyn ReadSeek + Send>> {
-        let native = path.to_native(self.inner.root()).unwrap();
-        if native == self.victim {
+        if path.key().as_str() == self.victim {
+            let native = path.to_native(self.inner.root()).unwrap();
             fs::OpenOptions::new()
                 .append(true)
                 .open(&native)?
@@ -425,7 +426,7 @@ fn files_changing_while_hashed_become_warnings_without_digests() {
     fx.write("growing", b"growing", 1_001);
     let source = Arc::new(Mutating {
         inner: fx.local(),
-        victim: fs::canonicalize(&fx.root).unwrap().join("growing"),
+        victim: "growing",
     });
     let (events, summary) = fx.scan_with(source, ScanOptions::default());
     assert_eq!(summary.unwrap().counts.warnings, 1);
