@@ -118,6 +118,9 @@ pub struct CompareOptions {
     /// equal without hashing. Such rows are marked [`Row::assumed`] and must be presented as
     /// unverified. `None` (the default) never assumes.
     pub assume_equal_within: Option<Duration>,
+    /// Also find duplicates within each side: [`Comparison::hash_needs`] then includes files
+    /// that share a size with another file of the same side. Off by default (extra hashing).
+    pub duplicates: bool,
 }
 
 impl CompareOptions {
@@ -125,6 +128,13 @@ impl CompareOptions {
     #[must_use]
     pub fn keys(mut self, keys: KeyOptions) -> Self {
         self.keys = keys;
+        self
+    }
+
+    /// Sets [`CompareOptions::duplicates`].
+    #[must_use]
+    pub fn duplicates(mut self, duplicates: bool) -> Self {
+        self.duplicates = duplicates;
         self
     }
 
@@ -321,12 +331,23 @@ impl Summary {
     }
 }
 
-/// Which rows [`Comparison::rows`] returns.
+/// Which rows [`Comparison::rows`] and [`Comparison::filtered_summary`] consider. Every set
+/// field must match; the default matches all rows.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct RowFilter {
     /// Only these categories; empty means all.
     pub categories: Vec<Category>,
+    /// Only rows whose file name has this extension (case-insensitive, without the dot).
+    pub extension: Option<String>,
+    /// Only rows whose largest file has at least this many bytes.
+    pub min_size: Option<u64>,
+    /// Only rows whose largest file has at most this many bytes.
+    pub max_size: Option<u64>,
+    /// Only rows at or under this relative path (matched with the comparison's key options).
+    pub prefix: Option<String>,
+    /// Only rows present on exactly these sides.
+    pub presence: Option<SideSet>,
 }
 
 impl RowFilter {
@@ -334,8 +355,71 @@ impl RowFilter {
     pub fn categories(categories: impl IntoIterator<Item = Category>) -> Self {
         Self {
             categories: categories.into_iter().collect(),
+            ..Self::default()
         }
     }
+
+    /// Restricts to file names with `extension` (`"jpg"`, `".JPG"` and `"Jpg"` are the same).
+    #[must_use]
+    pub fn extension(mut self, extension: &str) -> Self {
+        self.extension = Some(extension.trim_start_matches('.').to_lowercase());
+        self
+    }
+
+    /// Restricts to rows whose largest file is within `min..=max` bytes.
+    #[must_use]
+    pub fn size_range(mut self, min: Option<u64>, max: Option<u64>) -> Self {
+        self.min_size = min;
+        self.max_size = max;
+        self
+    }
+
+    /// Restricts to rows at or under the relative path `prefix`.
+    #[must_use]
+    pub fn prefix(mut self, prefix: &str) -> Self {
+        self.prefix = Some(prefix.to_owned());
+        self
+    }
+
+    /// Restricts to rows present on exactly `sides`.
+    #[must_use]
+    pub fn presence(mut self, sides: SideSet) -> Self {
+        self.presence = Some(sides);
+        self
+    }
+}
+
+/// Files with identical content within one side.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DuplicateSet {
+    /// Index of the side.
+    pub side: usize,
+    /// The shared full digest.
+    pub digest: Digest,
+    /// Size of each copy.
+    pub size: u64,
+    /// The copies, ordered by path.
+    pub cells: Vec<Cell>,
+}
+
+impl DuplicateSet {
+    /// Bytes that removing all but one copy would free.
+    pub fn redundant_bytes(&self) -> u64 {
+        self.size * (self.cells.len() as u64).saturating_sub(1)
+    }
+}
+
+/// Duplicate totals of one side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct DuplicateTotals {
+    /// Groups of identical files.
+    pub groups: u64,
+    /// Files in those groups.
+    pub files: u64,
+    /// Bytes that removing all but one copy per group would free.
+    pub redundant_bytes: u64,
 }
 
 /// A comparison of two or more sides; see the module documentation.
@@ -414,7 +498,40 @@ impl Comparison {
     ///
     /// A database error.
     pub fn summary(&self) -> Result<Summary, CompareError> {
-        sql::summary(&self.conn)
+        self.filtered_summary(&RowFilter::default())
+    }
+
+    /// Totals per category of the rows matching `filter`.
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn filtered_summary(&self, filter: &RowFilter) -> Result<Summary, CompareError> {
+        sql::summary(&self.conn, &sql::FilterParams::new(filter, &self.options))
+    }
+
+    /// Duplicate groups within side `side` (an index into [`Comparison::sides`]), ordered by
+    /// digest. Only files with full digests count; empty files are left out, since they are
+    /// all trivially identical.
+    ///
+    /// # Errors
+    ///
+    /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor.
+    pub fn duplicates(
+        &self,
+        side: usize,
+        page: &Page,
+    ) -> Result<PageOf<DuplicateSet>, CompareError> {
+        sql::duplicates(&self.conn, &self.sides, side, page)
+    }
+
+    /// Duplicate totals per side, indexed like [`Comparison::sides`].
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn duplicate_totals(&self) -> Result<Vec<DuplicateTotals>, CompareError> {
+        sql::duplicate_totals(&self.conn, self.sides.len())
     }
 
     /// A page of rows matching `filter`, in stable path order.
@@ -423,7 +540,12 @@ impl Comparison {
     ///
     /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor.
     pub fn rows(&self, filter: &RowFilter, page: &Page) -> Result<PageOf<Row>, CompareError> {
-        sql::rows(&self.conn, &self.sides, filter, page)
+        sql::rows(
+            &self.conn,
+            &self.sides,
+            &sql::FilterParams::new(filter, &self.options),
+            page,
+        )
     }
 }
 
