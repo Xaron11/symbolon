@@ -12,6 +12,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0006](0006-core-feature-gates.md)                 | Cargo features in `symbolon-core`                                       |
 | [0007](0007-development-workflow.md)               | Branches, hooks, CI, releases, project management                       |
 | [0008](0008-documentation-and-editor-tooling.md)   | rustdoc and TSDoc rules, mdBook site, link checks, language servers     |
+| [0009](0009-core-scan-design.md)                   | Catalog access, schema v1 choices, hashing and the scan pipeline        |
 
 ## Writing a new ADR
 

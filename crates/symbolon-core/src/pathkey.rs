@@ -479,19 +479,19 @@ fn wtf8_units(bytes: &[u8]) -> Option<Vec<Wtf8Unit>> {
 }
 
 #[cfg(unix)]
-fn push_native(out: &mut Vec<u8>, name: &OsStr) {
+pub(crate) fn push_native(out: &mut Vec<u8>, name: &OsStr) {
     use std::os::unix::ffi::OsStrExt as _;
     out.extend_from_slice(name.as_bytes());
 }
 
 #[cfg(windows)]
-fn push_native(out: &mut Vec<u8>, name: &OsStr) {
+pub(crate) fn push_native(out: &mut Vec<u8>, name: &OsStr) {
     use std::os::windows::ffi::OsStrExt as _;
     wtf8_encode(name.encode_wide(), out);
 }
 
 #[cfg(not(any(unix, windows)))]
-fn push_native(out: &mut Vec<u8>, name: &OsStr) {
+pub(crate) fn push_native(out: &mut Vec<u8>, name: &OsStr) {
     out.extend_from_slice(name.to_string_lossy().as_bytes());
 }
 
@@ -500,13 +500,13 @@ fn push_native(out: &mut Vec<u8>, name: &OsStr) {
     clippy::unnecessary_wraps,
     reason = "same signature as on Windows, where decoding can fail"
 )]
-fn native_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
+pub(crate) fn native_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
     use std::os::unix::ffi::OsStrExt as _;
     Some(PathBuf::from(OsStr::from_bytes(bytes)))
 }
 
 #[cfg(windows)]
-fn native_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
+pub(crate) fn native_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
     use std::os::windows::ffi::OsStringExt as _;
     let mut wide = Vec::with_capacity(bytes.len());
     for unit in wtf8_units(bytes)? {
@@ -520,7 +520,7 @@ fn native_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
 }
 
 #[cfg(not(any(unix, windows)))]
-fn native_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
+pub(crate) fn native_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
     std::str::from_utf8(bytes).ok().map(PathBuf::from)
 }
 

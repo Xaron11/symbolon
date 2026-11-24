@@ -80,6 +80,10 @@ test-ui: ui-install
 coverage *args:
     cargo llvm-cov nextest --workspace --locked {{ args }}
 
+# Write the catalog fixture for a new schema version (see docs/schema.md).
+schema-fixture:
+    cargo test -p symbolon-core --test schema_fixtures -- --ignored write_fixture
+
 bench:
     cargo bench --workspace
 
