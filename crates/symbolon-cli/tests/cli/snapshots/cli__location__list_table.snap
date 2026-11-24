@@ -1,0 +1,7 @@
+---
+source: crates/symbolon-cli/tests/cli/location.rs
+expression: "env.ok(&[\"location\", \"list\"])"
+---
+LABEL  ROOT  POLICY  ALGO  FILES  SIZE  HASHED  LAST SCAN
+backup  [TMP]/backup  lazy  xxh3  0  0 B  0  never
+photos  [TMP]/photos  eager  blake3  2  6 B  2  completed [TIME]

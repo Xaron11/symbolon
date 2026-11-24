@@ -1,0 +1,6 @@
+---
+source: crates/symbolon-cli/tests/cli/location.rs
+expression: "env.ok(&[\"location\", \"remove\", \"photos\", \"--yes\"])"
+---
+REMOVED
+photos

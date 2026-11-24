@@ -1,0 +1,32 @@
+---
+source: crates/symbolon-cli/tests/cli/location.rs
+expression: "env.ok(&[\"location\", \"list\", \"--json\"])"
+---
+{
+  "locations": [
+    {
+      "label": "backup",
+      "root": "[TMP]/backup",
+      "scannable": true,
+      "hash_policy": "lazy",
+      "hash_algo": "xxh3",
+      "files": 0,
+      "bytes": 0,
+      "hashed_files": 0,
+      "last_scan_status": null,
+      "last_scan_started_at": null
+    },
+    {
+      "label": "photos",
+      "root": "[TMP]/photos",
+      "scannable": true,
+      "hash_policy": "eager",
+      "hash_algo": "blake3",
+      "files": 2,
+      "bytes": 6,
+      "hashed_files": 2,
+      "last_scan_status": "completed",
+      "last_scan_started_at": "[TIME]"
+    }
+  ]
+}

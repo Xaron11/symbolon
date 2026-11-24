@@ -400,6 +400,33 @@ pub enum LocationRoot {
     },
 }
 
+impl LocationRoot {
+    /// The root for people and scripts: the path as it is when it is valid Unicode, otherwise
+    /// with the invalid bytes escaped as `%XX` like path keys. Windows' `\\?\` prefix on
+    /// drive paths is left out.
+    pub fn display(&self) -> String {
+        match self {
+            Self::Local(path) => path.to_str().map_or_else(
+                || {
+                    let mut raw = Vec::new();
+                    pathkey::push_native(&mut raw, path.as_os_str());
+                    display_raw(PathEncoding::native(), &raw)
+                },
+                |text| strip_verbatim(text).to_owned(),
+            ),
+            Self::Foreign { display, .. } => display.clone(),
+        }
+    }
+}
+
+/// `\\?\C:\dir` → `C:\dir`; other paths (including `\\?\UNC\…`) unchanged.
+fn strip_verbatim(path: &str) -> &str {
+    match path.strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1..3) == Some(b":\\") => rest,
+        _ => path,
+    }
+}
+
 /// A location to add with [`Catalog::add_location`].
 #[derive(Debug, Clone)]
 pub struct NewLocation {
@@ -550,6 +577,30 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let catalog = Catalog::open(dir.path().join("catalog.db")).unwrap();
         (dir, catalog)
+    }
+
+    #[test]
+    fn roots_display_without_verbatim_prefix_and_with_escapes() {
+        assert_eq!(strip_verbatim(r"\\?\C:\data"), r"C:\data");
+        assert_eq!(strip_verbatim(r"\\?\UNC\host\share"), r"\\?\UNC\host\share");
+        assert_eq!(strip_verbatim("/home/me"), "/home/me");
+        assert_eq!(
+            LocationRoot::Local("/srv/data".into()).display(),
+            "/srv/data"
+        );
+        let foreign = LocationRoot::Foreign {
+            encoding: PathEncoding::Posix,
+            display: "/bad%FF".into(),
+        };
+        assert_eq!(foreign.display(), "/bad%FF");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_unicode_local_roots_are_escaped() {
+        use std::os::unix::ffi::OsStrExt as _;
+        let root = PathBuf::from(std::ffi::OsStr::from_bytes(b"/data/bad\xffname"));
+        assert_eq!(LocationRoot::Local(root).display(), "/data/bad%FFname");
     }
 
     #[test]

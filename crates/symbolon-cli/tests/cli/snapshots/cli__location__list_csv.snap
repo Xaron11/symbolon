@@ -1,0 +1,7 @@
+---
+source: crates/symbolon-cli/tests/cli/location.rs
+expression: "env.ok(&[\"location\", \"list\", \"--format\", \"csv\"])"
+---
+label,root,scannable,hash_policy,hash_algo,files,bytes,hashed_files,last_scan_status,last_scan_started_at
+backup,[TMP]/backup,true,lazy,xxh3,0,0,0,,
+photos,[TMP]/photos,true,eager,blake3,2,6,2,completed,[TIME]

@@ -1,0 +1,20 @@
+---
+source: crates/symbolon-cli/tests/cli/location.rs
+expression: out
+---
+{
+  "locations": [
+    {
+      "label": "docs",
+      "root": "[TMP]/docs",
+      "scannable": true,
+      "hash_policy": "lazy",
+      "hash_algo": "blake3",
+      "files": 0,
+      "bytes": 0,
+      "hashed_files": 0,
+      "last_scan_status": null,
+      "last_scan_started_at": null
+    }
+  ]
+}
