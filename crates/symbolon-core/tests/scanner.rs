@@ -27,7 +27,7 @@ use symbolon_core::source::{
 const TIMEOUT: Duration = Duration::from_secs(10);
 
 struct Fixture {
-    _dir: tempfile::TempDir,
+    dir: tempfile::TempDir,
     root: PathBuf,
     catalog: Catalog,
 }
@@ -41,11 +41,7 @@ impl Fixture {
         catalog
             .add_location(NewLocation::local("loc", &root).hash_policy(policy))
             .unwrap();
-        Self {
-            _dir: dir,
-            root,
-            catalog,
-        }
+        Self { dir, root, catalog }
     }
 
     /// Writes a file with a fixed, distinct mtime so tests never depend on clock resolution.
@@ -752,4 +748,132 @@ fn unknown_locations_cannot_be_scanned() {
         Scanner::start(&fx.catalog, "nope", ScanOptions::default()),
         Err(ScanError::Catalog(_))
     ));
+}
+
+#[test]
+fn a_location_is_scanned_by_one_scan_at_a_time() {
+    let fx = Fixture::new(HashPolicy::Eager);
+    many_files(&fx, 3);
+    let other = fx.dir.path().join("other");
+    fs::create_dir(&other).unwrap();
+    fx.catalog
+        .add_location(NewLocation::local("other", &other))
+        .unwrap();
+
+    let (source, opened, go) = Gated::new(fx.local());
+    let first =
+        Scanner::start_with_source(&fx.catalog, "loc", source.clone(), one_thread()).unwrap();
+    opened.recv_timeout(TIMEOUT).unwrap();
+
+    let second = Scanner::start(&fx.catalog, "loc", ScanOptions::default());
+    let Err(ScanError::AlreadyScanning { label, since }) = second else {
+        panic!("expected AlreadyScanning, got {second:?}");
+    };
+    assert_eq!(label, "loc");
+    assert!(since.is_some(), "the running scan's start time is reported");
+    let parallel = Scanner::start(&fx.catalog, "other", ScanOptions::default()).unwrap();
+    assert_eq!(parallel.wait().unwrap().status, ScanStatus::Completed);
+
+    source.release();
+    go.send(()).unwrap();
+    assert_eq!(first.wait().unwrap().status, ScanStatus::Completed);
+    assert_eq!(fx.scan().status, ScanStatus::Completed);
+}
+
+/// A walk that never ends, so the scan holds its lock until the process dies.
+struct Stuck;
+
+impl Source for Stuck {
+    fn walk(
+        &self,
+        _visit: &mut dyn FnMut(WalkItem) -> ControlFlow<()>,
+    ) -> Result<WalkOutcome, SourceError> {
+        loop {
+            std::thread::park();
+        }
+    }
+    fn open(&self, _path: &RelPath) -> io::Result<Box<dyn ReadSeek + Send>> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+    fn stat(&self, _path: &RelPath) -> io::Result<SourceEntry> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+}
+
+const LOCK_CHILD_ENV: &str = "SYMBOLON_TEST_LOCK_CHILD";
+
+/// Run as a child process by `the_scan_lock_works_across_processes`: starts a scan that never
+/// ends, says so, and waits to be killed.
+#[test]
+#[ignore = "helper: run as a child process by another test"]
+fn scan_lock_child() {
+    let Some(dir) = std::env::var_os(LOCK_CHILD_ENV) else {
+        return;
+    };
+    let catalog = Catalog::open(PathBuf::from(dir).join("catalog.db")).unwrap();
+    let _handle =
+        Scanner::start_with_source(&catalog, "loc", Arc::new(Stuck), ScanOptions::default())
+            .unwrap();
+    let conn = Connection::open(catalog.path()).unwrap();
+    let running = || -> bool {
+        conn.query_row(
+            "SELECT count(*) FROM scans WHERE status = 'running'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap()
+            == 1
+    };
+    while !running() {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    println!("locked");
+    loop {
+        std::thread::park();
+    }
+}
+
+#[test]
+fn the_scan_lock_works_across_processes() {
+    use std::io::BufRead as _;
+    let fx = Fixture::new(HashPolicy::Eager);
+    many_files(&fx, 3);
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "scan_lock_child",
+            "--include-ignored",
+            "--nocapture",
+        ])
+        .env(LOCK_CHILD_ENV, fx.dir.path())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let stdout = io::BufReader::new(child.stdout.take().unwrap());
+    assert!(
+        stdout.lines().any(|line| line.unwrap() == "locked"),
+        "the child took the lock"
+    );
+
+    let refused = Scanner::start(&fx.catalog, "loc", ScanOptions::default());
+    assert!(
+        matches!(refused, Err(ScanError::AlreadyScanning { .. })),
+        "{refused:?}"
+    );
+
+    // A killed scanner releases its lock; its scan is recorded as interrupted.
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let deadline = std::time::Instant::now() + TIMEOUT;
+    let handle = loop {
+        match Scanner::start(&fx.catalog, "loc", ScanOptions::default()) {
+            Err(ScanError::AlreadyScanning { .. }) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            result => break result.unwrap(),
+        }
+    };
+    assert_eq!(handle.wait().unwrap().status, ScanStatus::Completed);
+    let statuses: Vec<String> = fx.scan_rows().into_iter().map(|(s, _)| s).collect();
+    assert_eq!(statuses, ["interrupted", "completed"]);
 }
