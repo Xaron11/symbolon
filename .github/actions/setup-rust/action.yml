@@ -6,12 +6,16 @@ inputs:
     description: Extra rustup components, space-separated.
     required: false
     default: ""
+  tauri-libs:
+    description: Install the Tauri system libraries on Linux ("true" or "false").
+    required: false
+    default: "true"
 
 runs:
   using: composite
   steps:
     - name: Tauri system libraries
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && inputs.tauri-libs == 'true'
       shell: bash
       run: |
         sudo apt-get update -qq

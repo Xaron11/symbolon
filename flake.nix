@@ -46,6 +46,8 @@
           extensions = toolchainFile.components ++ extensions;
           inherit (toolchainFile) targets;
         };
+      # Host-only toolchain (no cross targets) for formatting and CI shells.
+      hostRust = pkgs: (rustFor pkgs [ ]).override { targets = [ ]; };
       devRust =
         pkgs:
         rustFor pkgs [
@@ -97,7 +99,7 @@
       # treefmt reads treefmt.toml; Prettier is taken from the frontend's node_modules.
       formatters =
         pkgs: with pkgs; [
-          (rustFor pkgs [ ])
+          (hostRust pkgs)
           nixfmt
           taplo
         ];
@@ -223,6 +225,34 @@
               export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:''${XDG_DATA_DIRS:-}"
               ${hooks.shellHook}
             '';
+          };
+
+          # Lean shells for CI, so jobs download and cache only what they use.
+          # `ci`: git hooks and docs (no language servers, Tauri libraries, adb or cross toolchain).
+          ci = pkgs.mkShellNoCC {
+            packages =
+              with pkgs;
+              [
+                (hostRust pkgs)
+                (treefmtFor pkgs)
+                just
+                nodejs_24
+                pnpm
+              ]
+              ++ hooks.enabledPackages
+              ++ docsTools pkgs;
+
+            inherit (hooks) shellHook;
+          };
+
+          # `android`: cross-compiling the Android agent.
+          android = pkgs.mkShell {
+            packages = with pkgs; [
+              (rustFor pkgs [ ])
+              just
+              cargo-zigbuild
+              zig
+            ];
           };
         }
       );

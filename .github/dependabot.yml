@@ -23,6 +23,10 @@ updates:
       day: monday
     cooldown:
       default-days: 7
+    ignore:
+      # Type definitions follow the Node major we run (nodejs_24 in flake.nix), not the newest.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
     groups:
       npm:
         update-types: [minor, patch]

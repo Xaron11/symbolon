@@ -97,7 +97,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
-      - run: nix develop -c just android-scanner check-agent
+      - run: nix develop .#android -c just android-scanner check-agent
       - name: Package
         env:
           TAG: ${{ github.ref_name }}
