@@ -14,6 +14,10 @@
 
 <!-- UI changes only. -->
 
+## Documentation
+
+<!-- Updated rustdoc, book pages, ADRs or AGENTS.md; or why none was needed. -->
+
 ## Schema / migration impact
 
 <!-- None, or: new schema version, migration, compatibility tests added. -->

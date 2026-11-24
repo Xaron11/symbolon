@@ -95,6 +95,31 @@ android-probe dir="/sdcard/DCIM" serial="": android-scanner
     trap 'adb "${adb_args[@]}" shell rm -f "$remote"' EXIT
     adb "${adb_args[@]}" exec-out "$remote" "{{ dir }}"
 
+# --- documentation -----------------------------------------------------------
+
+# Build the book and the API reference into target/book.
+docs: docs-api docs-book
+
+docs-api:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+
+# Assemble the book; includes the API reference from target/doc if it was built.
+docs-book:
+    mdbook-mermaid install docs >/dev/null
+    mdbook build docs
+    rm -rf target/book/api
+    if [[ -d target/doc ]]; then cp -r target/doc target/book/api; fi
+
+docs-serve:
+    mdbook-mermaid install docs >/dev/null
+    mdbook serve docs --open
+
+# Build everything and check every internal link and anchor.
+docs-check: docs docs-links
+
+docs-links:
+    lychee --offline --include-fragments --no-progress --root-dir "$PWD/target/book" --exclude-path target/book/api 'target/book/**/*.html'
+
 # --- release (see docs/adr/0007-development-workflow.md) ---------------------
 
 changelog:

@@ -21,18 +21,21 @@ Symbolon compares two or more file locations (directories, disks, pendrives, And
 
 Everything comes from the Nix dev shell (`direnv allow` or `nix develop`), which also installs the git hooks. Run `just` to list recipes. The ones you need:
 
-| Task                            | Command                                 |
-| ------------------------------- | --------------------------------------- |
-| Format everything               | `just fmt`                              |
-| All lints (what CI runs)        | `just lint`                             |
-| Rust lints only / frontend only | `just lint-rust` / `just lint-ui`       |
-| Tests                           | `just test` and `just test-ui`          |
-| Coverage                        | `just coverage` (`--html` for a report) |
-| Licenses and advisories         | `just deny`                             |
-| Desktop app with hot reload     | `just app-dev`                          |
-| Android agent                   | `just android-scanner check-agent`      |
+| Task                            | Command                                          |
+| ------------------------------- | ------------------------------------------------ |
+| Format everything               | `just fmt`                                       |
+| All lints (what CI runs)        | `just lint`                                      |
+| Rust lints only / frontend only | `just lint-rust` / `just lint-ui`                |
+| Tests                           | `just test` and `just test-ui`                   |
+| Coverage                        | `just coverage` (`--html` for a report)          |
+| Licenses and advisories         | `just deny`                                      |
+| Desktop app with hot reload     | `just app-dev`                                   |
+| Android agent                   | `just android-scanner check-agent`               |
+| Docs (book + API, link check)   | `just docs-check` (`just docs-serve` to preview) |
 
-Before you say a change is done: `just fmt lint test` (plus `just test-ui` for frontend changes) must pass. The pre-push hook runs the same checks.
+Before you say a change is done: `just fmt lint test` (plus `just test-ui` for frontend changes, `just docs-check` for docs changes) must pass. The pre-push hook runs the same checks.
+
+Language servers for every file type come from the dev shell; see `docs/development/editor.md`. The book in `docs/` (mdBook) explains concepts and architecture; start there when the code alone does not tell you why.
 
 ## Code rules
 
@@ -46,6 +49,15 @@ Before you say a change is done: `just fmt lint test` (plus `just test-ui` for f
 - **Hashes:** never treat a partial hash as proof of identity; never compare hashes of different algorithms (spec §5).
 - **Frontend:** TypeScript strict (with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), `typescript-eslint` strict-type-checked, Svelte 5 runes. Large lists are paginated by Rust and virtualized in the UI.
 - **PoC code** is labelled `PoC` in a comment and tracked by an issue.
+
+## Documentation
+
+Docs change in the same PR as the code. Details: `docs/development/documentation.md`.
+
+- Every public Rust item has rustdoc: a one-sentence summary, then `# Errors` / `# Panics` / `# Examples` as they apply. Examples are doctests. Use intra-doc links; broken links fail CI.
+- Exported TypeScript in `ui/src/lib` has TSDoc (enforced by ESLint).
+- Concepts, architecture and how-tos go in the book (`docs/`, listed in `docs/SUMMARY.md`); decisions go in ADRs; do not duplicate, link.
+- Mark not-yet-built things as _(planned)_ with their milestone and remove the mark when they land.
 
 ## Tests
 
