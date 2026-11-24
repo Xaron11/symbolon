@@ -73,6 +73,10 @@ jobs:
           shared-key: clippy
           save-if: ${{ env.SAVE_CACHE }}
       - run: cargo clippy ${{ matrix.packages }} --all-targets --locked
+      # symbolon-core must also build with its optional features off (ADR-0006).
+      - name: clippy (core, no default features)
+        if: runner.os == 'Linux'
+        run: cargo clippy -p symbolon-core --no-default-features --all-targets --locked
       - name: rustdoc
         if: runner.os == 'Linux'
         env:

@@ -23,8 +23,9 @@
 //! | [`catalog`] | SQLite catalog: opening, migrations, locations              |
 //! | [`hash`]    | Hash algorithms, streaming full digests and partial digests |
 //! | [`pathkey`] | Lossless relative paths and normalized matching keys        |
+//! | [`source`]  | Walking and reading a location; `LocalSource` (feature `local`) |
 //!
-//! _(planned)_ `source` (walking a location), `scan` (`Scanner`), `query` (`Query`), then `compare` and `plan`
+//! _(planned)_ `scan` (`Scanner`), `query` (`Query`), then `compare` and `plan`
 //! in later milestones. See the book chapter *Architecture* in `docs/`.
 //!
 //! # Guarantees
@@ -39,6 +40,7 @@
 pub mod catalog;
 pub mod hash;
 pub mod pathkey;
+pub mod source;
 
 /// Version of this crate, shared by the whole workspace.
 ///
