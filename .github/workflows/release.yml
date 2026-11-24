@@ -88,6 +88,11 @@ jobs:
           name="symbolon-${TAG}-${TARGET}"
           mkdir "$name"
           cp "target/${TARGET}/release/${EXE}" LICENSE README.md "$name/"
+          "target/${TARGET}/release/${EXE}" man --out "$name/man"
+          mkdir "$name/completions"
+          for shell in bash zsh fish elvish powershell; do
+            "target/${TARGET}/release/${EXE}" completions "$shell" > "$name/completions/symbolon.$shell"
+          done
           echo "Corresponding source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG}" > "$name/SOURCE.txt"
           if [[ "$RUNNER_OS" == "Windows" ]]; then 7z a "$name.zip" "$name"; else tar czf "$name.tar.gz" "$name"; fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
