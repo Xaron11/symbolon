@@ -24,6 +24,7 @@
   - [0008 Documentation and editor tooling](adr/0008-documentation-and-editor-tooling.md)
   - [0009 Core scan design](adr/0009-core-scan-design.md)
   - [0010 Comparison engine](adr/0010-comparison-engine.md)
+  - [0011 CLI conventions](adr/0011-cli-conventions.md)
 
 # Development
 

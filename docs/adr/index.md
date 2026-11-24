@@ -14,6 +14,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0008](0008-documentation-and-editor-tooling.md)   | rustdoc and TSDoc rules, mdBook site, link checks, language servers     |
 | [0009](0009-core-scan-design.md)                   | Catalog access, schema v1 choices, hashing and the scan pipeline        |
 | [0010](0010-comparison-engine.md)                  | Comparison categories, move matching, hashing on demand, paged results  |
+| [0011](0011-cli-conventions.md)                    | Catalog location, output formats, exit codes, Ctrl-C                    |
 
 ## Writing a new ADR
 
