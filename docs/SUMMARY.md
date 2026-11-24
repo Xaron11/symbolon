@@ -23,6 +23,7 @@
   - [0007 Development workflow](adr/0007-development-workflow.md)
   - [0008 Documentation and editor tooling](adr/0008-documentation-and-editor-tooling.md)
   - [0009 Core scan design](adr/0009-core-scan-design.md)
+  - [0010 Comparison engine](adr/0010-comparison-engine.md)
 
 # Development
 

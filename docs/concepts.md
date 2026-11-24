@@ -43,16 +43,19 @@ A file whose size is unique among the compared locations cannot match anything a
 
 ## Comparison categories
 
-Comparing two or more locations sorts every file into these categories:
+Comparing two or more locations (or subpaths of them) sorts every file into exactly one category ([ADR-0010](adr/0010-comparison-engine.md)):
 
-| Category              | Meaning                                                                       |
-| --------------------- | ----------------------------------------------------------------------------- |
-| **Identical**         | Same path key and same full hash in every compared location.                  |
-| **Different content** | Same path key, different size or hash.                                        |
-| **Only in …**         | Present in some locations only; with three or more this is a presence matrix. |
-| **Moved**             | Same content, same file name, different directory.                            |
-| **Renamed**           | Same content, different file name.                                            |
-| **Duplicate**         | Same content at several paths within one location.                            |
+| Category              | Meaning                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Identical**         | Same path and same full hash in every compared location.                                                                  |
+| **Different content** | Same path in two or more locations, different size or hash.                                                               |
+| **Only in …**         | Present in some locations only, with equal content where present; with three or more locations this is a presence matrix. |
+| **Moved**             | Same content in different directories, same file name.                                                                    |
+| **Renamed**           | Same content under a different file name (possibly also moved).                                                           |
+| **Collision**         | Two files of one location become the same path under case-insensitive or Unicode matching.                                |
+| **Unverified**        | Same path and size, not hashed yet, so equality is unknown.                                                               |
+
+Duplicates within one location are listed separately: a file can be identical across locations and also duplicated inside one.
 
 Example with two locations, `laptop` and `pendrive`:
 
@@ -63,6 +66,8 @@ Example with two locations, `laptop` and `pendrive`:
 | `photos/2024/a.jpg` | `archive/a.jpg`            | moved             |
 | `music/song.flac`   | `music/song (1).flac`      | renamed           |
 | `taxes/2023.ods`    | —                          | only in `laptop`  |
+
+Comparing lazily hashed locations reads only what decides a category: files with a size no other candidate has are never read, partial hashes rule out most differences cheaply, and full hashes are computed only where partial hashes match. A fast mode can assume "same size and modification time means same content"; such results are always marked as unverified.
 
 ## Write operations
 
