@@ -4,22 +4,20 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::{RecvTimeoutError, Sender};
-use rayon::prelude::*;
+use crossbeam_channel::Sender;
 use rusqlite::{Connection, TransactionBehavior, params};
 
+use super::hashing::{self, Job, Outcome, Tier};
 use super::{
     Control, ScanCounts, ScanError, ScanEvent, ScanId, ScanOptions, ScanPhase, ScanProgress,
     ScanStatus, ScanSummary,
 };
 use crate::catalog::{HashPolicy, Location, LocationRoot, now_ms};
-use crate::hash::{Digest, HashAlgo, HashError, hash_reader};
+use crate::hash::Digest;
 use crate::pathkey::RelPath;
 #[cfg(feature = "local")]
 use crate::source::LocalSource;
-use crate::source::{
-    EntryKind, Source, SourceEntry, SourceWarning, WalkItem, WalkOutcome, WarningKind,
-};
+use crate::source::{EntryKind, Source, SourceEntry, SourceWarning, WalkItem, WalkOutcome};
 
 /// Entries or hash results per write transaction.
 const BATCH: usize = 512;
@@ -48,7 +46,7 @@ ON CONFLICT (location_id, rel_path_raw) DO UPDATE SET
 const INSERT_WARNING: &str =
     "INSERT INTO scan_warnings (scan_id, rel_path_raw, kind, message) VALUES (?1, ?2, ?3, ?4)";
 
-pub(super) fn source_for(location: &Location) -> Result<Arc<dyn Source>, ScanError> {
+pub(crate) fn source_for(location: &Location) -> Result<Arc<dyn Source>, ScanError> {
     match &location.root {
         #[cfg(feature = "local")]
         LocationRoot::Local(root) => Ok(Arc::new(LocalSource::new(
@@ -121,18 +119,6 @@ fn begin(conn: &mut Connection, location: &Location) -> Result<ScanId, ScanError
     let id = tx.last_insert_rowid();
     tx.commit()?;
     Ok(ScanId(id))
-}
-
-struct HashJob {
-    id: i64,
-    path: RelPath,
-    size: u64,
-    mtime_ns: Option<i64>,
-}
-
-enum HashOutcome<'a> {
-    Hashed(&'a HashJob, Digest),
-    Warning(SourceWarning),
 }
 
 struct Scan<'a> {
@@ -294,7 +280,7 @@ impl Scan<'_> {
         Ok(())
     }
 
-    fn hash_jobs(&self) -> Result<Vec<HashJob>, ScanError> {
+    fn hash_jobs(&self) -> Result<Vec<Job>, ScanError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, rel_path_raw, size, mtime_ns FROM entries \
              WHERE location_id = ?1 AND seen_scan_id = ?2 AND kind = 'file' AND hash_full IS NULL \
@@ -313,11 +299,12 @@ impl Scan<'_> {
             let (id, raw, size, mtime_ns) = row?;
             let path = RelPath::from_raw(self.location.path_encoding, raw)
                 .map_err(|e| crate::catalog::CatalogError::Corrupt(e.to_string()))?;
-            jobs.push(HashJob {
+            jobs.push(Job {
                 id,
                 path,
                 size,
                 mtime_ns,
+                tier: Tier::Full,
             });
         }
         Ok(jobs)
@@ -329,41 +316,14 @@ impl Scan<'_> {
         self.hashing_started = Some(Instant::now());
         self.progress(ScanPhase::Hashing, true);
 
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(self.options.resolved_threads())
-            .thread_name(|i| format!("symbolon-hash-{i}"))
-            .build()
-            .map_err(|e| ScanError::Threads(e.to_string()))?;
-        let (sender, results) = crossbeam_channel::bounded::<HashOutcome<'_>>(BATCH);
+        let pool = hashing_pool(self.options)?;
         let (source, control, algo) = (self.source, self.control, self.location.hash_algo);
-
-        std::thread::scope(|scope| {
-            let jobs = &jobs;
-            scope.spawn(move || {
-                pool.install(|| {
-                    jobs.par_iter().for_each_with(sender, |sender, job| {
-                        if control.proceed() {
-                            // The receiver only goes away if the writer failed; stop quietly.
-                            sender.send(hash_one(source, algo, job)).ok();
-                        }
-                    });
-                });
-            });
-            self.write_hashes(&results)
-        })?;
-        self.progress(ScanPhase::Hashing, true);
-        Ok(())
-    }
-
-    fn write_hashes(
-        &mut self,
-        results: &crossbeam_channel::Receiver<HashOutcome<'_>>,
-    ) -> Result<(), ScanError> {
-        let mut batch: Vec<(&HashJob, Digest)> = Vec::with_capacity(BATCH);
+        let tick = self.options.progress_interval;
+        let mut batch: Vec<(&Job, Digest)> = Vec::with_capacity(BATCH);
         let mut batch_started = Instant::now();
-        loop {
-            let done = match results.recv_timeout(self.options.progress_interval) {
-                Ok(HashOutcome::Hashed(job, digest)) => {
+        hashing::run(&pool, source, algo, &jobs, control, tick, |outcome| {
+            match outcome {
+                Some(Outcome::Full(job, digest)) => {
                     self.counts.hashed_files += 1;
                     self.counts.hashed_bytes += job.size;
                     if self.options.file_events {
@@ -373,33 +333,28 @@ impl Scan<'_> {
                         });
                     }
                     batch.push((job, digest));
-                    false
                 }
-                Ok(HashOutcome::Warning(warning)) => {
-                    self.warn(warning);
-                    false
-                }
-                Err(RecvTimeoutError::Timeout) => false,
-                Err(RecvTimeoutError::Disconnected) => true,
-            };
-            if done || batch.len() >= BATCH || batch_started.elapsed() >= MAX_BATCH_AGE {
+                Some(Outcome::Warning(_, warning)) => self.warn(warning),
+                // Scans only compute full digests.
+                Some(Outcome::Partial(..)) | None => {}
+            }
+            if batch.len() >= BATCH || batch_started.elapsed() >= MAX_BATCH_AGE {
                 self.store_hashes(&mut batch)?;
                 batch_started = Instant::now();
             }
-            if done {
-                return Ok(());
-            }
             self.progress(ScanPhase::Hashing, false);
-        }
+            Ok::<(), ScanError>(())
+        })?;
+        self.store_hashes(&mut batch)?;
+        self.progress(ScanPhase::Hashing, true);
+        Ok(())
     }
 
-    fn store_hashes(&mut self, batch: &mut Vec<(&HashJob, Digest)>) -> Result<(), ScanError> {
+    fn store_hashes(&mut self, batch: &mut Vec<(&Job, Digest)>) -> Result<(), ScanError> {
         let tx = self.conn.transaction()?;
         {
             // The guard skips entries a newer scan changed in the meantime.
-            let mut update = tx.prepare_cached(
-                "UPDATE entries SET hash_full = ?1 WHERE id = ?2 AND size = ?3 AND mtime_ns IS ?4",
-            )?;
+            let mut update = tx.prepare_cached(hashing::store_statement(Tier::Full))?;
             for (job, digest) in batch.drain(..) {
                 update.execute(params![digest.as_bytes(), job.id, job.size, job.mtime_ns])?;
             }
@@ -463,42 +418,13 @@ fn insert_warnings(
     Ok(())
 }
 
-/// Hashes one file and re-checks it afterwards; any change turns the result into a warning.
-fn hash_one<'a>(source: &dyn Source, algo: HashAlgo, job: &'a HashJob) -> HashOutcome<'a> {
-    let warning = |kind, message: String| {
-        HashOutcome::Warning(SourceWarning {
-            path: Some(job.path.clone()),
-            kind,
-            message,
-        })
-    };
-    let reader = match source.open(&job.path) {
-        Ok(reader) => reader,
-        Err(e) => return HashOutcome::Warning(SourceWarning::io(Some(job.path.clone()), &e)),
-    };
-    let digest = match hash_reader(algo, reader, job.size) {
-        Ok(digest) => digest,
-        Err(HashError::SizeMismatch { expected, actual }) => {
-            return warning(
-                WarningKind::Changed,
-                format!("size changed while hashing (listed {expected} bytes, read {actual})"),
-            );
-        }
-        Err(HashError::Io(e)) => {
-            return HashOutcome::Warning(SourceWarning::io(Some(job.path.clone()), &e));
-        }
-        Err(e) => return warning(WarningKind::Io, e.to_string()),
-    };
-    match source.stat(&job.path) {
-        Ok(now) if now.size == job.size && now.mtime_ns == job.mtime_ns => {
-            HashOutcome::Hashed(job, digest)
-        }
-        Ok(_) => warning(
-            WarningKind::Changed,
-            "modified while hashing; hash discarded".to_owned(),
-        ),
-        Err(e) => HashOutcome::Warning(SourceWarning::io(Some(job.path.clone()), &e)),
-    }
+/// The thread pool hashing runs on, sized by [`ScanOptions::threads`].
+pub(crate) fn hashing_pool(options: &ScanOptions) -> Result<rayon::ThreadPool, ScanError> {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(options.resolved_threads())
+        .thread_name(|i| format!("symbolon-hash-{i}"))
+        .build()
+        .map_err(|e| ScanError::Threads(e.to_string()))
 }
 
 #[expect(

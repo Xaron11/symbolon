@@ -6,7 +6,10 @@
 //! committed is lost if the scan is cancelled, crashes or loses its device: the next scan of
 //! the location reuses it. See ADR-0009 for the pipeline.
 
+pub(crate) mod hashing;
 mod run;
+
+pub(crate) use self::run::{hashing_pool, source_for};
 
 use std::fmt;
 use std::num::NonZeroUsize;
@@ -295,7 +298,7 @@ impl Scanner {
         options: ScanOptions,
     ) -> Result<ScanHandle, ScanError> {
         let location = catalog.location(label)?;
-        let source = run::source_for(&location)?;
+        let source = source_for(&location)?;
         Ok(Self::spawn(catalog.clone(), location, source, options))
     }
 
@@ -390,20 +393,20 @@ impl ScanHandle {
 }
 
 #[derive(Debug, Default)]
-struct Control {
+pub(crate) struct Control {
     cancelled: AtomicBool,
     paused: Mutex<bool>,
     unpaused: Condvar,
 }
 
 impl Control {
-    fn cancel(&self) {
+    pub(crate) fn cancel(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
         // Wake paused workers so they observe the cancellation.
         self.set_paused(false);
     }
 
-    fn is_cancelled(&self) -> bool {
+    pub(crate) fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::SeqCst)
     }
 
@@ -413,7 +416,7 @@ impl Control {
     }
 
     /// Blocks while paused; returns `false` if the scan was cancelled.
-    fn proceed(&self) -> bool {
+    pub(crate) fn proceed(&self) -> bool {
         let mut paused = self.paused.lock().unwrap_or_else(PoisonError::into_inner);
         while *paused && !self.is_cancelled() {
             paused = self

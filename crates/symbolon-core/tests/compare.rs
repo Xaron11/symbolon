@@ -615,3 +615,222 @@ fn unhashed_or_different_files_are_never_matched_as_moves() {
             .all(|(category, _, _)| *category == Category::OnlyIn)
     );
 }
+
+mod resolve {
+    use std::ops::ControlFlow;
+
+    use symbolon_core::compare::ResolveEvent;
+    use symbolon_core::pathkey::RelPath;
+    use symbolon_core::query::{HashState, Query};
+
+    use super::*;
+
+    const BIG: usize = 200 * 1024;
+
+    fn lazy(fx: &Fixture, label: &str, files: &[(&str, String)]) {
+        let files: Vec<(&str, &str, u64)> =
+            files.iter().map(|(p, c)| (*p, c.as_str(), 1_000)).collect();
+        fx.location(label, HashPolicy::Lazy, HashAlgo::Blake3, &files);
+    }
+
+    fn state(fx: &Fixture, label: &str, path: &str) -> HashState {
+        let query = Query::open(&fx.catalog).unwrap();
+        query
+            .entry(label, &RelPath::from_path(path.as_ref()).unwrap())
+            .unwrap()
+            .unwrap()
+            .hash_state
+    }
+
+    fn resolve(cmp: &mut Comparison) -> symbolon_core::compare::ResolveSummary {
+        cmp.resolve(&ScanOptions::default(), |_| ControlFlow::Continue(()))
+            .unwrap()
+    }
+
+    fn big(fill: u8, tail: u8) -> String {
+        let mut text = vec![fill; BIG];
+        text[BIG - 1] = tail;
+        String::from_utf8(text).unwrap()
+    }
+
+    #[test]
+    fn only_deciding_files_are_hashed_and_unique_sizes_never_read() {
+        let fx = Fixture::new();
+        lazy(
+            &fx,
+            "a",
+            &[
+                ("same", "aaaa".into()),
+                ("diff", "aaaa".into()),
+                ("unique_a", "1234567".into()),
+            ],
+        );
+        lazy(
+            &fx,
+            "b",
+            &[
+                ("same", "aaaa".into()),
+                ("diff", "bbbb".into()),
+                ("unique_b", "123456789".into()),
+            ],
+        );
+        let mut cmp = fx.compare(&["a", "b"], CompareOptions::default());
+        assert_eq!(classes(&cmp)["same"].0, Category::Unverified);
+
+        let needs = cmp.hash_needs().unwrap();
+        let listed: u64 = needs.iter().map(|n| n.full_files + n.partial_files).sum();
+        assert_eq!(listed, 4, "same and diff on both sides: {needs:?}");
+
+        let summary = resolve(&mut cmp);
+        assert_eq!((summary.hashed_files, summary.warnings), (4, 0));
+        let got = classes(&cmp);
+        assert_eq!(got["same"].0, Category::Identical);
+        assert_eq!(got["diff"].0, Category::Different);
+        assert_eq!(state(&fx, "a", "unique_a"), HashState::Unhashed);
+        assert_eq!(state(&fx, "b", "unique_b"), HashState::Unhashed);
+        assert_eq!(cmp.hash_needs().unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn partial_digests_settle_large_differences_without_full_reads() {
+        let fx = Fixture::new();
+        lazy(
+            &fx,
+            "a",
+            &[("differs", big(b'x', b'1')), ("equal", big(b'y', b'2'))],
+        );
+        lazy(
+            &fx,
+            "b",
+            &[("differs", big(b'x', b'9')), ("equal", big(b'y', b'2'))],
+        );
+        let mut cmp = fx.compare(&["a", "b"], CompareOptions::default());
+        let first = cmp.hash_needs().unwrap();
+        assert!(
+            first
+                .iter()
+                .all(|n| n.full_files == 0 && n.partial_files == 2),
+            "{first:?}"
+        );
+
+        let summary = resolve(&mut cmp);
+        assert_eq!(
+            summary.rounds, 2,
+            "partial round, then full round for the still-equal pair"
+        );
+        let got = classes(&cmp);
+        assert_eq!(got["differs"].0, Category::Different);
+        assert_eq!(got["equal"].0, Category::Identical);
+        assert_eq!(
+            state(&fx, "a", "differs"),
+            HashState::Partial,
+            "the tail differs, so no full read"
+        );
+        assert_eq!(state(&fx, "a", "equal"), HashState::Verified);
+    }
+
+    #[test]
+    fn moves_appear_once_candidates_are_hashed() {
+        let fx = Fixture::new();
+        lazy(
+            &fx,
+            "a",
+            &[("old/photo.jpg", "PHOTO".into()), ("only_a", "x".into())],
+        );
+        lazy(
+            &fx,
+            "b",
+            &[
+                ("new/photo.jpg", "PHOTO".into()),
+                ("only_b", "yyyyyy".into()),
+            ],
+        );
+        let mut cmp = fx.compare(&["a", "b"], CompareOptions::default());
+        assert_eq!(classes(&cmp)["old/photo.jpg"].0, Category::OnlyIn);
+        resolve(&mut cmp);
+        let got = classes(&cmp);
+        assert_eq!(got["new/photo.jpg"].0, Category::Moved);
+        assert_eq!(
+            state(&fx, "a", "only_a"),
+            HashState::Unhashed,
+            "no size partner on b"
+        );
+    }
+
+    #[test]
+    fn resolving_lazily_matches_comparing_eagerly_hashed_copies() {
+        let files_a = [
+            ("x/1", "one"),
+            ("x/2", "two"),
+            ("moved/a", "AAAA"),
+            ("same", "SAME"),
+            ("d", "left"),
+        ];
+        let files_b = [
+            ("x/1", "one"),
+            ("x/2", "TWO"),
+            ("elsewhere/a", "AAAA"),
+            ("same", "SAME"),
+            ("d", "rite"),
+        ];
+        let fx = Fixture::new();
+        lazy(&fx, "a", &files_a.map(|(p, c)| (p, c.to_owned())));
+        lazy(&fx, "b", &files_b.map(|(p, c)| (p, c.to_owned())));
+        let mut lazily = fx.compare(&["a", "b"], CompareOptions::default());
+        resolve(&mut lazily);
+
+        let eager = Fixture::new();
+        eager.eager("a", &files_a);
+        eager.eager("b", &files_b);
+        assert_eq!(
+            classes(&lazily),
+            classes(&eager.compare(&["a", "b"], CompareOptions::default()))
+        );
+    }
+
+    #[test]
+    fn unreachable_locations_leave_rows_unverified() {
+        let fx = Fixture::new();
+        lazy(&fx, "a", &[("f", "same".into())]);
+        lazy(&fx, "b", &[("f", "same".into())]);
+        fs::remove_dir_all(fx.root("b")).unwrap();
+        let mut cmp = fx.compare(&["a", "b"], CompareOptions::default());
+        let mut unreachable = Vec::new();
+        let summary = cmp
+            .resolve(&ScanOptions::default(), |event| {
+                if let ResolveEvent::Unreachable { label, .. } = event {
+                    unreachable.push(label);
+                }
+                ControlFlow::Continue(())
+            })
+            .unwrap();
+        assert_eq!(unreachable, ["b"]);
+        assert_eq!(summary.unreachable, ["b"]);
+        assert_eq!(classes(&cmp)["f"].0, Category::Unverified);
+    }
+
+    #[test]
+    fn the_callback_can_stop_resolving() {
+        let fx = Fixture::new();
+        lazy(&fx, "a", &[("f", "same".into())]);
+        lazy(&fx, "b", &[("f", "same".into())]);
+        let mut cmp = fx.compare(&["a", "b"], CompareOptions::default());
+        let summary = cmp
+            .resolve(&ScanOptions::default(), |_| ControlFlow::Break(()))
+            .unwrap();
+        assert!(summary.cancelled);
+        assert_eq!(classes(&cmp)["f"].0, Category::Unverified);
+    }
+
+    #[test]
+    fn assumed_rows_need_no_hashing() {
+        let fx = Fixture::new();
+        lazy(&fx, "a", &[("f", "same".into())]);
+        lazy(&fx, "b", &[("f", "same".into())]);
+        let fast = fx.compare(
+            &["a", "b"],
+            CompareOptions::default().assume_equal_within(Duration::ZERO),
+        );
+        assert_eq!(fast.hash_needs().unwrap(), Vec::new());
+    }
+}
