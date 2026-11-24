@@ -39,7 +39,7 @@ impl Page {
         }
     }
 
-    fn limit(&self) -> u32 {
+    fn effective_limit(&self) -> u32 {
         self.limit.clamp(1, MAX_PAGE)
     }
 }
@@ -271,7 +271,7 @@ impl Query {
              hashed_files, hashed_bytes, reused_hashes, warnings, error \
              FROM scans WHERE location_id = ?1 AND id < ?2 ORDER BY id DESC LIMIT ?3",
         )?;
-        let rows = stmt.query_map(params![location.id, after, page.limit()], |row| {
+        let rows = stmt.query_map(params![location.id, after, page.effective_limit()], |row| {
             let counts = ScanCounts {
                 files: row.get(4)?,
                 dirs: row.get(5)?,
@@ -343,7 +343,7 @@ impl Query {
             "SELECT id, rel_path_raw, kind, message FROM scan_warnings \
              WHERE scan_id = ?1 AND id > ?2 ORDER BY id LIMIT ?3",
         )?;
-        let rows = stmt.query_map(params![scan.get(), after, page.limit()], |row| {
+        let rows = stmt.query_map(params![scan.get(), after, page.effective_limit()], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, Option<Vec<u8>>>(1)?,
@@ -406,7 +406,7 @@ impl Query {
              AND path_key > ?3 ORDER BY path_key LIMIT ?4"
         ))?;
         let rows = stmt.query_map(
-            params![location.id, parent, after, page.limit()],
+            params![location.id, parent, after, page.effective_limit()],
             RawEntry::from_row,
         )?;
         let items = rows
@@ -444,7 +444,7 @@ impl Query {
              AND path_key LIKE ?2 ESCAPE '\\' AND path_key > ?3 ORDER BY path_key LIMIT ?4"
         ))?;
         let rows = stmt.query_map(
-            params![location.id, pattern, after, page.limit()],
+            params![location.id, pattern, after, page.effective_limit()],
             RawEntry::from_row,
         )?;
         let items = rows
@@ -478,8 +478,10 @@ impl Query {
                  AND hash_full IS NOT NULL AND hash_full > ?2 \
                  GROUP BY hash_full HAVING count(*) > 1 ORDER BY hash_full LIMIT ?3",
             )?;
-            stmt.query_map(params![location.id, after, page.limit()], |row| row.get(0))?
-                .collect::<Result<_, _>>()?
+            stmt.query_map(params![location.id, after, page.effective_limit()], |row| {
+                row.get(0)
+            })?
+            .collect::<Result<_, _>>()?
         };
         let mut items = Vec::with_capacity(digests.len());
         let mut stmt = self.conn.prepare_cached(&format!(
@@ -506,7 +508,7 @@ impl Query {
 }
 
 fn next_cursor<T>(items: &[T], page: &Page, key: impl Fn(&T) -> String) -> Option<Cursor> {
-    if items.len() < page.limit() as usize {
+    if items.len() < page.effective_limit() as usize {
         return None;
     }
     items.last().map(|last| Cursor(key(last)))
