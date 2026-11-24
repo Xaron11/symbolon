@@ -1,0 +1,29 @@
+# Formats the whole repository: `just fmt` (write) or `treefmt --ci` (check).
+# Prettier comes from the frontend's lockfile so editors, hooks and CI agree on one version.
+
+excludes = [
+  "LICENSE",
+  "*.lock",
+  "**/pnpm-lock.yaml",
+  "crates/symbolon-app/icons/**",
+  "crates/symbolon-app/gen/**",
+]
+
+[formatter.rustfmt]
+command = "rustfmt"
+options = ["--edition", "2024"]
+includes = ["*.rs"]
+
+[formatter.nixfmt]
+command = "nixfmt"
+includes = ["*.nix"]
+
+[formatter.taplo]
+command = "taplo"
+options = ["format"]
+includes = ["*.toml"]
+
+[formatter.prettier]
+command = "crates/symbolon-app/ui/node_modules/.bin/prettier"
+options = ["--write"]
+includes = ["*.md", "*.yml", "*.yaml", "*.json", "*.js", "*.ts", "*.svelte", "*.css", "*.html"]

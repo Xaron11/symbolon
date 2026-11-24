@@ -1,9 +1,10 @@
-//! PoC: M0 spike probe for running a static binary on Android over `adb exec-out`.
+//! `PoC`: M0 spike probe for running a static binary on Android over `adb exec-out`.
 //! It reports the execution environment, then walks and hashes a tree, streaming NDJSON.
 //! Follow-up (M5): replace with the real scanner built on `symbolon-core`.
 
 use std::fs;
 use std::io::{self, BufWriter, Write};
+use std::num::NonZero;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -81,11 +82,14 @@ impl Emitter {
     fn emit(&self, event: &Event<'_>) {
         if let Ok(mut out) = self.out.lock() {
             // A broken pipe means the host went away; nothing useful to do with the error.
-            let _ = serde_json::to_writer(&mut *out, event).map(|()| out.write_all(b"\n"));
+            serde_json::to_writer(&mut *out, event)
+                .map_err(io::Error::from)
+                .and_then(|()| out.write_all(b"\n"))
+                .ok();
         }
     }
 
-    fn warn(&self, path: &Path, error: impl ToString) {
+    fn warn(&self, path: &Path, error: &io::Error) {
         self.warnings.fetch_add(1, Ordering::Relaxed);
         self.emit(&Event::Warning {
             path: path.to_string_lossy().into_owned(),
@@ -100,9 +104,16 @@ struct FileEntry {
     mtime_ns: Option<i128>,
 }
 
+#[derive(Default)]
+struct Walk {
+    files: Vec<FileEntry>,
+    dirs: u64,
+    symlinks: u64,
+}
+
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let parallelism = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let parallelism = std::thread::available_parallelism().map_or(1, NonZero::get);
     let threads = args.threads.unwrap_or(parallelism);
     rayon::ThreadPoolBuilder::new()
         .num_threads(threads)
@@ -113,7 +124,48 @@ fn main() -> anyhow::Result<()> {
         out: Mutex::new(BufWriter::new(io::stdout())),
         warnings: AtomicU64::new(0),
     };
-    emitter.emit(&Event::Env {
+    emitter.emit(&env_event(parallelism, threads));
+
+    let start = Instant::now();
+    let walk = walk(&args.root, &emitter);
+    emitter.emit(&Event::Walked {
+        files: walk.files.len() as u64,
+        dirs: walk.dirs,
+        symlinks: walk.symlinks,
+        bytes: walk.files.iter().map(|f| f.size).sum(),
+        elapsed_ms: start.elapsed().as_millis(),
+    });
+
+    let (files, bytes) = if args.walk_only {
+        (0, 0)
+    } else {
+        hash_all(&walk.files, args.emit_files, &emitter)
+    };
+
+    let elapsed = start.elapsed();
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "throughput is informational; f64 precision is plenty"
+    )]
+    let mib = bytes as f64 / (1024.0 * 1024.0);
+    emitter.emit(&Event::Finished {
+        files,
+        bytes,
+        warnings: emitter.warnings.load(Ordering::Relaxed),
+        elapsed_ms: elapsed.as_millis(),
+        mib_per_s: mib / elapsed.as_secs_f64().max(1e-9),
+    });
+    emitter
+        .out
+        .into_inner()
+        .map_err(|_| anyhow::anyhow!("output lock poisoned"))?
+        .flush()
+        .context("flushing output")?;
+    Ok(())
+}
+
+fn env_event(parallelism: usize, threads: usize) -> Event<'static> {
+    Event::Env {
         version: env!("CARGO_PKG_VERSION"),
         arch: std::env::consts::ARCH,
         os: std::env::consts::OS,
@@ -128,41 +180,40 @@ fn main() -> anyhow::Result<()> {
         selinux_context: fs::read_to_string("/proc/self/attr/current")
             .ok()
             .map(|s| s.trim_end_matches(['\0', '\n']).to_owned()),
-    });
+    }
+}
 
-    let start = Instant::now();
-    let mut files = Vec::new();
-    let (mut dirs, mut symlinks) = (0u64, 0u64);
-    let mut stack = vec![args.root.clone()];
+fn walk(root: &Path, emitter: &Emitter) -> Walk {
+    let mut walk = Walk::default();
+    let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        dirs += 1;
+        walk.dirs += 1;
         let read = match fs::read_dir(&dir) {
             Ok(read) => read,
             Err(e) => {
-                emitter.warn(&dir, e);
+                emitter.warn(&dir, &e);
                 continue;
             }
         };
         for entry in read {
-            let entry = match entry {
-                Ok(entry) => entry,
+            let path = match entry {
+                Ok(entry) => entry.path(),
                 Err(e) => {
-                    emitter.warn(&dir, e);
+                    emitter.warn(&dir, &e);
                     continue;
                 }
             };
-            let path = entry.path();
             // symlink_metadata: never follow links, so cycles are impossible.
             let meta = match fs::symlink_metadata(&path) {
                 Ok(meta) => meta,
                 Err(e) => {
-                    emitter.warn(&path, e);
+                    emitter.warn(&path, &e);
                     continue;
                 }
             };
             let kind = meta.file_type();
             if kind.is_symlink() {
-                symlinks += 1;
+                walk.symlinks += 1;
             } else if kind.is_dir() {
                 stack.push(path);
             } else if kind.is_file() {
@@ -170,8 +221,8 @@ fn main() -> anyhow::Result<()> {
                     .modified()
                     .ok()
                     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                    .map(|d| d.as_nanos() as i128);
-                files.push(FileEntry {
+                    .map(|d| d.as_nanos().cast_signed());
+                walk.files.push(FileEntry {
                     path,
                     size: meta.len(),
                     mtime_ns,
@@ -179,51 +230,28 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
-    let walked_bytes: u64 = files.iter().map(|f| f.size).sum();
-    emitter.emit(&Event::Walked {
-        files: files.len() as u64,
-        dirs,
-        symlinks,
-        bytes: walked_bytes,
-        elapsed_ms: start.elapsed().as_millis(),
-    });
+    walk
+}
 
-    let hashed_bytes = AtomicU64::new(0);
+fn hash_all(files: &[FileEntry], emit_files: bool, emitter: &Emitter) -> (u64, u64) {
     let hashed_files = AtomicU64::new(0);
-    if !args.walk_only {
-        files.par_iter().for_each(|f| match hash_file(&f.path) {
-            Ok((hash, len)) => {
-                hashed_bytes.fetch_add(len, Ordering::Relaxed);
-                hashed_files.fetch_add(1, Ordering::Relaxed);
-                if args.emit_files {
-                    emitter.emit(&Event::File {
-                        path: f.path.to_string_lossy().into_owned(),
-                        size: f.size,
-                        mtime_ns: f.mtime_ns,
-                        blake3: hash.to_hex().to_string(),
-                    });
-                }
+    let hashed_bytes = AtomicU64::new(0);
+    files.par_iter().for_each(|f| match hash_file(&f.path) {
+        Ok((hash, len)) => {
+            hashed_files.fetch_add(1, Ordering::Relaxed);
+            hashed_bytes.fetch_add(len, Ordering::Relaxed);
+            if emit_files {
+                emitter.emit(&Event::File {
+                    path: f.path.to_string_lossy().into_owned(),
+                    size: f.size,
+                    mtime_ns: f.mtime_ns,
+                    blake3: hash.to_hex().to_string(),
+                });
             }
-            Err(e) => emitter.warn(&f.path, e),
-        });
-    }
-
-    let elapsed = start.elapsed();
-    let bytes = hashed_bytes.load(Ordering::Relaxed);
-    emitter.emit(&Event::Finished {
-        files: hashed_files.load(Ordering::Relaxed),
-        bytes,
-        warnings: emitter.warnings.load(Ordering::Relaxed),
-        elapsed_ms: elapsed.as_millis(),
-        mib_per_s: bytes as f64 / (1024.0 * 1024.0) / elapsed.as_secs_f64().max(1e-9),
+        }
+        Err(e) => emitter.warn(&f.path, &e),
     });
-    emitter
-        .out
-        .into_inner()
-        .map_err(|_| anyhow::anyhow!("output lock poisoned"))?
-        .flush()
-        .context("flushing output")?;
-    Ok(())
+    (hashed_files.into_inner(), hashed_bytes.into_inner())
 }
 
 fn hash_file(path: &Path) -> io::Result<(blake3::Hash, u64)> {

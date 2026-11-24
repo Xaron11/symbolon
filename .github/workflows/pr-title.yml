@@ -1,0 +1,24 @@
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  pr-title:
+    name: pr-title
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Title is a Conventional Commit
+        # The squash-merge commit takes the PR title, so this is what lands on main.
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert'
+          if [[ ! "$TITLE" =~ ^($types)(\([a-z0-9-]+\))?!?:\ [^[:space:]].*$ ]]; then
+            echo "::error::PR title must be a Conventional Commit, e.g. 'feat(core): add tiered hashing'. Got: $TITLE"
+            exit 1
+          fi

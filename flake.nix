@@ -8,6 +8,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     crane.url = "github:ipetkov/crane";
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -16,6 +20,7 @@
       nixpkgs,
       rust-overlay,
       crane,
+      git-hooks,
     }:
     let
       systems = [
@@ -41,6 +46,13 @@
           extensions = toolchainFile.components ++ extensions;
           inherit (toolchainFile) targets;
         };
+      devRust =
+        pkgs:
+        rustFor pkgs [
+          "rust-src"
+          "rust-analyzer"
+          "llvm-tools-preview"
+        ];
 
       # Libraries needed to build and run the Tauri app on Linux.
       tauriLibs =
@@ -58,6 +70,59 @@
           webkitgtk_4_1
           openssl
         ];
+
+      # treefmt reads treefmt.toml; Prettier is taken from the frontend's node_modules.
+      formatters =
+        pkgs: with pkgs; [
+          (rustFor pkgs [ ])
+          nixfmt
+          taplo
+        ];
+      treefmtFor =
+        pkgs:
+        pkgs.writeShellApplication {
+          name = "treefmt";
+          runtimeInputs = [ pkgs.treefmt ] ++ formatters pkgs;
+          text = ''exec treefmt "$@"'';
+        };
+
+      # Hooks run outside the Nix sandbox (they need node_modules and the cargo registry),
+      # so they are installed by the devShell and run in CI via `pre-commit run`, not `nix flake check`.
+      hooksFor =
+        pkgs:
+        git-hooks.lib.${pkgs.stdenv.hostPlatform.system}.run {
+          src = ./.;
+          default_stages = [ "pre-commit" ];
+          hooks = {
+            treefmt = {
+              enable = true;
+              packageOverrides.treefmt = pkgs.treefmt;
+              settings.formatters = formatters pkgs;
+            };
+            typos.enable = true;
+            statix.enable = true;
+            deadnix.enable = true;
+            actionlint.enable = true;
+            zizmor.enable = true;
+            check-merge-conflicts.enable = true;
+            detect-private-keys.enable = true;
+            convco.enable = true;
+            pre-push-rust = {
+              enable = true;
+              name = "clippy, tests, unused dependencies";
+              entry = "just lint-rust test";
+              pass_filenames = false;
+              stages = [ "pre-push" ];
+            };
+            pre-push-ui = {
+              enable = true;
+              name = "frontend lint, typecheck, tests";
+              entry = "just lint-ui test-ui";
+              pass_filenames = false;
+              stages = [ "pre-push" ];
+            };
+          };
+        };
     in
     {
       packages = forAllSystems (
@@ -69,7 +134,7 @@
             inherit src;
             strictDeps = true;
             pname = "symbolon";
-            version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
+            inherit ((builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package) version;
             cargoExtraArgs = "--locked -p symbolon-cli";
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -92,36 +157,50 @@
         }
       );
 
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          packages =
-            with pkgs;
-            [
-              (rustFor pkgs [
-                "rust-src"
-                "rust-analyzer"
-              ])
-              just
-              cargo-deny
-              cargo-nextest
-              cargo-tauri
-              cargo-zigbuild
-              zig
-              git-cliff
-              android-tools
-              nodejs_24
-              pnpm
-              pkg-config
-              gobject-introspection
-            ]
-            ++ tauriLibs pkgs;
-
-          shellHook = ''
-            export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:''${XDG_DATA_DIRS:-}"
-          '';
-        };
+      checks = forAllSystems (pkgs: {
+        inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) symbolon;
       });
 
-      formatter = forAllSystems (pkgs: pkgs.nixfmt);
+      devShells = forAllSystems (
+        pkgs:
+        let
+          hooks = hooksFor pkgs;
+        in
+        {
+          default = pkgs.mkShell {
+            packages =
+              with pkgs;
+              [
+                (devRust pkgs)
+                (treefmtFor pkgs)
+                just
+                cargo-deny
+                cargo-llvm-cov
+                cargo-nextest
+                cargo-shear
+                cargo-tauri
+                cargo-zigbuild
+                zig
+                git-cliff
+                gh
+                jq
+                android-tools
+                nodejs_24
+                pnpm
+                pkg-config
+                gobject-introspection
+              ]
+              ++ hooks.enabledPackages
+              ++ tauriLibs pkgs;
+
+            shellHook = ''
+              export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:''${XDG_DATA_DIRS:-}"
+              ${hooks.shellHook}
+            '';
+          };
+        }
+      );
+
+      formatter = forAllSystems treefmtFor;
     };
 }

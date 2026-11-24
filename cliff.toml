@@ -28,13 +28,19 @@ trim = true
 conventional_commits = true
 filter_unconventional = true
 commit_parsers = [
-    { message = "^feat", group = "<!-- 0 -->Added" },
-    { message = "^fix", group = "<!-- 2 -->Fixed" },
-    { message = "^perf", group = "<!-- 1 -->Changed" },
-    { message = "^refactor", group = "<!-- 1 -->Changed" },
-    { body = ".*security", group = "<!-- 3 -->Security" },
-    { message = "^(build|chore|ci|docs|style|test)", skip = true },
+  { message = "^feat", group = "<!-- 0 -->Added" },
+  { message = "^fix", group = "<!-- 2 -->Fixed" },
+  { message = "^perf", group = "<!-- 1 -->Changed" },
+  { message = "^refactor", group = "<!-- 1 -->Changed" },
+  { body = ".*security", group = "<!-- 3 -->Security" },
+  { message = "^(build|chore|ci|docs|style|test)", skip = true },
 ]
 protect_breaking_commits = true
 filter_commits = false
 sort_commits = "oldest"
+
+[bump]
+# Stay on 0.x until the first stable release: breaking changes bump the minor version.
+features_always_bump_minor = true
+breaking_always_bump_major = false
+initial_tag = "v0.1.0"

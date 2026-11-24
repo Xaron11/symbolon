@@ -2,7 +2,7 @@
 
 You are the lead engineer bootstrapping **Symbolon**, a private (potentially public later) Rust project. Read this whole document before writing code. Treat it as a living spec: where it conflicts with reality (library limits, platform quirks, a better design), propose the change, record it as an ADR in `docs/adr/`, and proceed. Do not silently deviate.
 
-The name comes from the ancient Greek *symbolon*: a token broken in two, each party keeping a half, later matched to prove identity. The tool answers one question: **do these locations match, and if not, how exactly do they differ?**
+The name comes from the ancient Greek _symbolon_: a token broken in two, each party keeping a half, later matched to prove identity. The tool answers one question: **do these locations match, and if not, how exactly do they differ?**
 
 ---
 
@@ -35,24 +35,24 @@ Typical scale: up to ~100 GB per location, 20k–200k files, mostly documents, i
 
 ## 3. Decisions already made
 
-| Area | Decision |
-|---|---|
-| Language | Rust, stable toolchain, edition 2021 or newer |
-| GUI | Tauri 2 + SvelteKit (static adapter, SSR disabled), Chart.js for pie/bar/doughnut charts |
-| Repo layout | Cargo workspace: `symbolon-core` (lib), `symbolon-cli`, `symbolon-app` (Tauri) |
-| Storage | SQLite (WAL) as the single source of truth, one global catalog DB with saved `locations`; per-location export/import as a standalone `.symbolon` file (a SQLite file with a Symbolon-specific `application_id` pragma) |
-| SQLite build | `rusqlite` with the `bundled` feature, so the SQLite version and features are identical on Nix, Arch and Windows |
-| Default hash | BLAKE3, configurable (`blake3`, `xxh3`, `sha256`), algorithm stored per location |
-| Hash strategy | Tiered: size → partial hash → full hash; lazy by default, optional "hash everything now" per location |
-| Android v1 | No app. Push a static `aarch64` scanner binary via `adb` (start with `aarch64-unknown-linux-musl`), fallback to `sha256sum` over `adb exec-out` |
-| Device identity | User-assigned location label is the primary identity; automatic fingerprint (filesystem UUID, ADB serial) is a best-effort hint, and the user is asked to confirm when it is missing or ambiguous |
-| ADB | Spawn system `adb` behind an `AndroidTransport` trait; `adb_client` crate can be a later alternative implementation |
-| Path matching | Relative to location root; optional case-insensitive and Unicode-NFC-normalized key; raw bytes always preserved |
-| Write ops | Read-only first. Writes are plan → review → execute, with quarantine instead of delete, post-copy hash verification, and a journal |
-| Platforms | Linux + Android first-class. Windows must not be made impossible (no Unix-only assumptions outside platform modules); full Windows support is a later milestone |
-| License | `GPL-3.0-or-later` (strong copyleft: anyone reusing the code, including `symbolon-core` as a library, must release their work under GPL-compatible terms). Enforce the dependency license policy with `cargo-deny`. No DCO and no CLA for now: outside contributions are accepted under `GPL-3.0-or-later` by default. Relicensing later needs consent from every copyright holder, so revisit before accepting the first outside contribution |
-| Nix | `flake.nix` with `devShell`, `.envrc` (`use flake`), and a package output for the CLI |
-| Repo | Private GitHub repo under `Xaron11`, structured so it can become public (no secrets, no hardcoded personal paths) |
+| Area            | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language        | Rust, stable toolchain, edition 2021 or newer                                                                                                                                                                                                                                                                                                                                                                                                  |
+| GUI             | Tauri 2 + SvelteKit (static adapter, SSR disabled), Chart.js for pie/bar/doughnut charts                                                                                                                                                                                                                                                                                                                                                       |
+| Repo layout     | Cargo workspace: `symbolon-core` (lib), `symbolon-cli`, `symbolon-app` (Tauri)                                                                                                                                                                                                                                                                                                                                                                 |
+| Storage         | SQLite (WAL) as the single source of truth, one global catalog DB with saved `locations`; per-location export/import as a standalone `.symbolon` file (a SQLite file with a Symbolon-specific `application_id` pragma)                                                                                                                                                                                                                         |
+| SQLite build    | `rusqlite` with the `bundled` feature, so the SQLite version and features are identical on Nix, Arch and Windows                                                                                                                                                                                                                                                                                                                               |
+| Default hash    | BLAKE3, configurable (`blake3`, `xxh3`, `sha256`), algorithm stored per location                                                                                                                                                                                                                                                                                                                                                               |
+| Hash strategy   | Tiered: size → partial hash → full hash; lazy by default, optional "hash everything now" per location                                                                                                                                                                                                                                                                                                                                          |
+| Android v1      | No app. Push a static `aarch64` scanner binary via `adb` (start with `aarch64-unknown-linux-musl`), fallback to `sha256sum` over `adb exec-out`                                                                                                                                                                                                                                                                                                |
+| Device identity | User-assigned location label is the primary identity; automatic fingerprint (filesystem UUID, ADB serial) is a best-effort hint, and the user is asked to confirm when it is missing or ambiguous                                                                                                                                                                                                                                              |
+| ADB             | Spawn system `adb` behind an `AndroidTransport` trait; `adb_client` crate can be a later alternative implementation                                                                                                                                                                                                                                                                                                                            |
+| Path matching   | Relative to location root; optional case-insensitive and Unicode-NFC-normalized key; raw bytes always preserved                                                                                                                                                                                                                                                                                                                                |
+| Write ops       | Read-only first. Writes are plan → review → execute, with quarantine instead of delete, post-copy hash verification, and a journal                                                                                                                                                                                                                                                                                                             |
+| Platforms       | Linux + Android first-class. Windows must not be made impossible (no Unix-only assumptions outside platform modules); full Windows support is a later milestone                                                                                                                                                                                                                                                                                |
+| License         | `GPL-3.0-or-later` (strong copyleft: anyone reusing the code, including `symbolon-core` as a library, must release their work under GPL-compatible terms). Enforce the dependency license policy with `cargo-deny`. No DCO and no CLA for now: outside contributions are accepted under `GPL-3.0-or-later` by default. Relicensing later needs consent from every copyright holder, so revisit before accepting the first outside contribution |
+| Nix             | `flake.nix` with `devShell`, `.envrc` (`use flake`), and a package output for the CLI                                                                                                                                                                                                                                                                                                                                                          |
+| Repo            | Private GitHub repo under `Xaron11`, structured so it can become public (no secrets, no hardcoded personal paths)                                                                                                                                                                                                                                                                                                                              |
 
 ## 4. Architecture
 
@@ -252,28 +252,28 @@ Requirements: stable exit codes, `--json` for scripting, progress on stderr, res
 Work milestone by milestone. At the end of each, stop, summarize what was done, list open questions and risks, and wait for confirmation before the next.
 
 **M0. Scaffolding.** Workspace, flake/devShell, CI, `deny.toml`, license files, ADR template, ADR-0001 (stack and layout), the name `symbolon` has been reported available, so only re-check crates.io before the first publish.
-*Done when:* `nix develop` works, `just test lint` pass, CI green on an empty-but-real skeleton.
+_Done when:_ `nix develop` works, `just test lint` pass, CI green on an empty-but-real skeleton.
 
 **M1. Core scan (local).** `LocalSource`, walker, hash pipeline (BLAKE3 + enum), SQLite catalog with migrations, `Scanner` with events/cancel, incremental rescans.
-*Done when:* scanning a 100k-file tree populates the catalog; a second scan only reads changed files (test proves it); queries work during a running scan.
+_Done when:_ scanning a 100k-file tree populates the catalog; a second scan only reads changed files (test proves it); queries work during a running scan.
 
 **M2. Compare engine.** N-way classification, path-key options, hash tiers with size pruning, pagination.
-*Done when:* integration and property tests cover all categories including moved vs renamed and case/Unicode edge cases; wrong-algorithm comparison is refused.
+_Done when:_ integration and property tests cover all categories including moved vs renamed and case/Unicode edge cases; wrong-algorithm comparison is refused.
 
 **M3. CLI.** Location management, scan, diff, dupes, JSON/CSV output, export/import.
-*Done when:* a full workflow (add two locations, scan, diff, export one) works end-to-end from the shell; CLI integration tests cover it.
+_Done when:_ a full workflow (add two locations, scan, diff, export one) works end-to-end from the shell; CLI integration tests cover it.
 
 **M4. Locations and device identity.** User-assigned location labels as the primary identity, with an automatic best-effort fingerprint (filesystem UUID on Linux, ADB serial for Android) used to recognize a device at a different mount point and to ask the user to confirm when it is ambiguous; eager vs lazy policy.
-*Done when:* replugging a pendrive at another mount point resolves to the same saved location, or prompts for confirmation when the fingerprint is ambiguous.
+_Done when:_ replugging a pendrive at another mount point resolves to the same saved location, or prompts for confirmation when the fingerprint is ambiguous.
 
 **M5. Android over ADB.** `AndroidTransport`, device discovery, pushed static scanner, `sha256sum` fallback, mock-based tests.
-*Done when:* a real phone location can be scanned without copying files, scanning 100 GB is bounded by device storage speed (measure and record), failures degrade to the fallback with clear messages.
+_Done when:_ a real phone location can be scanned without copying files, scanning 100 GB is bounded by device storage speed (measure and record), failures degrade to the fallback with clear messages.
 
 **M6. GUI.** Tauri app with Locations, Scan progress (browse while scanning), Compare dashboard with charts, expandable tree/list.
-*Done when:* GUI can run the full read-only workflow on Linux; large result sets stay smooth (virtualized, paginated).
+_Done when:_ GUI can run the full read-only workflow on Linux; large result sets stay smooth (virtualized, paginated).
 
 **M7. Safe write operations.** Action plan, review UI, executor with quarantine, post-copy verification, journal, resume.
-*Done when:* fault-injection tests (kill mid-copy, wrong drive, stale entry) never lose or corrupt data and the journal recovers cleanly.
+_Done when:_ fault-injection tests (kill mid-copy, wrong drive, stale entry) never lose or corrupt data and the journal recovers cleanly.
 
 **M8. Reports and polish.** HTML report, shell completions, Windows build in CI, docs, benchmark results in `docs/`.
 

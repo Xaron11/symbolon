@@ -11,7 +11,8 @@ const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
 	js.configs.recommended,
-	ts.configs.recommendedTypeChecked,
+	ts.configs.strictTypeChecked,
+	ts.configs.stylisticTypeChecked,
 	svelte.configs.recommended,
 	prettier,
 	svelte.configs.prettier,
@@ -37,8 +38,11 @@ export default defineConfig(
 		}
 	},
 	{
-		// Override or add rule settings here, such as:
-		// 'svelte/button-has-type': 'error'
-		rules: {}
+		rules: {
+			'svelte/button-has-type': 'error',
+			'svelte/no-at-html-tags': 'error',
+			'@typescript-eslint/consistent-type-imports': 'error',
+			'@typescript-eslint/switch-exhaustiveness-check': 'error'
+		}
 	}
 );

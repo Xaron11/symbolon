@@ -1,0 +1,6 @@
+[files]
+extend-exclude = ["LICENSE", "*.lock", "pnpm-lock.yaml", "crates/symbolon-app/icons/**"]
+
+[default.extend-words]
+# Greek: "token"; the project name.
+symbolon = "symbolon"

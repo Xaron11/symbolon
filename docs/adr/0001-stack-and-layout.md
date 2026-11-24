@@ -11,12 +11,12 @@
 
 **Workspace.** Cargo workspace (resolver 3, edition 2024) with four crates:
 
-| Crate | Kind | Depends on |
-|---|---|---|
-| `symbolon-core` | lib | (none of the others) |
-| `symbolon-cli` | bin `symbolon` | core |
-| `symbolon-app` | Tauri 2 bin + lib (`run()`), frontend in `ui/` | core |
-| `symbolon-agent` | bin, static aarch64 binary pushed to Android | core (from M5) |
+| Crate            | Kind                                           | Depends on           |
+| ---------------- | ---------------------------------------------- | -------------------- |
+| `symbolon-core`  | lib                                            | (none of the others) |
+| `symbolon-cli`   | bin `symbolon`                                 | core                 |
+| `symbolon-app`   | Tauri 2 bin + lib (`run()`), frontend in `ui/` | core                 |
+| `symbolon-agent` | bin, static aarch64 binary pushed to Android   | core (from M5)       |
 
 `symbolon-agent` is an addition to the spec's layout. The on-device scanner is a separate binary with a different build target, profile (`release-agent`: fat LTO, `panic = "abort"`, stripped) and global allocator (`mimalloc`, see §6 of the spec). Keeping it out of the CLI keeps the pushed binary small and free of CLI-only dependencies. It must stay a thin wrapper over `symbolon-core`.
 
@@ -24,7 +24,7 @@
 
 **Toolchain.** `rust-toolchain.toml` pins an exact stable release (1.100.0 at bootstrap) and the `aarch64-unknown-linux-musl` target. `rust-version` in the workspace matches it. Bump both together.
 
-**Lints.** Workspace lints: `unsafe_code = "deny"`, `clippy::unwrap_used` and `clippy::expect_used = "deny"` (allowed in tests via `clippy.toml`). `symbolon-core` additionally has `#![forbid(unsafe_code)]`. CI runs clippy with `-D warnings`.
+**Lints.** Superseded by ADR-0007 (workspace lints, hooks, CI).
 
 **Frontend.** Svelte 5 (runes) + SvelteKit 3, scaffolded with the official `sv` CLI, TypeScript strict, ESLint + Prettier. `@sveltejs/adapter-static` with `fallback: "index.html"`, `ssr = false`, `prerender = false`: the app is a pure SPA served by Tauri, so dynamic routes need no prerender entries. No component framework. Dark mode follows `prefers-color-scheme`.
 

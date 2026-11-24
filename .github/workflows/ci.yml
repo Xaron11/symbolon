@@ -5,79 +5,151 @@ on:
     branches: [main]
   pull_request:
 
+# Runs on main are never cancelled, so their caches always get saved.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-permissions:
-  contents: read
+permissions: {}
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
   RUSTFLAGS: -D warnings
+  # Caches are written only from main; PRs restore them but never evict them.
+  SAVE_CACHE: ${{ github.ref == 'refs/heads/main' }}
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  rust:
-    name: rust (${{ matrix.os }})
+  hooks:
+    name: hooks (format, typos, nix, workflows)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-devshell-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-devshell-${{ runner.os }}-
+          gc-max-store-size-linux: 6G
+          save: ${{ env.SAVE_CACHE }}
+      - run: nix develop -c just ui-install
+      - name: pre-commit hooks on all files
+        # zizmor uses the token for online audits (impostor commits, known-vulnerable actions).
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: nix develop -c pre-commit run --all-files --show-diff-on-failure
+
+  clippy:
+    name: clippy (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             packages: --workspace
-          # Windows covers core and cli only until the Windows milestone (M8).
+          # Windows covers core and cli until the Windows milestone (M8).
           - os: windows-latest
             packages: -p symbolon-core -p symbolon-cli
     steps:
-      - uses: actions/checkout@v7
-      - name: Install Tauri system libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev libssl-dev
-      - name: Install toolchain from rust-toolchain.toml
-        run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          tool: cargo-nextest
-      - name: fmt
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: clippy
+          save-if: ${{ env.SAVE_CACHE }}
+      - run: cargo clippy ${{ matrix.packages }} --all-targets --locked
+      - name: rustdoc
         if: runner.os == 'Linux'
-        run: cargo fmt --all --check
-      - name: clippy
-        run: cargo clippy ${{ matrix.packages }} --all-targets
-      - name: test
-        run: |
-          cargo nextest run ${{ matrix.packages }} --no-tests=warn
-          cargo test ${{ matrix.packages }} --doc
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        if: runner.os == 'Linux'
+        with:
+          tool: cargo-shear
+      - name: unused dependencies
+        if: runner.os == 'Linux'
+        run: cargo shear
 
-  deny:
-    runs-on: ubuntu-latest
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            packages: --workspace
+          - os: windows-latest
+            packages: -p symbolon-core -p symbolon-cli
     steps:
-      - uses: actions/checkout@v7
-      - run: rustup toolchain install
-      - uses: taiki-e/install-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          tool: cargo-deny
-      - run: cargo deny check
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: test
+          save-if: ${{ env.SAVE_CACHE }}
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        with:
+          tool: cargo-nextest,cargo-llvm-cov
+      # Linux runs the suite once, instrumented, and reports coverage from that run.
+      - name: tests with coverage
+        if: runner.os == 'Linux'
+        run: |
+          cargo llvm-cov nextest ${{ matrix.packages }} --locked --profile ci --no-tests=warn
+          {
+            echo '### Coverage'
+            echo '```'
+            cargo llvm-cov report --summary-only
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: tests
+        if: runner.os != 'Linux'
+        run: cargo nextest run ${{ matrix.packages }} --locked --profile ci --no-tests=warn
+      - name: doctests
+        run: cargo test ${{ matrix.packages }} --locked --doc
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: junit-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
   frontend:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: crates/symbolon-app/ui
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           package_json_file: crates/symbolon-app/ui/package.json
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: pnpm
@@ -85,15 +157,56 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm check
+      - run: pnpm test
       - run: pnpm build
       - run: pnpm license-check
 
-  nix:
+  deny:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: cachix/install-nix-action@v32
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        with:
+          tool: cargo-deny
+      - run: cargo deny check
+
+  nix:
+    name: nix (package, android agent)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-build-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'Cargo.lock') }}
+          restore-prefixes-first-match: |
+            nix-build-${{ runner.os }}-
+            nix-devshell-${{ runner.os }}-
+          gc-max-store-size-linux: 6G
+          save: ${{ env.SAVE_CACHE }}
       - run: nix flake check
-      - run: nix build .#default
-      - name: Cross-build Android scanner
-        run: nix develop -c just android-scanner
+      - name: Cross-build and check the Android agent
+        run: nix develop -c just android-scanner check-agent
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [hooks, clippy, test, frontend, deny, nix]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: All jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do [[ "$r" == success ]] || exit 1; done

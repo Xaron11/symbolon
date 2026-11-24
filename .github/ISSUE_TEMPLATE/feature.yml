@@ -1,0 +1,27 @@
+name: Feature
+description: New user-visible capability or behavior change.
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What the user cannot do today, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Behavior, CLI/GUI surface, data model changes. Reference spec sections or ADRs.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checklist that decides when this is done, including tests.
+      value: |
+        - [ ]
+    validations:
+      required: true

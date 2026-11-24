@@ -13,13 +13,13 @@ Always compiled (pure, portable): `hash`, `pathkey`, `catalog` (with `rusqlite` 
 
 Cargo features:
 
-| Feature | Default | Contents |
-|---|---|---|
-| `local` | yes | `LocalSource`, walker, local hash pipeline (`rayon`, `ignore`-style patterns). |
-| `android-adb` | yes | `transport::android`: `AndroidTransport`, `SystemAdb` (spawns `adb`), `AdbSource`. |
-| `identity` | yes | Per-OS volume/device fingerprinting (Linux `/dev/disk/by-uuid`, statfs; Windows volume serial later). |
-| `exec` | no | Plan executor with journal and verification (M7). |
-| `report-html` | no | HTML report renderer (M8). |
+| Feature       | Default | Contents                                                                                              |
+| ------------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `local`       | yes     | `LocalSource`, walker, local hash pipeline (`rayon`, `ignore`-style patterns).                        |
+| `android-adb` | yes     | `transport::android`: `AndroidTransport`, `SystemAdb` (spawns `adb`), `AdbSource`.                    |
+| `identity`    | yes     | Per-OS volume/device fingerprinting (Linux `/dev/disk/by-uuid`, statfs; Windows volume serial later). |
+| `exec`        | no      | Plan executor with journal and verification (M7).                                                     |
+| `report-html` | no      | HTML report renderer (M8).                                                                            |
 
 The agent builds core with `default-features = false, features = ["local"]`. A mobile consumer would use `local` plus its own `Source`/transport. Platform-specific code inside a feature sits behind `cfg(target_os)` modules, never at the API surface.
 
