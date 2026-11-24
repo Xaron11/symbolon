@@ -3,5 +3,6 @@
 #![expect(clippy::unwrap_used, reason = "test helpers fail loudly by design")]
 
 mod common;
+mod diff;
 mod location;
 mod scan;

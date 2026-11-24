@@ -1,5 +1,6 @@
 //! One module per command; each returns the exit status of a successful run.
 
+mod diff;
 mod location;
 mod scan;
 
@@ -15,6 +16,7 @@ pub(crate) fn run(cli: &Cli) -> anyhow::Result<Exit> {
     match &cli.command {
         Command::Location(command) => location::run(&cli.global, command),
         Command::Scan(args) => scan::run(&cli.global, args),
+        Command::Diff(args) => diff::run(&cli.global, args),
     }
 }
 

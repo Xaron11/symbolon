@@ -62,13 +62,13 @@ impl<T: Serialize + ?Sized> Serialize for Named<'_, T> {
 }
 
 /// Columns padded to their widest cell, two spaces apart.
-fn table(
+pub(crate) fn table(
     out: &mut impl Write,
-    headers: &[&str],
+    headers: &[impl AsRef<str>],
     rows: impl Iterator<Item = Vec<String>>,
 ) -> io::Result<()> {
     let rows: Vec<Vec<String>> = rows.collect();
-    let mut widths: Vec<usize> = headers.iter().map(|h| h.chars().count()).collect();
+    let mut widths: Vec<usize> = headers.iter().map(|h| h.as_ref().chars().count()).collect();
     for row in &rows {
         for (width, cell) in widths.iter_mut().zip(row) {
             *width = (*width).max(cell.chars().count());
@@ -82,7 +82,7 @@ fn table(
         }
         writeln!(out, "{}", text.trim_end())
     };
-    line(out, &mut headers.iter().copied())?;
+    line(out, &mut headers.iter().map(AsRef::as_ref))?;
     for row in &rows {
         line(out, &mut row.iter().map(String::as_str))?;
     }

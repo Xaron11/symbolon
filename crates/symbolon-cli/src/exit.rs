@@ -8,6 +8,8 @@ use symbolon_core::scan::ScanError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Exit {
     Success,
+    /// `diff` found differences.
+    Differences,
     Error,
     /// Refused until the user chooses, for example with a flag.
     Refused,
@@ -19,6 +21,7 @@ impl From<Exit> for ExitCode {
     fn from(exit: Exit) -> Self {
         Self::from(match exit {
             Exit::Success => 0,
+            Exit::Differences => 1,
             Exit::Error => 3,
             Exit::Refused => 4,
             Exit::Interrupted => 130,

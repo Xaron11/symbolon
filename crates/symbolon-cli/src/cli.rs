@@ -1,9 +1,11 @@
 //! The command-line definition (spec §10, ADR-0011).
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use symbolon_core::catalog::HashPolicy;
+use symbolon_core::compare::Category;
 use symbolon_core::hash::HashAlgo;
 
 use crate::output::Format;
@@ -48,6 +50,101 @@ pub(crate) enum Command {
     Location(LocationCommand),
     /// Scan locations: record their files and hash contents as their policy says
     Scan(ScanArgs),
+    /// Compare locations, or folders of them; exits 1 if anything differs
+    Diff(DiffArgs),
+}
+
+#[derive(Debug, Args)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent command-line flags"
+)]
+pub(crate) struct DiffArgs {
+    /// Locations to compare, as LABEL or LABEL:folder/in/it; two or more
+    #[arg(required = true, num_args = 2.., value_name = "SIDE")]
+    pub(crate) sides: Vec<String>,
+    /// Match paths regardless of letter case
+    #[arg(long)]
+    pub(crate) case_insensitive: bool,
+    /// Match paths regardless of Unicode normalization (NFC and NFD spellings)
+    #[arg(long)]
+    pub(crate) nfc: bool,
+    /// Treat files with equal size and modification times within this tolerance as equal
+    /// without hashing (shown as assumed), for example 2s or 500ms
+    #[arg(long, value_name = "TOLERANCE", value_parser = parse_duration)]
+    pub(crate) fast: Option<Duration>,
+    /// Do not hash files to decide unverified rows
+    #[arg(long)]
+    pub(crate) no_hash: bool,
+    /// List only these categories
+    #[arg(long, value_enum, value_delimiter = ',', value_name = "CATEGORY")]
+    pub(crate) only: Vec<CategoryArg>,
+    /// List identical rows too
+    #[arg(long, conflicts_with = "only")]
+    pub(crate) all: bool,
+    /// List only files with this extension
+    #[arg(long, value_name = "EXT")]
+    pub(crate) ext: Option<String>,
+    /// List only files of at least this many bytes
+    #[arg(long, value_name = "BYTES")]
+    pub(crate) min_size: Option<u64>,
+    /// List only files of at most this many bytes
+    #[arg(long, value_name = "BYTES")]
+    pub(crate) max_size: Option<u64>,
+    /// List only paths under this folder (relative to the compared folders)
+    #[arg(long, value_name = "FOLDER")]
+    pub(crate) under: Option<String>,
+    /// Print the totals only
+    #[arg(long)]
+    pub(crate) summary: bool,
+    /// List every file that could not be hashed instead of counting them
+    #[arg(long, short)]
+    pub(crate) verbose: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum CategoryArg {
+    Identical,
+    Different,
+    #[value(alias = "only_in")]
+    OnlyIn,
+    Moved,
+    Renamed,
+    Collision,
+    Unverified,
+}
+
+impl From<CategoryArg> for Category {
+    fn from(category: CategoryArg) -> Self {
+        match category {
+            CategoryArg::Identical => Self::Identical,
+            CategoryArg::Different => Self::Different,
+            CategoryArg::OnlyIn => Self::OnlyIn,
+            CategoryArg::Moved => Self::Moved,
+            CategoryArg::Renamed => Self::Renamed,
+            CategoryArg::Collision => Self::Collision,
+            CategoryArg::Unverified => Self::Unverified,
+        }
+    }
+}
+
+/// `500ms`, `2s`, `1.5s`, `3m`, `1h`; a bare number is seconds.
+fn parse_duration(text: &str) -> Result<Duration, String> {
+    let split = text
+        .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .unwrap_or(text.len());
+    let (number, unit) = text.split_at(split);
+    let value: f64 = number
+        .parse()
+        .map_err(|_| format!("{text:?} is not a duration such as 2s or 500ms"))?;
+    let seconds = match unit.trim() {
+        "ms" => value / 1000.0,
+        "" | "s" => value,
+        "m" | "min" => value * 60.0,
+        "h" => value * 3600.0,
+        other => return Err(format!("unknown unit {other:?}; use ms, s, m or h")),
+    };
+    Duration::try_from_secs_f64(seconds).map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Args)]
@@ -138,5 +235,20 @@ mod tests {
     #[test]
     fn definition_is_valid() {
         super::Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn durations_parse_with_units() {
+        use std::time::Duration;
+        let parse = super::parse_duration;
+        assert_eq!(parse("2"), Ok(Duration::from_secs(2)));
+        assert_eq!(parse("2s"), Ok(Duration::from_secs(2)));
+        assert_eq!(parse("1.5s"), Ok(Duration::from_millis(1500)));
+        assert_eq!(parse("500ms"), Ok(Duration::from_millis(500)));
+        assert_eq!(parse("3m"), Ok(Duration::from_secs(180)));
+        assert_eq!(parse("1h"), Ok(Duration::from_secs(3600)));
+        assert!(parse("2 weeks").is_err());
+        assert!(parse("fast").is_err());
+        assert!(parse("").is_err());
     }
 }

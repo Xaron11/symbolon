@@ -1,0 +1,140 @@
+---
+source: crates/symbolon-cli/tests/cli/diff.rs
+expression: "env.run(&[\"diff\", \"a\", \"b\", \"--json\"]).stdout"
+---
+{
+  "sides": [
+    {
+      "side": "a",
+      "label": "a",
+      "subpath": "",
+      "hash_algo": "blake3"
+    },
+    {
+      "side": "b",
+      "label": "b",
+      "subpath": "",
+      "hash_algo": "blake3"
+    }
+  ],
+  "summary": {
+    "identical": {
+      "rows": 1,
+      "files": 2,
+      "bytes": 8,
+      "assumed_rows": 0
+    },
+    "different": {
+      "rows": 1,
+      "files": 2,
+      "bytes": 7,
+      "assumed_rows": 0
+    },
+    "only_in": {
+      "rows": 1,
+      "files": 1,
+      "bytes": 9,
+      "assumed_rows": 0
+    },
+    "moved": {
+      "rows": 1,
+      "files": 2,
+      "bytes": 12,
+      "assumed_rows": 0
+    },
+    "renamed": {
+      "rows": 1,
+      "files": 2,
+      "bytes": 30,
+      "assumed_rows": 0
+    },
+    "collision": {
+      "rows": 0,
+      "files": 0,
+      "bytes": 0,
+      "assumed_rows": 0
+    },
+    "unverified": {
+      "rows": 0,
+      "files": 0,
+      "bytes": 0,
+      "assumed_rows": 0
+    }
+  },
+  "rows": [
+    {
+      "category": "different",
+      "key": "changed.txt",
+      "assumed": false,
+      "size": null,
+      "files": [
+        {
+          "side": "a",
+          "path": "changed.txt",
+          "size": 3,
+          "digest": "d33fb48ab5adff269ae172b29a6913ff04f6f266207a7a8e976f2ecd571d4492"
+        },
+        {
+          "side": "b",
+          "path": "changed.txt",
+          "size": 4,
+          "digest": "1841a335f6dd0be6a4b4b6917314217a09f1238c9e6c66bacaed2b5a70e4c1eb"
+        }
+      ]
+    },
+    {
+      "category": "renamed",
+      "key": "new.txt",
+      "assumed": false,
+      "size": 15,
+      "files": [
+        {
+          "side": "a",
+          "path": "old.txt",
+          "size": 15,
+          "digest": "9c5fa25c1b1e6fa26eebb256b8a70e74b96abae91a3309398619febd968e695a"
+        },
+        {
+          "side": "b",
+          "path": "new.txt",
+          "size": 15,
+          "digest": "9c5fa25c1b1e6fa26eebb256b8a70e74b96abae91a3309398619febd968e695a"
+        }
+      ]
+    },
+    {
+      "category": "only_in",
+      "key": "only_a.txt",
+      "assumed": false,
+      "size": 9,
+      "files": [
+        {
+          "side": "a",
+          "path": "only_a.txt",
+          "size": 9,
+          "digest": "b58bf1283cecff00e148d6aff7a7357770095b7f7d2b3e227706c06f1f4fdd49"
+        }
+      ]
+    },
+    {
+      "category": "moved",
+      "key": "x/photo.jpg",
+      "assumed": false,
+      "size": 6,
+      "files": [
+        {
+          "side": "a",
+          "path": "x/photo.jpg",
+          "size": 6,
+          "digest": "de6a7900b92aebb51befe7d1916188247b895cab1ad5597a042579ea7e4f8add"
+        },
+        {
+          "side": "b",
+          "path": "y/photo.jpg",
+          "size": 6,
+          "digest": "de6a7900b92aebb51befe7d1916188247b895cab1ad5597a042579ea7e4f8add"
+        }
+      ]
+    }
+  ]
+}
