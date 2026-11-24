@@ -68,7 +68,7 @@ See [`docs/testing.md`](docs/testing.md). Every behavior change comes with tests
 - Never commit to `main`; it is protected. Branch as `<type>/<short-name>` (for example `feat/tiered-hashing`) and open a PR.
 - Commits and PR titles are [Conventional Commits](https://www.conventionalcommits.org): `feat(core): ...`, `fix(cli): ...`. Scopes: `core`, `cli`, `app`, `ui`, `agent`, `android`, `catalog`, `compare`, `nix`, `ci`, `deps`, `release`, `adr`. PRs are squash-merged, so the PR title becomes the commit on `main`.
 - Commits must be signed. No co-author or tool attribution lines in commits or PR bodies.
-- Fill in the PR template, including schema and security impact. Link the issue (`Closes #N`).
+- Fill in the PR template: before and after (concrete behavior or state), testing, docs, schema and security impact. Link the issue (`Closes #N`).
 - Decisions the spec does not settle: pick the simplest option that keeps the architecture flexible, write an ADR (copy `docs/adr/0000-template.md`), mention it in the PR.
 - Releases: `just release` opens the release PR, `just tag` creates the signed tag after merge (ADR-0007). Do not create tags or releases any other way.
 
