@@ -1,6 +1,7 @@
 //! One module per command; each returns the exit status of a successful run.
 
 mod location;
+mod scan;
 
 use std::path::PathBuf;
 
@@ -13,6 +14,7 @@ use crate::exit::Exit;
 pub(crate) fn run(cli: &Cli) -> anyhow::Result<Exit> {
     match &cli.command {
         Command::Location(command) => location::run(&cli.global, command),
+        Command::Scan(args) => scan::run(&cli.global, args),
     }
 }
 

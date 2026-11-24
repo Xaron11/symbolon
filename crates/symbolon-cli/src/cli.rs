@@ -46,6 +46,24 @@ pub(crate) enum Command {
     /// Manage saved locations
     #[command(subcommand)]
     Location(LocationCommand),
+    /// Scan locations: record their files and hash contents as their policy says
+    Scan(ScanArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ScanArgs {
+    /// Locations to scan, one after another
+    #[arg(required_unless_present = "all", conflicts_with = "all")]
+    pub(crate) labels: Vec<String>,
+    /// Scan every location of this computer
+    #[arg(long)]
+    pub(crate) all: bool,
+    /// Hash every file, also in lazy locations
+    #[arg(long)]
+    pub(crate) full: bool,
+    /// List every warning instead of counting them
+    #[arg(long, short)]
+    pub(crate) verbose: bool,
 }
 
 #[derive(Debug, Subcommand)]

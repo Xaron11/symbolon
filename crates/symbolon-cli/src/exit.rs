@@ -11,6 +11,8 @@ pub(crate) enum Exit {
     Error,
     /// Refused until the user chooses, for example with a flag.
     Refused,
+    /// Stopped by Ctrl-C after cleaning up.
+    Interrupted,
 }
 
 impl From<Exit> for ExitCode {
@@ -19,6 +21,7 @@ impl From<Exit> for ExitCode {
             Exit::Success => 0,
             Exit::Error => 3,
             Exit::Refused => 4,
+            Exit::Interrupted => 130,
         })
     }
 }

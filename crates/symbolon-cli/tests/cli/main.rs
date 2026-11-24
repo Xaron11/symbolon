@@ -4,3 +4,4 @@
 
 mod common;
 mod location;
+mod scan;

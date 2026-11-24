@@ -1,0 +1,21 @@
+---
+source: crates/symbolon-cli/tests/cli/scan.rs
+expression: "env.ok(&[\"scan\", \"photos\", \"--json\"])"
+---
+{
+  "scans": [
+    {
+      "label": "photos",
+      "status": "completed",
+      "files": 3,
+      "dirs": 1,
+      "symlinks": 0,
+      "bytes": 7,
+      "hashed_files": 3,
+      "hashed_bytes": 7,
+      "reused_hashes": 0,
+      "warnings": 0,
+      "elapsed_ms": "[MS]"
+    }
+  ]
+}
