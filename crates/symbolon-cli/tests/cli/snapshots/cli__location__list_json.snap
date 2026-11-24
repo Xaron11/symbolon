@@ -7,6 +7,7 @@ expression: "env.ok(&[\"location\", \"list\", \"--json\"])"
     {
       "label": "backup",
       "root": "[TMP]/backup",
+      "kind": "local",
       "scannable": true,
       "hash_policy": "lazy",
       "hash_algo": "xxh3",
@@ -19,6 +20,7 @@ expression: "env.ok(&[\"location\", \"list\", \"--json\"])"
     {
       "label": "photos",
       "root": "[TMP]/photos",
+      "kind": "local",
       "scannable": true,
       "hash_policy": "eager",
       "hash_algo": "blake3",

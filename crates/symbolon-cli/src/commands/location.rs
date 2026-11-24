@@ -24,7 +24,10 @@ pub(super) fn run(global: &Global, command: &LocationCommand) -> anyhow::Result<
 struct LocationRecord {
     label: String,
     root: String,
-    /// False for locations recorded on another platform: comparable, not scannable here.
+    /// `local`, `imported` (from a .symbolon file) or `other_platform` (a catalog moved
+    /// between operating systems).
+    kind: &'static str,
+    /// Only local locations can be scanned; the others can be compared.
     scannable: bool,
     hash_policy: String,
     hash_algo: String,
@@ -39,6 +42,7 @@ impl Record for LocationRecord {
     const FIELDS: &'static [&'static str] = &[
         "label",
         "root",
+        "kind",
         "scannable",
         "hash_policy",
         "hash_algo",
@@ -60,10 +64,10 @@ impl Record for LocationRecord {
     ];
 
     fn cells(&self) -> Vec<String> {
-        let root = if self.scannable {
-            self.root.clone()
-        } else {
-            format!("{} (other platform)", self.root)
+        let root = match self.kind {
+            "imported" => format!("{} (imported)", self.root),
+            "other_platform" => format!("{} (other platform)", self.root),
+            _ => self.root.clone(),
         };
         let last_scan = match (&self.last_scan_status, &self.last_scan_started_at) {
             (Some(status), Some(at)) => format!("{status} {at}"),
@@ -92,6 +96,11 @@ fn record(query: &Query, location: &Location) -> anyhow::Result<LocationRecord> 
     Ok(LocationRecord {
         label: location.label.clone(),
         root: location.root.display(),
+        kind: match location.root {
+            LocationRoot::Local(_) => "local",
+            LocationRoot::Imported { .. } => "imported",
+            _ => "other_platform",
+        },
         scannable: matches!(location.root, LocationRoot::Local(_)),
         hash_policy: location.hash_policy.to_string(),
         hash_algo: location.hash_algo.to_string(),
@@ -193,6 +202,7 @@ mod tests {
         output::assert_fields(&LocationRecord {
             label: String::new(),
             root: String::new(),
+            kind: "local",
             scannable: true,
             hash_policy: String::new(),
             hash_algo: String::new(),

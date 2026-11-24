@@ -1,0 +1,14 @@
+---
+source: crates/symbolon-cli/tests/cli/transfer.rs
+expression: imported.stdout
+---
+{
+  "imports": [
+    {
+      "label": "photos",
+      "action": "added",
+      "entries": 2,
+      "scanned_at": "[TIME]"
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 mod diff;
 mod location;
 mod scan;
+mod transfer;
 
 use std::path::PathBuf;
 
@@ -17,6 +18,8 @@ pub(crate) fn run(cli: &Cli) -> anyhow::Result<Exit> {
         Command::Location(command) => location::run(&cli.global, command),
         Command::Scan(args) => scan::run(&cli.global, args),
         Command::Diff(args) => diff::run(&cli.global, args),
+        Command::Export(args) => transfer::export(&cli.global, args),
+        Command::Import(args) => transfer::import(&cli.global, args),
     }
 }
 
