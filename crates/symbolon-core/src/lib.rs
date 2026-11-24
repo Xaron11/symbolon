@@ -20,9 +20,10 @@
 //!
 //! | Module    | Responsibility                                                  |
 //! | --------- | --------------------------------------------------------------- |
-//! | [`hash`]  | Hash algorithms, streaming full digests and partial digests     |
+//! | [`hash`]    | Hash algorithms, streaming full digests and partial digests   |
+//! | [`pathkey`] | Lossless relative paths and normalized matching keys          |
 //!
-//! _(planned)_ `pathkey` (raw paths and matching keys), `source` (walking a location), `catalog`
+//! _(planned)_ `source` (walking a location), `catalog`
 //! (SQLite storage, internal), `scan` (`Scanner`), `query` (`Query`), then `compare` and `plan`
 //! in later milestones. See the book chapter *Architecture* in `docs/`.
 //!
@@ -36,6 +37,7 @@
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
 pub mod hash;
+pub mod pathkey;
 
 /// Version of this crate, shared by the whole workspace.
 ///
