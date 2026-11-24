@@ -16,18 +16,15 @@
 //!
 //! # Status
 //!
-//! Only [`VERSION`] exists so far. `Scanner`, `Query` and the modules below arrive with
-//! milestones M1 (scanning) and M2 (comparison); see the book chapter *Architecture* in `docs/`.
+//! Milestone M1 is in progress; modules land one at a time. Implemented so far:
 //!
 //! | Module    | Responsibility                                                  |
 //! | --------- | --------------------------------------------------------------- |
-//! | `hash`    | Hash algorithms, streaming and partial hashing                  |
-//! | `pathkey` | Lossless raw paths and normalized matching keys                 |
-//! | `source`  | Walking and reading a location (local, Android)                 |
-//! | `catalog` | SQLite storage, schema migrations, export and import (internal) |
-//! | `scan`    | Walk, reuse cached hashes, prune, hash, persist                 |
-//! | `compare` | N-way classification of entries across locations               |
-//! | `plan`    | Write actions (copy, move, quarantine) as reviewable data       |
+//! | [`hash`]  | Hash algorithms, streaming full digests and partial digests     |
+//!
+//! _(planned)_ `pathkey` (raw paths and matching keys), `source` (walking a location), `catalog`
+//! (SQLite storage, internal), `scan` (`Scanner`), `query` (`Query`), then `compare` and `plan`
+//! in later milestones. See the book chapter *Architecture* in `docs/`.
 //!
 //! # Guarantees
 //!
@@ -37,6 +34,8 @@
 
 #![forbid(unsafe_code)]
 #![deny(clippy::print_stdout, clippy::print_stderr)]
+
+pub mod hash;
 
 /// Version of this crate, shared by the whole workspace.
 ///
