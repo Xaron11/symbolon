@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cli:
+    name: cli (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            exe: symbolon
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            exe: symbolon.exe
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install && rustup target add ${{ matrix.target }}
+      - run: cargo build --release --locked -p symbolon-cli --target ${{ matrix.target }}
+      - name: Package
+        run: |
+          name="symbolon-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir "$name"
+          cp "target/${{ matrix.target }}/release/${{ matrix.exe }}" LICENSE README.md "$name/"
+          echo "Corresponding source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_REF_NAME}" > "$name/SOURCE.txt"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then 7z a "$name.zip" "$name"; else tar czf "$name.tar.gz" "$name"; fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-${{ matrix.target }}
+          path: symbolon-*.*z*
+
+  android-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v32
+      - run: nix develop -c just android-scanner
+      - name: Package
+        run: |
+          name="symbolon-agent-${GITHUB_REF_NAME}-aarch64-linux-musl"
+          mkdir "$name"
+          cp target/aarch64-unknown-linux-musl/release-agent/symbolon-agent LICENSE "$name/"
+          echo "Corresponding source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_REF_NAME}" > "$name/SOURCE.txt"
+          tar czf "$name.tar.gz" "$name"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-agent
+          path: symbolon-agent-*.tar.gz
+
+  publish:
+    needs: [cli, android-agent]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+            --notes "Binaries are built from source tag ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_REF_NAME} under GPL-3.0-or-later."
