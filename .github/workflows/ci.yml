@@ -26,6 +26,44 @@ defaults:
     shell: bash
 
 jobs:
+  # Decides which slow jobs a pull request needs. Pushes to main always run everything, which
+  # keeps the caches warm and catches anything a filter missed before a release.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      nix: ${{ steps.diff.outputs.nix }}
+      agent: ${{ steps.diff.outputs.agent }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ "$EVENT" != pull_request ]]; then
+            { echo nix=true; echo agent=true; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$BASE"...HEAD)"
+          echo "$changed"
+          # Inputs every Nix build depends on.
+          shared='^(flake\.(nix|lock)|Cargo\.(toml|lock)|rust-toolchain\.toml|justfile|\.github/workflows/ci\.yml)$'
+          nix=false
+          agent=false
+          if grep -qE "$shared" <<< "$changed"; then nix=true; agent=true; fi
+          # crane keeps only Rust sources and Cargo files; plain .rs changes are already built by
+          # clippy and test, so the package can only break through other files of its crates.
+          if grep -E '^crates/symbolon-(core|cli)/' <<< "$changed" | grep -vE '\.rs$|/(tests|benches)/' | grep -q .; then
+            nix=true
+          fi
+          if grep -qE '^crates/symbolon-agent/' <<< "$changed"; then agent=true; fi
+          { echo "nix=$nix"; echo "agent=$agent"; } | tee -a "$GITHUB_OUTPUT"
+
   hooks:
     name: hooks (format, typos, nix, workflows)
     runs-on: ubuntu-latest
@@ -212,6 +250,8 @@ jobs:
 
   nix:
     name: nix (flake check, CLI package)
+    needs: changes
+    if: needs.changes.outputs.nix == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -230,6 +270,8 @@ jobs:
 
   android-agent:
     name: android agent (cross-build, static check)
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -290,13 +332,14 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [hooks, clippy, test, frontend, deny, nix, android-agent, docs]
+    needs: [changes, hooks, clippy, test, frontend, deny, nix, android-agent, docs]
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - name: All jobs succeeded
+      # `skipped` only happens for jobs `changes` ruled out; a failed `changes` fails this job.
+      - name: All jobs succeeded or were not needed
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
           echo "results: $RESULTS"
-          for r in $RESULTS; do [[ "$r" == success ]] || exit 1; done
+          for r in $RESULTS; do [[ "$r" == success || "$r" == skipped ]] || exit 1; done
