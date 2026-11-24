@@ -3790,8 +3790,10 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "criterion",
+ "crossbeam-channel",
  "ignore",
  "proptest",
+ "rayon",
  "rusqlite",
  "sha2 0.11.1",
  "tempfile",
