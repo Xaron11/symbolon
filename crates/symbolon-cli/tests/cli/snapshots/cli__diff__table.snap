@@ -1,0 +1,16 @@
+---
+source: crates/symbolon-cli/tests/cli/diff.rs
+expression: run.stdout
+---
+CATEGORY  ROWS  FILES  SIZE
+identical  1  2  8 B
+different  1  2  7 B
+only_in  1  1  9 B
+moved  1  2  12 B
+renamed  1  2  30 B
+
+CATEGORY  PATH  a  b
+different  changed.txt  3 B  4 B
+renamed  new.txt  old.txt (15 B)  15 B
+only_in  only_a.txt  9 B  -
+moved  x/photo.jpg  6 B  y/photo.jpg (6 B)

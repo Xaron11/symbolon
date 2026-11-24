@@ -1,0 +1,12 @@
+---
+source: crates/symbolon-cli/tests/cli/diff.rs
+expression: "env.run(&[\"diff\", \"a\", \"b\", \"--format\", \"csv\"]).stdout"
+---
+row,category,assumed,side,path,size,digest
+1,different,false,a,changed.txt,3,d33fb48ab5adff269ae172b29a6913ff04f6f266207a7a8e976f2ecd571d4492
+1,different,false,b,changed.txt,4,1841a335f6dd0be6a4b4b6917314217a09f1238c9e6c66bacaed2b5a70e4c1eb
+2,renamed,false,a,old.txt,15,9c5fa25c1b1e6fa26eebb256b8a70e74b96abae91a3309398619febd968e695a
+2,renamed,false,b,new.txt,15,9c5fa25c1b1e6fa26eebb256b8a70e74b96abae91a3309398619febd968e695a
+3,only_in,false,a,only_a.txt,9,b58bf1283cecff00e148d6aff7a7357770095b7f7d2b3e227706c06f1f4fdd49
+4,moved,false,a,x/photo.jpg,6,de6a7900b92aebb51befe7d1916188247b895cab1ad5597a042579ea7e4f8add
+4,moved,false,b,y/photo.jpg,6,de6a7900b92aebb51befe7d1916188247b895cab1ad5597a042579ea7e4f8add
