@@ -267,6 +267,95 @@ fn scans_are_listed_newest_first_with_their_warnings() {
     );
 }
 
+/// Fails `open` for every file whose key starts with "gone".
+struct FailAll(LocalSource);
+impl Source for FailAll {
+    fn walk(
+        &self,
+        visit: &mut dyn FnMut(WalkItem) -> ControlFlow<()>,
+    ) -> Result<WalkOutcome, SourceError> {
+        self.0.walk(visit)
+    }
+    fn open(&self, path: &RelPath) -> io::Result<Box<dyn ReadSeek + Send>> {
+        if path.key().as_str().starts_with("gone") {
+            return Err(io::Error::from(io::ErrorKind::NotFound));
+        }
+        self.0.open(path)
+    }
+    fn stat(&self, path: &RelPath) -> io::Result<SourceEntry> {
+        self.0.stat(path)
+    }
+}
+
+#[test]
+fn scan_history_and_warnings_page_through_and_reject_bad_cursors() {
+    let fx = Fixture::new(HashPolicy::Eager);
+    for name in ["gone", "ok"] {
+        fx.write(name, name.as_bytes());
+    }
+    for _ in 0..3 {
+        fx.scan();
+    }
+    // Three failing files in one scan, for paging through warnings.
+    for name in ["gone", "gone2", "gone3"] {
+        fx.write(name, b"changed so it is hashed again");
+    }
+    let source = Arc::new(FailAll(LocalSource::new(&fx.root, &[]).unwrap()));
+    Scanner::start_with_source(&fx.catalog, "loc", source, ScanOptions::default())
+        .unwrap()
+        .wait()
+        .unwrap();
+    let q = fx.query();
+
+    let mut ids = Vec::new();
+    let mut page = Page::first(1);
+    loop {
+        let result = q.scans("loc", &page).unwrap();
+        ids.extend(result.items.iter().map(|s| s.id));
+        match result.next {
+            Some(cursor) => page = Page::after(cursor, 1),
+            None => break,
+        }
+    }
+    assert_eq!(ids.len(), 4);
+    assert!(ids.windows(2).all(|pair| pair[0] > pair[1]), "newest first");
+
+    let mut warned = Vec::new();
+    let mut page = Page::first(2);
+    loop {
+        let result = q.warnings(ids[0], &page).unwrap();
+        warned.extend(
+            result
+                .items
+                .iter()
+                .map(|w| w.path.as_ref().unwrap().key().as_str().to_owned()),
+        );
+        match result.next {
+            Some(cursor) => page = Page::after(cursor, 2),
+            None => break,
+        }
+    }
+    warned.sort();
+    assert_eq!(warned, ["gone", "gone2", "gone3"]);
+
+    let bad = Page::after(
+        symbolon_core::query::Cursor::from_string("not a cursor".into()),
+        5,
+    );
+    assert!(matches!(
+        q.scans("loc", &bad),
+        Err(CatalogError::Corrupt(_))
+    ));
+    assert!(matches!(
+        q.warnings(ids[0], &bad),
+        Err(CatalogError::Corrupt(_))
+    ));
+    assert!(matches!(
+        q.duplicates("loc", &bad),
+        Err(CatalogError::Corrupt(_))
+    ));
+}
+
 #[test]
 fn unknown_locations_are_reported() {
     let fx = Fixture::new(HashPolicy::Lazy);

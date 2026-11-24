@@ -567,6 +567,170 @@ fn unreadable_files_become_warnings_and_the_scan_completes() {
     assert_eq!(fx.entries()["secret"].2, None);
 }
 
+/// Changes a file's modification time (not its size) right before it is opened.
+struct Touching {
+    inner: LocalSource,
+    victim: &'static str,
+}
+
+impl Source for Touching {
+    fn walk(
+        &self,
+        visit: &mut dyn FnMut(WalkItem) -> ControlFlow<()>,
+    ) -> Result<WalkOutcome, SourceError> {
+        self.inner.walk(visit)
+    }
+    fn open(&self, path: &RelPath) -> io::Result<Box<dyn ReadSeek + Send>> {
+        if path.key().as_str() == self.victim {
+            let native = path.to_native(self.inner.root()).unwrap();
+            fs::File::options()
+                .write(true)
+                .open(native)?
+                .set_modified(UNIX_EPOCH + Duration::from_secs(9_999))?;
+        }
+        self.inner.open(path)
+    }
+    fn stat(&self, path: &RelPath) -> io::Result<SourceEntry> {
+        self.inner.stat(path)
+    }
+}
+
+#[test]
+fn files_touched_while_hashed_lose_their_digest_even_at_the_same_size() {
+    let fx = Fixture::new(HashPolicy::Eager);
+    fx.write("touched", b"same size", 1_000);
+    fx.write("calm", b"calm", 1_001);
+    let source = Arc::new(Touching {
+        inner: fx.local(),
+        victim: "touched",
+    });
+    let (events, summary) = fx.scan_with(source, ScanOptions::default());
+    assert_eq!(summary.unwrap().counts.hashed_files, 1);
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, ScanEvent::Warning(w) if w.kind.name() == "changed"))
+    );
+    let entries = fx.entries();
+    assert_eq!(entries["touched"].2, None);
+    assert_eq!(entries["calm"].2, Some(blake3_hex(b"calm")));
+}
+
+/// A reader that fails on the first read, like storage that disappears mid-hash.
+struct Failing;
+
+impl io::Read for Failing {
+    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::other("device disconnected"))
+    }
+}
+
+impl io::Seek for Failing {
+    fn seek(&mut self, _: io::SeekFrom) -> io::Result<u64> {
+        Err(io::Error::other("device disconnected"))
+    }
+}
+
+struct Unplugged {
+    inner: LocalSource,
+}
+
+impl Source for Unplugged {
+    fn walk(
+        &self,
+        visit: &mut dyn FnMut(WalkItem) -> ControlFlow<()>,
+    ) -> Result<WalkOutcome, SourceError> {
+        self.inner.walk(visit)
+    }
+    fn open(&self, _path: &RelPath) -> io::Result<Box<dyn ReadSeek + Send>> {
+        Ok(Box::new(Failing))
+    }
+    fn stat(&self, path: &RelPath) -> io::Result<SourceEntry> {
+        self.inner.stat(path)
+    }
+}
+
+#[test]
+fn read_errors_while_hashing_become_warnings() {
+    let fx = Fixture::new(HashPolicy::Eager);
+    fx.write("a", b"aaaa", 1_000);
+    fx.write("b", b"bbbb", 1_001);
+    let (_, summary) = fx.scan_with(
+        Arc::new(Unplugged { inner: fx.local() }),
+        ScanOptions::default(),
+    );
+    let summary = summary.unwrap();
+    assert_eq!(summary.status, ScanStatus::Completed);
+    assert_eq!(
+        (summary.counts.hashed_files, summary.counts.warnings),
+        (0, 2)
+    );
+    assert!(fx.entries().values().all(|(_, _, digest)| digest.is_none()));
+}
+
+/// Pauses the walk after `after` items until the test lets it continue.
+struct WalkGate {
+    inner: LocalSource,
+    after: usize,
+    reached: Sender<()>,
+    go: Receiver<()>,
+}
+
+impl Source for WalkGate {
+    fn walk(
+        &self,
+        visit: &mut dyn FnMut(WalkItem) -> ControlFlow<()>,
+    ) -> Result<WalkOutcome, SourceError> {
+        let mut seen = 0;
+        self.inner.walk(&mut |item| {
+            seen += 1;
+            if seen == self.after {
+                self.reached.send(()).unwrap();
+                self.go.recv_timeout(TIMEOUT).unwrap();
+            }
+            visit(item)
+        })
+    }
+    fn open(&self, path: &RelPath) -> io::Result<Box<dyn ReadSeek + Send>> {
+        self.inner.open(path)
+    }
+    fn stat(&self, path: &RelPath) -> io::Result<SourceEntry> {
+        self.inner.stat(path)
+    }
+}
+
+#[test]
+fn cancelling_during_the_walk_never_deletes_unvisited_entries() {
+    let fx = Fixture::new(HashPolicy::Eager);
+    many_files(&fx, 10);
+    fx.scan();
+    let before = fx.entries();
+    assert_eq!(before.len(), 10);
+
+    let (reached_tx, reached) = crossbeam_channel::unbounded();
+    let (go, go_rx) = crossbeam_channel::unbounded();
+    let source = Arc::new(WalkGate {
+        inner: fx.local(),
+        after: 3,
+        reached: reached_tx,
+        go: go_rx,
+    });
+    let handle =
+        Scanner::start_with_source(&fx.catalog, "loc", source, ScanOptions::default()).unwrap();
+    reached.recv_timeout(TIMEOUT).unwrap();
+    handle.cancel();
+    go.send(()).unwrap();
+    let summary = handle.wait().unwrap();
+
+    assert_eq!(summary.status, ScanStatus::Cancelled);
+    assert!(summary.counts.files < 10, "the walk stopped early");
+    assert_eq!(
+        fx.entries(),
+        before,
+        "unvisited entries and all digests are kept"
+    );
+}
+
 #[test]
 fn an_unavailable_root_fails_the_scan() {
     let fx = Fixture::new(HashPolicy::Eager);
