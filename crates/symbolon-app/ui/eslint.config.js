@@ -4,6 +4,7 @@ import js from '@eslint/js';
 import svelte from 'eslint-plugin-svelte';
 import { defineConfig, includeIgnoreFile } from 'eslint/config';
 import globals from 'globals';
+import jsdoc from 'eslint-plugin-jsdoc';
 import ts from 'typescript-eslint';
 
 const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
@@ -35,6 +36,29 @@ export default defineConfig(
 				extraFileExtensions: ['.svelte'],
 				parser: ts.parser
 			}
+		}
+	},
+	{
+		// Exported library code is documented with TSDoc; types already describe parameters.
+		files: ['src/lib/**/*.ts', 'scripts/**/*.ts'],
+		ignores: ['**/*.test.ts'],
+		...jsdoc.configs['flat/recommended-typescript-error'],
+		rules: {
+			...jsdoc.configs['flat/recommended-typescript-error'].rules,
+			'jsdoc/require-jsdoc': [
+				'error',
+				{
+					publicOnly: true,
+					require: { FunctionDeclaration: true, ClassDeclaration: true, MethodDefinition: true },
+					contexts: [
+						'TSInterfaceDeclaration',
+						'TSTypeAliasDeclaration',
+						'ExportNamedDeclaration > VariableDeclaration'
+					]
+				}
+			],
+			'jsdoc/require-param': 'off',
+			'jsdoc/require-returns': 'off'
 		}
 	},
 	{

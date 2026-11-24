@@ -1,0 +1,13 @@
+# Read by rust-analyzer itself, whatever the editor. Only per-crate ("local") settings are
+# honoured from a project file; check command and target dir must be set in the editor or in
+# ~/.config/rust-analyzer/rust-analyzer.toml (see docs/development/editor.md).
+
+[imports]
+# Match the codebase: one `use` per module (`use std::io::{self, Write};`), grouped std/external/crate.
+granularity.group = "module"
+granularity.enforce = true
+group.enable = true
+prefix = "crate"
+
+[diagnostics]
+styleLints.enable = true

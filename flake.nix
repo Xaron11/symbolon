@@ -71,6 +71,29 @@
           openssl
         ];
 
+      # Language servers for any LSP editor; versions match the toolchain and CI. rust-analyzer
+      # comes with the Rust toolchain (devRust). See docs/development/editor.md.
+      languageServers =
+        pkgs: with pkgs; [
+          nixd
+          taplo
+          svelte-language-server
+          vtsls
+          vscode-langservers-extracted
+          yaml-language-server
+          marksman
+          rumdl
+          typos-lsp
+          just-lsp
+        ];
+
+      docsTools =
+        pkgs: with pkgs; [
+          mdbook
+          mdbook-mermaid
+          lychee
+        ];
+
       # treefmt reads treefmt.toml; Prettier is taken from the frontend's node_modules.
       formatters =
         pkgs: with pkgs; [
@@ -100,6 +123,7 @@
               settings.formatters = formatters pkgs;
             };
             typos.enable = true;
+            rumdl.enable = true;
             statix.enable = true;
             deadnix.enable = true;
             actionlint.enable = true;
@@ -191,6 +215,8 @@
                 gobject-introspection
               ]
               ++ hooks.enabledPackages
+              ++ languageServers pkgs
+              ++ docsTools pkgs
               ++ tauriLibs pkgs;
 
             shellHook = ''
