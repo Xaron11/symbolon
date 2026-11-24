@@ -20,11 +20,11 @@
 //!
 //! | Module      | Responsibility                                              |
 //! | ----------- | ----------------------------------------------------------- |
+//! | [`catalog`] | SQLite catalog: opening, migrations, locations              |
 //! | [`hash`]    | Hash algorithms, streaming full digests and partial digests |
 //! | [`pathkey`] | Lossless relative paths and normalized matching keys        |
 //!
-//! _(planned)_ `source` (walking a location), `catalog`
-//! (SQLite storage, internal), `scan` (`Scanner`), `query` (`Query`), then `compare` and `plan`
+//! _(planned)_ `source` (walking a location), `scan` (`Scanner`), `query` (`Query`), then `compare` and `plan`
 //! in later milestones. See the book chapter *Architecture* in `docs/`.
 //!
 //! # Guarantees
@@ -36,6 +36,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
+pub mod catalog;
 pub mod hash;
 pub mod pathkey;
 
