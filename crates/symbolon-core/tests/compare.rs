@@ -264,12 +264,13 @@ fn case_and_unicode_options_match_keys() {
     fx.eager("a", &[("Photo.JPG", "img"), ("Cafe\u{301}.txt", "menu")]);
     fx.eager("b", &[("photo.jpg", "img"), ("Café.txt", "menu")]);
 
+    // Without options the names differ, so equal content shows up as renamed files.
     let plain = classes(&fx.compare(&["a", "b"], CompareOptions::default()));
-    assert_eq!(plain.len(), 4, "without options nothing matches: {plain:?}");
+    assert_eq!(plain.len(), 2, "{plain:?}");
     assert!(
         plain
             .values()
-            .all(|(category, _, _)| *category == Category::OnlyIn)
+            .all(|(category, _, _)| *category == Category::Renamed)
     );
 
     let both = KeyOptions {
@@ -466,4 +467,151 @@ fn rows_filter_by_category_and_page_stably() {
         ["f0", "f1"]
     );
     assert_eq!(both.items[0].presence, SideSet::from_bits(0b11));
+}
+
+#[test]
+fn same_content_at_another_path_is_moved_or_renamed() {
+    let fx = Fixture::new();
+    fx.eager(
+        "a",
+        &[
+            ("photos/2024/a.jpg", "IMG"),
+            ("music/song.flac", "SONG"),
+            ("x/one.txt", "ONE"),
+            ("keep", "K"),
+        ],
+    );
+    fx.eager(
+        "b",
+        &[
+            ("archive/a.jpg", "IMG"),
+            ("music/song (1).flac", "SONG"),
+            ("y/two.txt", "ONE"),
+            ("keep", "K"),
+        ],
+    );
+    let rows = all_rows(&fx.compare(&["a", "b"], CompareOptions::default()));
+    let summary: BTreeMap<String, (Category, Vec<String>)> = rows
+        .iter()
+        .map(|r| {
+            (
+                r.key.clone(),
+                (
+                    r.category,
+                    r.cells
+                        .iter()
+                        .map(|c| c.path.key().as_str().to_owned())
+                        .collect(),
+                ),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        BTreeMap::from([
+            (
+                "archive/a.jpg".to_owned(),
+                (
+                    Category::Moved,
+                    vec!["photos/2024/a.jpg".to_owned(), "archive/a.jpg".to_owned()]
+                )
+            ),
+            (
+                "keep".to_owned(),
+                (
+                    Category::Identical,
+                    vec!["keep".to_owned(), "keep".to_owned()]
+                )
+            ),
+            (
+                "music/song (1).flac".to_owned(),
+                (
+                    Category::Renamed,
+                    vec![
+                        "music/song.flac".to_owned(),
+                        "music/song (1).flac".to_owned()
+                    ]
+                )
+            ),
+            (
+                "x/one.txt".to_owned(),
+                (
+                    Category::Renamed,
+                    vec!["x/one.txt".to_owned(), "y/two.txt".to_owned()]
+                )
+            ),
+        ])
+    );
+    assert!(rows.iter().all(|r| r.presence == SideSet::from_bits(0b11)));
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+    assert_eq!(
+        cmp.summary().unwrap().files(),
+        8,
+        "every file in exactly one row"
+    );
+}
+
+#[test]
+fn moves_across_three_sides_follow_disjoint_presence() {
+    let fx = Fixture::new();
+    fx.eager("a", &[("x/f", "F"), ("dup1", "D"), ("dup2", "D")]);
+    fx.eager("b", &[("x/f", "F"), ("dup2", "D")]);
+    fx.eager("c", &[("y/f", "F")]);
+    let got = classes(&fx.compare(&["a", "b", "c"], CompareOptions::default()));
+    assert_eq!(
+        got["x/f"],
+        (Category::Moved, vec![0, 1, 2], false),
+        "A,B at x/f and C at y/f"
+    );
+    assert!(!got.contains_key("y/f"));
+    // A holds an extra copy of content B also has at dup2: not a move.
+    assert_eq!(got["dup1"], (Category::OnlyIn, vec![0], false));
+    assert_eq!(got["dup2"], (Category::OnlyIn, vec![0, 1], false));
+}
+
+#[test]
+fn duplicates_on_one_side_join_a_move_group() {
+    let fx = Fixture::new();
+    fx.eager("a", &[("p/a", "SAME"), ("q/a", "SAME")]);
+    fx.eager("b", &[("r/a", "SAME")]);
+    let rows = all_rows(&fx.compare(&["a", "b"], CompareOptions::default()));
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        (rows[0].category, rows[0].cells.len()),
+        (Category::Moved, 3)
+    );
+}
+
+#[test]
+fn unhashed_or_different_files_are_never_matched_as_moves() {
+    let fx = Fixture::new();
+    fx.location(
+        "a",
+        HashPolicy::Lazy,
+        HashAlgo::Blake3,
+        &[("old/f", "SAME", 1_000)],
+    );
+    fx.location(
+        "b",
+        HashPolicy::Lazy,
+        HashAlgo::Blake3,
+        &[("new/f", "SAME", 1_000)],
+    );
+    let lazy = classes(&fx.compare(&["a", "b"], CompareOptions::default()));
+    assert_eq!(
+        lazy["old/f"].0,
+        Category::OnlyIn,
+        "no digests yet, so no move"
+    );
+    assert_eq!(lazy["new/f"].0, Category::OnlyIn);
+
+    fx.eager("c", &[("old/f", "one")]);
+    fx.eager("d", &[("new/f", "two")]);
+    let different = classes(&fx.compare(&["c", "d"], CompareOptions::default()));
+    assert_eq!(different.len(), 2);
+    assert!(
+        different
+            .values()
+            .all(|(category, _, _)| *category == Category::OnlyIn)
+    );
 }

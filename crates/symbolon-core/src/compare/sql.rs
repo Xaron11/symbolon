@@ -78,7 +78,8 @@ pub(super) fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             files INTEGER NOT NULL,
             bytes INTEGER NOT NULL
         );
-        CREATE INDEX temp.cmp_rows_order ON cmp_rows (sort_key, id);",
+        CREATE INDEX temp.cmp_rows_order ON cmp_rows (sort_key, id);
+        CREATE INDEX temp.cmp_rows_digest ON cmp_rows (digest) WHERE digest IS NOT NULL;",
     )
 }
 
@@ -176,7 +177,42 @@ pub(super) fn classify(
              (SELECT id FROM temp.cmp_rows r WHERE r.sort_key = cmp_files.norm)",
         [],
     )?;
-    Ok(())
+    match_moves(conn)
+}
+
+/// Replaces verified only-in rows that share a digest with a row of disjoint presence by one
+/// moved or renamed row per digest (ADR-0010).
+fn match_moves(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS temp.cmp_moving;
+         CREATE TEMP TABLE cmp_moving AS
+         SELECT r.id, r.digest FROM temp.cmp_rows r
+         WHERE r.category = 'only_in' AND r.digest IS NOT NULL
+           AND EXISTS (
+               SELECT 1 FROM temp.cmp_rows o
+               WHERE o.digest = r.digest AND o.category = 'only_in' AND o.id != r.id
+                 AND (o.presence & r.presence) = 0
+           );
+         CREATE INDEX temp.cmp_moving_id ON cmp_moving (id);
+
+         INSERT INTO temp.cmp_rows (sort_key, category, presence, assumed, size, digest, files, bytes)
+         SELECT min(f.norm),
+                CASE WHEN count(DISTINCT f.name) = 1 THEN 'moved' ELSE 'renamed' END,
+                sum(DISTINCT 1 << f.side), 0, max(f.size), m.digest, count(*), sum(f.size)
+         FROM temp.cmp_moving m JOIN temp.cmp_files f ON f.row_id = m.id
+         GROUP BY m.digest
+         ORDER BY min(f.norm);
+
+         UPDATE temp.cmp_files SET row_id = (
+             SELECT n.id FROM temp.cmp_rows n
+             WHERE n.category IN ('moved', 'renamed')
+               AND n.digest = (SELECT m.digest FROM temp.cmp_moving m WHERE m.id = cmp_files.row_id)
+         )
+         WHERE row_id IN (SELECT id FROM temp.cmp_moving);
+
+         DELETE FROM temp.cmp_rows WHERE id IN (SELECT id FROM temp.cmp_moving);
+         DROP TABLE temp.cmp_moving;",
+    )
 }
 
 pub(super) fn summary(conn: &Connection) -> Result<Summary, CompareError> {
