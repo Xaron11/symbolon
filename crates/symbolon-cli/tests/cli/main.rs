@@ -4,6 +4,7 @@
 
 mod common;
 mod diff;
+mod dupes;
 mod location;
 mod scan;
 mod transfer;

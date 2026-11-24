@@ -1,6 +1,7 @@
 //! One module per command; each returns the exit status of a successful run.
 
 mod diff;
+mod dupes;
 mod location;
 mod scan;
 mod transfer;
@@ -20,6 +21,7 @@ pub(crate) fn run(cli: &Cli) -> anyhow::Result<Exit> {
         Command::Diff(args) => diff::run(&cli.global, args),
         Command::Export(args) => transfer::export(&cli.global, args),
         Command::Import(args) => transfer::import(&cli.global, args),
+        Command::Dupes(args) => dupes::run(&cli.global, args),
     }
 }
 

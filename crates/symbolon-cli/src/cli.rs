@@ -56,6 +56,8 @@ pub(crate) enum Command {
     Export(ExportArgs),
     /// Add a location from a .symbolon file, or update one with it
     Import(ImportArgs),
+    /// List files with identical content within each location
+    Dupes(DupesArgs),
 }
 
 #[derive(Debug, Args)]
@@ -131,6 +133,22 @@ pub(crate) struct DiffArgs {
     /// Print the totals only
     #[arg(long)]
     pub(crate) summary: bool,
+    /// List every file that could not be hashed instead of counting them
+    #[arg(long, short)]
+    pub(crate) verbose: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct DupesArgs {
+    /// Locations to search, as LABEL or LABEL:folder/in/it
+    #[arg(required = true, value_name = "SIDE")]
+    pub(crate) sides: Vec<String>,
+    /// Ignore files smaller than this many bytes
+    #[arg(long, value_name = "BYTES")]
+    pub(crate) min_size: Option<u64>,
+    /// Do not hash files; only already hashed files are compared
+    #[arg(long)]
+    pub(crate) no_hash: bool,
     /// List every file that could not be hashed instead of counting them
     #[arg(long, short)]
     pub(crate) verbose: bool,

@@ -436,7 +436,8 @@ impl Comparison {
     ///
     /// # Errors
     ///
-    /// - [`CompareError::SideCount`] for fewer than 2 or more than [`MAX_SIDES`] sides.
+    /// - [`CompareError::SideCount`] for fewer than 2 or more than [`MAX_SIDES`] sides; one
+    ///   side is enough with [`CompareOptions::duplicates`], to find its duplicates.
     /// - [`CompareError::Catalog`] for unknown locations.
     /// - [`CompareError::AlgorithmMismatch`] if the locations use different hash algorithms.
     pub fn new(
@@ -444,7 +445,8 @@ impl Comparison {
         sides: &[Side],
         options: CompareOptions,
     ) -> Result<Self, CompareError> {
-        if !(2..=MAX_SIDES).contains(&sides.len()) {
+        let fewest = if options.duplicates { 1 } else { 2 };
+        if !(fewest..=MAX_SIDES).contains(&sides.len()) {
             return Err(CompareError::SideCount(sides.len()));
         }
         let conn = catalog.connect()?;

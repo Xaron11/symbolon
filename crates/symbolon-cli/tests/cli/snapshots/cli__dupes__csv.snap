@@ -1,0 +1,10 @@
+---
+source: crates/symbolon-cli/tests/cli/dupes.rs
+expression: "env.ok(&[\"dupes\", \"photos\", \"--format\", \"csv\"])"
+---
+group,side,digest,size,path
+1,photos,388c011f9f3c5551dafb481984b4edfbba1157b9c7b2ce7648e4c45dc0fe95ba,18,doc.txt
+1,photos,388c011f9f3c5551dafb481984b4edfbba1157b9c7b2ce7648e4c45dc0fe95ba,18,old/doc.txt
+2,photos,5e8bbae7e88e4ae1d5e34720d270c86b3d584c0334cdc6d71539322026828913,5,a.jpg
+2,photos,5e8bbae7e88e4ae1d5e34720d270c86b3d584c0334cdc6d71539322026828913,5,copy/a.jpg
+2,photos,5e8bbae7e88e4ae1d5e34720d270c86b3d584c0334cdc6d71539322026828913,5,copy/again.jpg

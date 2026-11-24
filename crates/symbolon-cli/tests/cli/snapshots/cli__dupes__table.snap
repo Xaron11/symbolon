@@ -1,0 +1,12 @@
+---
+source: crates/symbolon-cli/tests/cli/dupes.rs
+expression: "env.ok(&[\"dupes\", \"photos\"])"
+---
+GROUP  SIDE  SIZE  PATH
+1  photos  18 B  doc.txt
+1  photos  18 B  old/doc.txt
+2  photos  5 B  a.jpg
+2  photos  5 B  copy/a.jpg
+2  photos  5 B  copy/again.jpg
+
+photos: 2 groups, 5 files, 28 B could be freed

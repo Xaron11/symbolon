@@ -429,6 +429,10 @@ fn bad_inputs_are_refused() {
         Err(CompareError::SideCount(1))
     ));
     assert!(matches!(
+        Comparison::new(&fx.catalog, &[], options().duplicates(true)),
+        Err(CompareError::SideCount(0))
+    ));
+    assert!(matches!(
         Comparison::new(&fx.catalog, &[Side::location("a"), Side::location("nope")], options()),
         Err(CompareError::Catalog(CatalogError::LocationNotFound(label))) if label == "nope"
     ));
@@ -1054,6 +1058,29 @@ mod filters_and_duplicates {
         with.resolve(&ScanOptions::default(), |_| ControlFlow::Continue(()))
             .unwrap();
         let sets = with.duplicates(0, &Page::first(10)).unwrap().items;
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0].cells.len(), 2);
+    }
+
+    #[test]
+    fn one_side_is_enough_to_find_its_duplicates() {
+        let fx = Fixture::new();
+        fx.location(
+            "a",
+            HashPolicy::Lazy,
+            HashAlgo::Blake3,
+            &[
+                ("x", "SAME", 1_000),
+                ("y", "SAME", 1_000),
+                ("z", "other size", 1_000),
+            ],
+        );
+        let mut cmp = fx.compare(&["a"], CompareOptions::default().duplicates(true));
+        let summary = cmp
+            .resolve(&ScanOptions::default(), |_| ControlFlow::Continue(()))
+            .unwrap();
+        assert_eq!(summary.hashed_files, 2, "only same-size files are read");
+        let sets = cmp.duplicates(0, &Page::first(10)).unwrap().items;
         assert_eq!(sets.len(), 1);
         assert_eq!(sets[0].cells.len(), 2);
     }
