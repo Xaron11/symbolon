@@ -16,18 +16,18 @@
 //!
 //! # Status
 //!
-//! Milestone M1 is in progress; modules land one at a time. Implemented so far:
+//! Implemented so far (milestone M1):
 //!
 //! | Module      | Responsibility                                                  |
 //! | ----------- | --------------------------------------------------------------- |
 //! | [`catalog`] | SQLite catalog: opening, migrations, locations                  |
 //! | [`hash`]    | Hash algorithms, streaming full digests and partial digests     |
 //! | [`pathkey`] | Lossless relative paths and normalized matching keys            |
+//! | [`query`]   | `Query`: browse, search, duplicates, scan history; paginated    |
 //! | [`scan`]    | `Scanner`: walk, store, hash; events, cancel, pause, rescans    |
 //! | [`source`]  | Walking and reading a location; `LocalSource` (feature `local`) |
 //!
-//! _(planned)_ `query` (`Query`), then `compare` and `plan`
-//! in later milestones. See the book chapter *Architecture* in `docs/`.
+//! _(planned)_ `compare` (M2) and `plan` (M7). See the book chapter *Architecture* in `docs/`.
 //!
 //! # Guarantees
 //!
@@ -41,6 +41,7 @@
 pub mod catalog;
 pub mod hash;
 pub mod pathkey;
+pub mod query;
 pub mod scan;
 pub mod source;
 
