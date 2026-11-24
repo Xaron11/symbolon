@@ -16,18 +16,19 @@
 //!
 //! # Status
 //!
-//! Implemented so far (milestone M1):
+//! Implemented so far (milestones M1 and M2):
 //!
-//! | Module      | Responsibility                                                  |
-//! | ----------- | --------------------------------------------------------------- |
-//! | [`catalog`] | SQLite catalog: opening, migrations, locations                  |
-//! | [`hash`]    | Hash algorithms, streaming full digests and partial digests     |
-//! | [`pathkey`] | Lossless relative paths and normalized matching keys            |
-//! | [`query`]   | `Query`: browse, search, duplicates, scan history; paginated    |
-//! | [`scan`]    | `Scanner`: walk, store, hash; events, cancel, pause, rescans    |
-//! | [`source`]  | Walking and reading a location; `LocalSource` (feature `local`) |
+//! | Module      | Responsibility                                                     |
+//! | ----------- | ------------------------------------------------------------------ |
+//! | [`catalog`] | SQLite catalog: opening, migrations, locations                     |
+//! | [`compare`] | `Comparison` of two or more sides: categories, summary, paged rows |
+//! | [`hash`]    | Hash algorithms, streaming full digests and partial digests        |
+//! | [`pathkey`] | Lossless relative paths and normalized matching keys               |
+//! | [`query`]   | `Query`: browse, search, duplicates, scan history; paginated       |
+//! | [`scan`]    | `Scanner`: walk, store, hash; events, cancel, pause, rescans       |
+//! | [`source`]  | Walking and reading a location; `LocalSource` (feature `local`)    |
 //!
-//! _(planned)_ `compare` (M2) and `plan` (M7). See the book chapter *Architecture* in `docs/`.
+//! _(planned)_ `plan` (M7). See the book chapter *Architecture* in `docs/`.
 //!
 //! # Guarantees
 //!
@@ -39,6 +40,7 @@
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
 pub mod catalog;
+pub mod compare;
 pub mod hash;
 pub mod pathkey;
 pub mod query;
