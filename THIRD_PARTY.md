@@ -5,5 +5,5 @@ Release artifacts bundle no third-party tools. Rust and npm dependencies are lin
 Any tool redistributed in a release (for example Android `platform-tools`) must have a license that permits redistribution and must be listed here with its license and source.
 
 | Component | Version | License | Source | Shipped in |
-|---|---|---|---|---|
-| *(none)* | | | | |
+| --------- | ------- | ------- | ------ | ---------- |
+| _(none)_  |         |         |        |            |

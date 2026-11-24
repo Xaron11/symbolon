@@ -1,8 +1,8 @@
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
-const host = process.env.TAURI_DEV_HOST;
+const host = process.env['TAURI_DEV_HOST'];
 
 export default defineConfig({
 	plugins: [
@@ -16,11 +16,14 @@ export default defineConfig({
 			adapter: adapter({ fallback: 'index.html' })
 		})
 	],
+	test: {
+		include: ['src/**/*.test.ts']
+	},
 	clearScreen: false,
 	server: {
 		port: 5173,
 		strictPort: true,
-		host: host || false,
-		hmr: host ? { protocol: 'ws', host, port: 5174 } : undefined
+		host: host ?? false,
+		...(host && { hmr: { protocol: 'ws', host, port: 5174 } })
 	}
 });

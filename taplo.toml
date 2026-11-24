@@ -1,0 +1,7 @@
+include = ["**/*.toml"]
+exclude = ["target/**", "**/node_modules/**"]
+
+[formatting]
+column_width = 100
+array_auto_collapse = true
+reorder_arrays = false

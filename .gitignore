@@ -8,3 +8,4 @@ node_modules/
 /crates/symbolon-app/gen/
 *.symbolon
 *.symbolon.zst
+/.pre-commit-config.yaml

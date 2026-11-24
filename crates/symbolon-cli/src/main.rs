@@ -5,9 +5,8 @@ use clap::Parser;
 #[command(name = "symbolon", version = symbolon_core::VERSION)]
 struct Cli {}
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     let _cli = Cli::parse();
-    Ok(())
 }
 
 #[cfg(test)]

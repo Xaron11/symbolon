@@ -13,16 +13,16 @@ The spike ran the PoC `symbolon-agent` (BLAKE3 with NEON, `rayon`, `mimalloc`, `
 
 Device: Android 16 (SDK 36), kernel 5.15 (android13 GKI), 8 cores, 4 KiB pages, SELinux enforcing, toybox 0.8.12. `/sdcard` is FUSE (`/storage/emulated`, `noexec`).
 
-| Check | Result |
-|---|---|
-| Push to `/data/local/tmp`, `chmod 755`, exec | Works. Runs as `uid=2000(shell)`, context `u:r:shell:s0`. |
-| `/proc/self/status`, `/proc/self/attr/current`, `available_parallelism` | Readable; parallelism = 8. |
-| `adb exec-out` NDJSON stream | Clean, no line-ending mangling. |
-| Walk `/sdcard` (27,567 files, 5,489 dirs, 17.6 GB) | 16.5 s cold, 3.9 s warm. One `EACCES` under `Android/data/<pkg>/…`. |
-| Hash `/sdcard/DCIM` (1,084 files, 2.6 GB), BLAKE3 | 1 thread 176 MiB/s, **2 threads 238 MiB/s**, 4 threads 227 MiB/s, 8 threads 213 MiB/s. |
-| Same tree, `find -print0 \| xargs -0 sha256sum` | ≈13.6 s (≈190 MiB/s); `xargs -P 2` ≈12.6 s. |
-| Unreadable file (EIO at ≈119 MB of a 143 MB video) | Agent: per-file `warning`, scan continues. **toybox `sha256sum`: prints a hash of the truncated content and exits 0.** |
-| Cleanup | Binary removed after the run (`trap … rm`). |
+| Check                                                                   | Result                                                                                                                 |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Push to `/data/local/tmp`, `chmod 755`, exec                            | Works. Runs as `uid=2000(shell)`, context `u:r:shell:s0`.                                                              |
+| `/proc/self/status`, `/proc/self/attr/current`, `available_parallelism` | Readable; parallelism = 8.                                                                                             |
+| `adb exec-out` NDJSON stream                                            | Clean, no line-ending mangling.                                                                                        |
+| Walk `/sdcard` (27,567 files, 5,489 dirs, 17.6 GB)                      | 16.5 s cold, 3.9 s warm. One `EACCES` under `Android/data/<pkg>/…`.                                                    |
+| Hash `/sdcard/DCIM` (1,084 files, 2.6 GB), BLAKE3                       | 1 thread 176 MiB/s, **2 threads 238 MiB/s**, 4 threads 227 MiB/s, 8 threads 213 MiB/s.                                 |
+| Same tree, `find -print0 \| xargs -0 sha256sum`                         | ≈13.6 s (≈190 MiB/s); `xargs -P 2` ≈12.6 s.                                                                            |
+| Unreadable file (EIO at ≈119 MB of a 143 MB video)                      | Agent: per-file `warning`, scan continues. **toybox `sha256sum`: prints a hash of the truncated content and exits 0.** |
+| Cleanup                                                                 | Binary removed after the run (`trap … rm`).                                                                            |
 
 No issues specific to musl: no NDK needed, no user/DNS lookups involved, `/proc` access fine, SELinux allows exec from `/data/local/tmp` for the shell domain.
 
