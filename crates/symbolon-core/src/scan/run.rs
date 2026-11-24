@@ -89,11 +89,7 @@ pub(super) fn run(
         location: location.label.clone(),
     });
     match scan.execute() {
-        Ok(status) => {
-            let summary = scan.finish(status, None)?;
-            scan.emit(ScanEvent::Finished(summary.clone()));
-            Ok(summary)
-        }
+        Ok(status) => scan.finish(status, None),
         Err(error) => {
             // Best effort: the original error matters more than a failure to record it.
             scan.finish(ScanStatus::Failed, Some(&error.to_string()))
@@ -163,9 +159,10 @@ impl Scan<'_> {
         })
     }
 
+    /// Sends without waiting: with the buffer full the event is dropped, never the scan
+    /// paused. A dropped receiver only means nobody is listening.
     fn emit(&self, event: ScanEvent) {
-        // A dropped receiver only means nobody is listening; the scan goes on.
-        self.events.send(event).ok();
+        self.events.try_send(event).ok();
     }
 
     fn progress(&mut self, phase: ScanPhase, force: bool) {

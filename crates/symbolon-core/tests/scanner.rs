@@ -877,3 +877,37 @@ fn the_scan_lock_works_across_processes() {
     let statuses: Vec<String> = fx.scan_rows().into_iter().map(|(s, _)| s).collect();
     assert_eq!(statuses, ["interrupted", "completed"]);
 }
+
+#[test]
+fn an_unread_event_receiver_never_stalls_the_scan() {
+    let fx = Fixture::new(HashPolicy::Eager);
+    // Two per-file events each: far more than the event buffer holds.
+    many_files(&fx, 1500);
+    let options = ScanOptions::default().file_events(true);
+    let handle = Scanner::start(&fx.catalog, "loc", options).unwrap();
+
+    let deadline = std::time::Instant::now() + TIMEOUT;
+    while fx
+        .scan_rows()
+        .last()
+        .is_none_or(|(status, _)| status != "completed")
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the scan stalled on its unread events"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // The location is free again although `Finished` has not been read yet.
+    let other = Scanner::start(&fx.catalog, "loc", ScanOptions::default()).unwrap();
+    assert_eq!(other.wait().unwrap().status, ScanStatus::Completed);
+
+    let events: Vec<ScanEvent> = handle.events().iter().collect();
+    assert!(matches!(events.first(), Some(ScanEvent::Started { .. })));
+    assert!(matches!(events.last(), Some(ScanEvent::Finished(_))));
+    assert!(
+        events.len() < 3000,
+        "per-file events were dropped, not queued"
+    );
+    assert_eq!(handle.wait().unwrap().counts.hashed_files, 1500);
+}
