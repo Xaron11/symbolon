@@ -5,7 +5,7 @@
 # Using Symbolon
 
 - [Concepts](concepts.md)
-- [Command-line usage](<>)
+- [Command-line usage](cli.md)
 
 # Design
 

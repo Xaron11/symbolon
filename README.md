@@ -6,7 +6,19 @@ Symbolon answers one question: **do these locations match, and if not, how exact
 
 It scans two or more locations (directories, mounted disks, pendrives, Android phones over ADB), hashes file contents into a local catalog, and reports for any set of them which files are identical, missing, changed, moved or renamed, and duplicated.
 
-**Status:** pre-alpha. The core library scans local locations into the catalog (M1) and compares two or more of them (M2): identical, different, only-in, moved, renamed and duplicate files, hashing lazily only what decides a result. The command line (M3) comes next; there is no user-facing tool yet. See [`docs/start.md`](docs/start.md) for the full specification and [`docs/adr/`](docs/adr/) for design decisions.
+**Status:** pre-alpha. The `symbolon` command line (M3) scans local directories and disks into a catalog, compares two or more of them (identical, different, only-in, moved, renamed and duplicate files, hashing only what decides a result), and exports a location to compare it on another computer. Android over ADB and the desktop app come next. See [`docs/start.md`](docs/start.md) for the full specification and [`docs/adr/`](docs/adr/) for design decisions.
+
+## Quick start
+
+```sh
+symbolon location add laptop ~/Documents
+symbolon location add backup /mnt/usb/Documents
+symbolon scan laptop backup
+symbolon diff laptop backup        # exit code 1 if anything differs
+symbolon dupes laptop
+```
+
+The [command-line chapter](docs/cli.md) covers installing, output formats for scripts (`--json`, `--format csv`) and exit codes.
 
 ## Layout
 

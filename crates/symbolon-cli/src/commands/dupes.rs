@@ -174,9 +174,9 @@ fn table(out: &mut impl io::Write, groups: &[Group], names: &[String]) -> anyhow
         let t = Totals::of(side, groups);
         writeln!(
             out,
-            "{side}: {} groups, {} files, {} could be freed",
-            t.groups,
-            t.files,
+            "{side}: {}, {}, {} could be freed",
+            output::count(t.groups, "group"),
+            output::count(t.files, "file"),
             output::size(t.redundant_bytes)
         )?;
     }

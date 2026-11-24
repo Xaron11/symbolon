@@ -108,6 +108,15 @@ pub(crate) fn size(bytes: u64) -> String {
     format!("{value:.1} {}", UNITS[unit])
 }
 
+/// `1 file`, `2 files`.
+pub(crate) fn count(n: u64, noun: &str) -> String {
+    if n == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{n} {noun}s")
+    }
+}
+
 /// RFC 3339 in UTC, to the second; times before 1970 are shown as the epoch.
 pub(crate) fn time(time: SystemTime) -> String {
     let secs = time
