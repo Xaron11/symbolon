@@ -37,7 +37,7 @@ flowchart LR
     readers -- "results" --> client
 ```
 
-- **`Scanner`** _(planned, M1)_ scans one location, writes entries in short transactions and streams events over a channel. It supports cancel and pause.
+- **`Scanner`** scans one location, writes entries in short transactions and streams events over a channel. It supports cancel and pause.
 - **`Query`** _(planned, M1–M2)_ is read-only. It uses separate SQLite connections in WAL mode, so it can browse partial results while a scan is still writing.
 
 A client may run both in one process (the GUI) or in different processes (a CLI scan in one terminal, a TUI browsing in another).
