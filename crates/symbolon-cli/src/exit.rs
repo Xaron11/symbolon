@@ -3,6 +3,7 @@
 use std::fmt;
 use std::process::ExitCode;
 
+use symbolon_core::catalog::TransferError;
 use symbolon_core::scan::ScanError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +37,10 @@ impl Exit {
                 || matches!(
                     cause.downcast_ref::<ScanError>(),
                     Some(ScanError::AlreadyScanning { .. })
+                )
+                || matches!(
+                    cause.downcast_ref::<TransferError>(),
+                    Some(TransferError::Busy(_) | TransferError::Conflict(_))
                 )
         });
         if refused { Self::Refused } else { Self::Error }

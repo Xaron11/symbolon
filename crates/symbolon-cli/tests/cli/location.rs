@@ -79,7 +79,7 @@ fn an_empty_catalog_lists_nothing_and_hints_on_stderr() {
     );
     assert_eq!(
         env.ok(&["location", "list", "--format", "csv"]),
-        "label,root,scannable,hash_policy,hash_algo,files,bytes,hashed_files,last_scan_status,last_scan_started_at\n"
+        "label,root,kind,scannable,hash_policy,hash_algo,files,bytes,hashed_files,last_scan_status,last_scan_started_at\n"
     );
 }
 

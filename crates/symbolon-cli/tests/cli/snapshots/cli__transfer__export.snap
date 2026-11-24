@@ -1,0 +1,14 @@
+---
+source: crates/symbolon-cli/tests/cli/transfer.rs
+expression: "env.ok(&[\"export\", \"photos\", \"-o\", file, \"--json\"])"
+---
+{
+  "exports": [
+    {
+      "label": "photos",
+      "action": "exported",
+      "entries": 2,
+      "scanned_at": "[TIME]"
+    }
+  ]
+}

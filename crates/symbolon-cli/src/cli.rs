@@ -52,6 +52,40 @@ pub(crate) enum Command {
     Scan(ScanArgs),
     /// Compare locations, or folders of them; exits 1 if anything differs
     Diff(DiffArgs),
+    /// Write a location's latest complete scan to a .symbolon file, to compare it elsewhere
+    Export(ExportArgs),
+    /// Add a location from a .symbolon file, or update one with it
+    Import(ImportArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ExportArgs {
+    /// The location to export
+    pub(crate) label: String,
+    /// File to write, usually ending in .symbolon
+    #[arg(long, short, value_name = "FILE")]
+    pub(crate) output: PathBuf,
+    /// Replace the file if it exists
+    #[arg(long)]
+    pub(crate) force: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ImportArgs {
+    /// The .symbolon file
+    pub(crate) file: PathBuf,
+    /// Add it as a new location with this label
+    #[arg(long = "as", value_name = "LABEL", conflicts_with_all = ["into", "replace"])]
+    pub(crate) as_label: Option<String>,
+    /// Update this location with it: the same device saved under another label
+    #[arg(long, value_name = "LABEL", conflicts_with = "replace")]
+    pub(crate) into: Option<String>,
+    /// Replace the data of the location with the file's label, although it is another device
+    #[arg(long)]
+    pub(crate) replace: bool,
+    /// Update a location even when its own scan is newer than the file's
+    #[arg(long)]
+    pub(crate) force: bool,
 }
 
 #[derive(Debug, Args)]
