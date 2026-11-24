@@ -18,10 +18,10 @@
 //!
 //! Milestone M1 is in progress; modules land one at a time. Implemented so far:
 //!
-//! | Module    | Responsibility                                                  |
-//! | --------- | --------------------------------------------------------------- |
-//! | [`hash`]    | Hash algorithms, streaming full digests and partial digests   |
-//! | [`pathkey`] | Lossless relative paths and normalized matching keys          |
+//! | Module      | Responsibility                                              |
+//! | ----------- | ----------------------------------------------------------- |
+//! | [`hash`]    | Hash algorithms, streaming full digests and partial digests |
+//! | [`pathkey`] | Lossless relative paths and normalized matching keys        |
 //!
 //! _(planned)_ `source` (walking a location), `catalog`
 //! (SQLite storage, internal), `scan` (`Scanner`), `query` (`Query`), then `compare` and `plan`
