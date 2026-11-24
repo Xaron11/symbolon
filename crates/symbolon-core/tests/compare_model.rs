@@ -49,19 +49,13 @@ struct World {
 fn world(locations: &[Location], hashed: bool) -> World {
     let dir = tempfile::tempdir().unwrap();
     let catalog = Catalog::open(dir.path().join("catalog.db")).unwrap();
-    let ids: Vec<i64> = (0..locations.len())
-        .map(|index| {
-            let root = dir.path().join(format!("root{index}"));
-            std::fs::create_dir(&root).unwrap();
-            let location = NewLocation::local(format!("s{index}"), &root);
-            catalog.add_location(location).unwrap().id.get()
-        })
-        .collect();
-    let mut conn = Connection::open(catalog.path()).unwrap();
-    // One unsynced transaction per case: per-row commits cost a flush each, slow on Windows.
-    conn.pragma_update(None, "synchronous", "OFF").unwrap();
-    let tx = conn.transaction().unwrap();
-    for (files, id) in locations.iter().zip(&ids) {
+    let conn = Connection::open(catalog.path()).unwrap();
+    for (index, files) in locations.iter().enumerate() {
+        let root = dir.path().join(format!("root{index}"));
+        std::fs::create_dir(&root).unwrap();
+        let location = catalog
+            .add_location(NewLocation::local(format!("s{index}"), &root))
+            .unwrap();
         for (path, contents) in files {
             let rel = RelPath::from_path(path.as_ref()).unwrap();
             let key = rel.key();
@@ -70,15 +64,14 @@ fn world(locations: &[Location], hashed: bool) -> World {
                     .as_bytes()
                     .to_vec()
             });
-            tx.execute(
+            conn.execute(
                 "INSERT INTO entries (location_id, rel_path_raw, path_key, parent_key, kind, size, mtime_ns, hash_full, seen_scan_id)
                  VALUES (?1, ?2, ?3, ?4, 'file', ?5, 1000, ?6, 1)",
-                params![id, rel.as_bytes(), key.as_str(), key.parent(), contents.len() as u64, digest],
+                params![location.id.get(), rel.as_bytes(), key.as_str(), key.parent(), contents.len() as u64, digest],
             )
             .unwrap();
         }
     }
-    tx.commit().unwrap();
     World {
         _dir: dir,
         catalog,

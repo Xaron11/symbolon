@@ -177,8 +177,12 @@ jobs:
             cargo llvm-cov report --summary-only
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      # Each property-test case creates a catalog, and file creation is slow on Windows runners
+      # (~0.5 s per case). The model tests check SQL, not the platform; Linux runs all 200 cases.
       - name: tests
         if: runner.os != 'Linux'
+        env:
+          PROPTEST_CASES: "32"
         run: cargo nextest run ${{ matrix.packages }} --locked --profile ci --no-tests=warn
       # Only library crates have doctests.
       - name: doctests
