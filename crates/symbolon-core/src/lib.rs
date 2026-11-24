@@ -40,6 +40,7 @@
 pub mod catalog;
 pub mod hash;
 pub mod pathkey;
+pub mod scan;
 pub mod source;
 
 /// Version of this crate, shared by the whole workspace.
