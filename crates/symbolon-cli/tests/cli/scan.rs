@@ -210,6 +210,7 @@ fn ctrl_c_cancels_cleanly() {
 }
 
 /// The status of the newest scan, read through the CLI's JSON output of `location list`.
+#[cfg(unix)]
 fn last_scan_status(env: &Env) -> impl Fn() -> Option<String> + '_ {
     move || {
         let out = env.ok(&["location", "list", "--json"]);
