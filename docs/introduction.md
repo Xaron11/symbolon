@@ -6,7 +6,7 @@ Symbolon answers one question: **do these locations match, and if not, how exact
 
 It scans two or more locations (directories, mounted disks, pendrives, Android phones over ADB), hashes file contents into a local catalog, and reports for any set of them which files are identical, missing, changed, moved or renamed, and duplicated. The catalog persists, so a device can be compared while it is unplugged, and rescans only read what changed.
 
-**Status:** pre-alpha. The core library scans local locations into the catalog (milestone M1); comparison (M2) and the command line (M3) come next. The [specification](start.md) describes the whole plan and its milestones.
+**Status:** pre-alpha. The core library scans local locations (M1) and compares them (M2); the command line (M3) comes next. The [specification](start.md) describes the whole plan and its milestones.
 
 ## How this book is organized
 

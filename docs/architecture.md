@@ -38,7 +38,8 @@ flowchart LR
 ```
 
 - **`Scanner`** scans one location, writes entries in short transactions and streams events over a channel. It supports cancel and pause.
-- **`Query`** is read-only; comparisons join it in M2 _(planned)_. It uses separate SQLite connections in WAL mode, so it can browse partial results while a scan is still writing.
+- **`Query`** is read-only. It uses separate SQLite connections in WAL mode, so it can browse partial results while a scan is still writing.
+- **`Comparison`** compares two or more sides (locations or subpaths) from the catalog. It copies the compared entries into temporary tables on its own connection, classifies them with SQL, and serves a summary and paged rows; `resolve` hashes on demand what decides a row ([ADR-0010](adr/0010-comparison-engine.md)).
 
 A client may run both in one process (the GUI) or in different processes (a CLI scan in one terminal, a TUI browsing in another).
 
