@@ -22,7 +22,7 @@ ignore = "0.4.35"
 mimalloc = "0.1.52"
 proptest = "1.12.0"
 rayon = "1.12.0"
-rusqlite = { version = "0.43.0", features = ["bundled", "fallible_uint"] }
+rusqlite = { version = "0.43.0", features = ["bundled", "fallible_uint", "functions"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
