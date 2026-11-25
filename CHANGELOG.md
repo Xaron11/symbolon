@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-25
+
+### Added
+
+- **scan:** Allow only one scan per location at a time (#71)
+- **scan:** Never let a slow event consumer stall a scan (#72)
+- **cli:** Command skeleton, output formats and location management (#73)
+- **cli:** Scan locations with progress and Ctrl-C (#74)
+- **cli:** Diff locations with filters and formats (#75)
+- **catalog:** Export a location and import it with the ADR-0005 conflict policy (#76)
+- **cli:** Export and import commands (#77)
+- **cli:** List duplicates within locations (#78)
+- **cli:** Shell completions and man pages (#79)
+
+### Fixed
+
+- **catalog:** Never replace a scanned local location's data without a choice (#88)
+- **catalog:** Validate imported entries and Windows separators in paths (#90)
+- **core:** Private catalog files and temporary copies, algorithm-guarded digest stores (#93)
+- **cli:** Escape control characters in tables and warnings (#89)
+- **scan:** Open files beneath the root without following symlinks (#91)
+
+### Security
+
+- Run fewer model-test cases on Windows (#60)
+
 ## [0.3.0] - 2026-11-24
 
 ### Added
