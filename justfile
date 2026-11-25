@@ -58,6 +58,8 @@ lint: ui-install
 
 lint-rust:
     cargo clippy --workspace --all-targets --locked -- -D warnings
+    # core must also build with its optional features off (ADR-0006), as CI checks.
+    cargo clippy -p symbolon-core --no-default-features --all-targets --locked -- -D warnings
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked --quiet
     cargo shear
 
