@@ -1,6 +1,9 @@
-//! The M3 acceptance test: the whole workflow from the shell, as `docs/cli.md` walks through
-//! it. Add two locations, scan, diff, sync and rescan, find duplicates, export one location
-//! and compare against it from another catalog.
+//! Milestone acceptance tests, from the shell as `docs/cli.md` walks through them.
+//!
+//! - M3: add two locations, scan, diff, sync and rescan, find duplicates, export one location
+//!   and compare against it from another catalog.
+//! - M4: a pendrive replugged at another mount point is still the same location, and a cloned
+//!   one makes Symbolon ask.
 
 use serde_json::Value;
 
@@ -109,4 +112,83 @@ fn the_full_workflow() {
     assert_eq!(other(&["scan", "laptop"]).code, 0);
     let remote = other(&["diff", "laptop", "backup"]);
     assert_eq!(remote.code, 0, "{}{}", remote.stdout, remote.stderr);
+}
+
+/// The M4 acceptance test (milestone "Locations and device identity"): replugging a pendrive
+/// at another mount point resolves to the same saved location, or asks when the device is
+/// ambiguous. Devices are simulated through the debug-only mount table (ADR-0016).
+#[test]
+fn a_replugged_pendrive_is_the_same_location() {
+    let env = Env::new();
+    let files = [("2024/a.jpg", "aaaa"), ("2024/b.jpg", "bbbbbb")];
+    let usb = env.tree("media/usb", &files);
+    let laptop = env.tree("laptop", &files);
+    env.mount(&[("disk", "."), ("6F21-0A3C", "media/usb")]);
+    env.ok(&[
+        "location",
+        "add",
+        "stick",
+        usb.to_str().unwrap(),
+        "--policy",
+        "eager",
+    ]);
+    env.ok(&[
+        "location",
+        "add",
+        "laptop",
+        laptop.to_str().unwrap(),
+        "--policy",
+        "eager",
+    ]);
+    env.ok(&["scan", "stick", "laptop", "--json"]);
+    assert_eq!(env.run(&["diff", "stick", "laptop"]).code, 0);
+
+    // Unplugged, then plugged in again where the desktop mounts it.
+    std::fs::create_dir_all(env.path("run/media/me")).unwrap();
+    std::fs::rename(&usb, env.path("run/media/me/6F21-0A3C")).unwrap();
+    env.mount(&[("disk", "."), ("6F21-0A3C", "run/media/me/6F21-0A3C")]);
+    let scan = env.run(&["scan", "stick", "--json"]);
+    assert_eq!(scan.code, 0, "{}", scan.stderr);
+    assert!(scan.stderr.contains("following it"), "{}", scan.stderr);
+    let scanned = json(&scan.stdout);
+    assert_eq!(
+        (
+            &scanned["scans"][0]["reused_hashes"],
+            &scanned["scans"][0]["hashed_files"]
+        ),
+        (&Value::from(2), &Value::from(0)),
+        "the same location: nothing rehashed"
+    );
+    assert_eq!(env.run(&["diff", "stick", "laptop"]).code, 0);
+
+    // A cloned stick (same filesystem UUID) is plugged in too: Symbolon asks instead of
+    // guessing; without a terminal that is exit code 4 naming both.
+    let clone = env.tree("run/media/me/clone", &files);
+    std::fs::rename(
+        env.path("run/media/me/6F21-0A3C"),
+        env.path("run/media/me/first"),
+    )
+    .unwrap();
+    env.mount(&[
+        ("disk", "."),
+        ("6F21-0A3C", "run/media/me/first"),
+        ("6F21-0A3C", "run/media/me/clone"),
+    ]);
+    let ambiguous = env.run(&["scan", "stick"]);
+    assert_eq!(ambiguous.code, 4);
+    assert!(
+        ambiguous
+            .stderr
+            .contains("[TMP]/run/media/me/clone, [TMP]/run/media/me/first"),
+        "{}",
+        ambiguous.stderr
+    );
+    env.ok(&[
+        "location",
+        "set",
+        "stick",
+        "--root",
+        clone.to_str().unwrap(),
+    ]);
+    env.ok(&["scan", "stick", "--json"]);
 }
