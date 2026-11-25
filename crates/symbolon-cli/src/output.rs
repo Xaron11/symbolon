@@ -1,6 +1,7 @@
 //! Output formats (ADR-0011): tables for people, JSON and CSV for scripts. Only results go to
 //! stdout.
 
+use std::borrow::Cow;
 use std::io::{self, Write};
 use std::time::SystemTime;
 
@@ -61,13 +62,44 @@ impl<T: Serialize + ?Sized> Serialize for Named<'_, T> {
     }
 }
 
-/// Columns padded to their widest cell, two spaces apart.
+/// `text` safe to print on a terminal: control characters and bidirectional overrides become
+/// `%XX` per UTF-8 byte, like the bytes path keys escape. File names and imported data are not
+/// trusted to drive the terminal.
+pub(crate) fn printable(text: &str) -> Cow<'_, str> {
+    let unsafe_char =
+        |c: char| c.is_control() || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}');
+    if !text.chars().any(unsafe_char) {
+        return Cow::Borrowed(text);
+    }
+    let mut escaped = String::with_capacity(text.len() + 8);
+    for c in text.chars() {
+        if unsafe_char(c) {
+            for byte in c.encode_utf8(&mut [0; 4]).bytes() {
+                const HEX: &[u8; 16] = b"0123456789ABCDEF";
+                escaped.push('%');
+                escaped.push(char::from(HEX[usize::from(byte >> 4)]));
+                escaped.push(char::from(HEX[usize::from(byte & 0xF)]));
+            }
+        } else {
+            escaped.push(c);
+        }
+    }
+    Cow::Owned(escaped)
+}
+
+/// Columns padded to their widest cell, two spaces apart; cells pass through [`printable`].
 pub(crate) fn table(
     out: &mut impl Write,
     headers: &[impl AsRef<str>],
     rows: impl Iterator<Item = Vec<String>>,
 ) -> io::Result<()> {
-    let rows: Vec<Vec<String>> = rows.collect();
+    let rows: Vec<Vec<String>> = rows
+        .map(|row| {
+            row.iter()
+                .map(|cell| printable(cell).into_owned())
+                .collect()
+        })
+        .collect();
     let mut widths: Vec<usize> = headers.iter().map(|h| h.as_ref().chars().count()).collect();
     for row in &rows {
         for (width, cell) in widths.iter_mut().zip(row) {
@@ -195,6 +227,20 @@ mod tests {
         assert_eq!(
             String::from_utf8(out).unwrap(),
             "one    two        three\na      long cell\nwider  x          ü\n"
+        );
+    }
+
+    #[test]
+    fn tables_escape_control_characters() {
+        let mut out = Vec::new();
+        let rows = vec![vec![
+            "a\u{1b}]0;title\u{7}\u{1b}[2Kb".to_owned(),
+            "\u{202e}gpj.exe\t%".to_owned(),
+        ]];
+        table(&mut out, &["PATH", "NAME"], rows.into_iter()).unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "PATH                    NAME\na%1B]0;title%07%1B[2Kb  %E2%80%AEgpj.exe%09%\n"
         );
     }
 }

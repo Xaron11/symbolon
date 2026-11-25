@@ -122,7 +122,7 @@ An imported location compares like any other but cannot be scanned there. Import
 
 Results go to stdout; progress, warnings and errors go to stderr, so piping is safe. `--quiet` turns progress and warnings off.
 
-`--format json` (or `--json`) and `--format csv` are stable for scripts: field names only change in a minor release with a changelog entry, and only by adding fields. Sizes are bytes, times are RFC 3339 in UTC, digests are lowercase hex, and paths are written with `/`, with bytes that are not valid UTF-8 escaped as `%XX`. The table format is for people and may change.
+`--format json` (or `--json`) and `--format csv` are stable for scripts: field names only change in a minor release with a changelog entry, and only by adding fields. Sizes are bytes, times are RFC 3339 in UTC, digests are lowercase hex, and paths are written with `/`, with bytes that are not valid UTF-8 escaped as `%XX`. The table format is for people and may change; it shows control characters in file names (which could otherwise drive the terminal) as `%XX`, while JSON and CSV keep them exact.
 
 ```console
 $ symbolon diff laptop backup --json | jq -r '.rows[] | select(.category == "only_in") | .key'
