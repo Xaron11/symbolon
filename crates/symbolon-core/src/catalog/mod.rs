@@ -8,23 +8,27 @@
 //! forward-only migrations it is missing, after backing it up, and refuses catalogs written by a
 //! newer version.
 
+mod locate;
 mod schema;
 mod transfer;
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::{
     Connection, ErrorCode, OpenFlags, OptionalExtension as _, TransactionBehavior, params,
 };
 
+pub use self::locate::Whereabouts;
 pub use self::schema::SCHEMA_VERSION;
 pub use self::transfer::{
     ExportSummary, ImportAction, ImportConflict, ImportOptions, ImportSummary, TransferError,
 };
 use crate::hash::HashAlgo;
+use crate::identity::{Fingerprint, SystemVolumes, Volumes};
 use crate::pathkey::{self, PathEncoding};
 
 /// SQLite `application_id` identifying Symbolon catalogs and exports (ASCII `SYMB`, ADR-0005).
@@ -83,9 +87,19 @@ pub enum CatalogError {
 /// Handle to a catalog database file.
 ///
 /// Cloning is cheap; connections are opened per use, so handles can move between threads.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Catalog {
     path: PathBuf,
+    /// The mounted filesystems, for device fingerprints (ADR-0016).
+    volumes: Arc<dyn Volumes>,
+}
+
+impl fmt::Debug for Catalog {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Catalog")
+            .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Catalog {
@@ -108,7 +122,18 @@ impl Catalog {
         let mut conn = Connection::open(&path)?;
         configure(&conn).map_err(|e| not_a_database(e, &path))?;
         migrate(&mut conn, &path)?;
-        Ok(Self { path })
+        Ok(Self {
+            path,
+            volumes: Arc::new(SystemVolumes),
+        })
+    }
+
+    /// This catalog, reading mounted filesystems from `volumes` instead of the system when
+    /// it records and checks device fingerprints (tests, platforms without detection).
+    #[must_use]
+    pub fn with_volumes(mut self, volumes: Arc<dyn Volumes>) -> Self {
+        self.volumes = volumes;
+        self
     }
 
     /// Path of the database file.
@@ -139,15 +164,18 @@ impl Catalog {
             .ok_or_else(|| CatalogError::InvalidRoot(root.clone()))?;
         let mut root_raw = Vec::new();
         pathkey::push_native(&mut root_raw, root.as_os_str());
+        let fingerprint = self.fingerprint_of(&root)?;
 
         let conn = self.connect()?;
         let inserted = conn.execute(
-            "INSERT INTO locations (label, root_kind, root_raw, path_encoding, hash_algo, \
-             hash_policy, ignore_patterns, created_at) VALUES (?1, 'local', ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO locations (label, root_kind, root_raw, path_encoding, fingerprint, \
+             hash_algo, hash_policy, ignore_patterns, created_at) \
+             VALUES (?1, 'local', ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 new.label,
                 root_raw,
                 PathEncoding::native().name(),
+                fingerprint.as_ref().map(Fingerprint::as_str),
                 new.hash_algo.name(),
                 new.hash_policy.name(),
                 new.ignore_patterns.join("\n"),
@@ -506,7 +534,8 @@ pub struct Location {
     pub root: LocationRoot,
     /// Encoding of the location's relative paths.
     pub path_encoding: PathEncoding,
-    /// Best-effort device fingerprint (M4); `None` until detected.
+    /// Best-effort device fingerprint ([`Fingerprint`], ADR-0016); `None` when the root's
+    /// filesystem has none or it was never detected.
     pub fingerprint: Option<String>,
     /// Hash algorithm for all of the location's digests.
     pub hash_algo: HashAlgo,

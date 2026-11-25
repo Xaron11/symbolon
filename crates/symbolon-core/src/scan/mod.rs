@@ -17,6 +17,7 @@ pub(crate) use self::run::{hashing_pool, source_for};
 
 use std::fmt;
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
@@ -25,8 +26,9 @@ use std::time::{Duration, SystemTime};
 
 use crossbeam_channel::Receiver;
 
-use crate::catalog::{Catalog, CatalogError};
+use crate::catalog::{Catalog, CatalogError, Whereabouts};
 use crate::hash::Digest;
+use crate::identity::Fingerprint;
 use crate::pathkey::RelPath;
 use crate::source::{EntryKind, Source, SourceError, SourceWarning};
 
@@ -69,6 +71,40 @@ pub enum ScanError {
     /// The location's lock file could not be created or locked.
     #[error("could not lock the location for scanning: {0}")]
     Lock(#[source] std::io::Error),
+    /// The location's device is mounted somewhere else; relocate it first
+    /// ([`Catalog::relocate`], ADR-0016).
+    #[error("location {label:?} moved from {} to {}", from.display(), to.display())]
+    Moved {
+        /// The location's label.
+        label: String,
+        /// The stored root.
+        from: PathBuf,
+        /// Where its device is now.
+        to: PathBuf,
+    },
+    /// The location's device matches several mounted directories; the user has to pick one.
+    #[error("location {label:?} is not at {}, and its device is mounted at several places", root.display())]
+    Ambiguous {
+        /// The location's label.
+        label: String,
+        /// The stored root.
+        root: PathBuf,
+        /// The matching directories.
+        candidates: Vec<PathBuf>,
+    },
+    /// Another device (or one without a fingerprint) is at the location's root; scanning it
+    /// would record its contents as the location's. Accept it with [`Catalog::relocate`].
+    #[error("location {label:?} expects device {expected} at {}, but found {}", root.display(), found.as_ref().map_or_else(|| "no device id".to_owned(), ToString::to_string))]
+    OtherDevice {
+        /// The location's label.
+        label: String,
+        /// The stored root.
+        root: PathBuf,
+        /// The recorded fingerprint.
+        expected: Fingerprint,
+        /// What is at the root now.
+        found: Option<Fingerprint>,
+    },
 }
 
 /// Database id of a scan.
@@ -321,6 +357,31 @@ impl Scanner {
         options: ScanOptions,
     ) -> Result<ScanHandle, ScanError> {
         let location = catalog.location(label)?;
+        let label = location.label.clone();
+        match catalog.locate_location(&location)? {
+            Whereabouts::Moved { from, to } => return Err(ScanError::Moved { label, from, to }),
+            Whereabouts::Ambiguous { root, candidates } => {
+                return Err(ScanError::Ambiguous {
+                    label,
+                    root,
+                    candidates,
+                });
+            }
+            Whereabouts::OtherDevice {
+                root,
+                expected,
+                found,
+            } => {
+                return Err(ScanError::OtherDevice {
+                    label,
+                    root,
+                    expected,
+                    found,
+                });
+            }
+            // A missing root fails the walk like before; imported roots fail below.
+            _ => {}
+        }
         let source = source_for(&location)?;
         Self::spawn(catalog, location, source, options)
     }
@@ -365,6 +426,12 @@ impl Scanner {
                     &sender,
                 );
                 drop(lock);
+                if let Ok(summary) = &result
+                    && summary.status == ScanStatus::Completed
+                {
+                    // Best effort: the scan itself succeeded either way.
+                    catalog.record_missing_fingerprint(&location).ok();
+                }
                 if let Ok(summary) = &result {
                     // The only event that waits for room: the work is done and the location
                     // free, so waiting for the client to read costs nothing.

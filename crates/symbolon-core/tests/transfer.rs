@@ -19,6 +19,7 @@ use symbolon_core::catalog::{
     NewLocation, SCHEMA_VERSION, TransferError,
 };
 use symbolon_core::compare::{Category, CompareOptions, Comparison, Side};
+use symbolon_core::identity::{Mount, Volumes};
 use symbolon_core::pathkey::{PathEncoding, RelPath};
 use symbolon_core::scan::{ScanError, ScanOptions, Scanner};
 use symbolon_core::source::{ReadSeek, Source, SourceEntry, SourceError, WalkItem, WalkOutcome};
@@ -28,10 +29,22 @@ struct Machine {
     catalog: Catalog,
 }
 
+/// No mounted filesystems, so no fingerprints are detected wherever the temporary directory
+/// lives: these tests set fingerprints themselves.
+struct NoMounts;
+
+impl Volumes for NoMounts {
+    fn mounts(&self) -> io::Result<Vec<Mount>> {
+        Ok(Vec::new())
+    }
+}
+
 impl Machine {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let catalog = Catalog::open(dir.path().join("catalog.db")).unwrap();
+        let catalog = Catalog::open(dir.path().join("catalog.db"))
+            .unwrap()
+            .with_volumes(Arc::new(NoMounts));
         Self { dir, catalog }
     }
 

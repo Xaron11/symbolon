@@ -7,7 +7,7 @@ use std::time::Instant;
 use rusqlite::{named_params, params};
 
 use super::{CompareError, Comparison};
-use crate::catalog::{CatalogError, LocationRoot};
+use crate::catalog::{CatalogError, Whereabouts};
 use crate::hash::{HashAlgo, PARTIAL_BLOCK};
 use crate::pathkey::RelPath;
 use crate::scan::hashing::{self, Job, Outcome, Tier};
@@ -147,17 +147,27 @@ impl Comparison {
             for (location_id, jobs) in &plan.jobs {
                 let label = self.label_of(*location_id);
                 let location = self.catalog.location(&label)?;
-                let reachable = match &location.root {
-                    LocationRoot::Local(root) => root.is_dir(),
-                    LocationRoot::Foreign { .. } | LocationRoot::Imported { .. } => false,
+                // Only a location whose device is where it should be is read (ADR-0016).
+                let unreachable = match self.catalog.locate_location(&location)? {
+                    Whereabouts::Here(_) => None,
+                    Whereabouts::Moved { to, .. } => Some(format!(
+                        "its device is now mounted at {}; scan it to follow",
+                        to.display()
+                    )),
+                    Whereabouts::Ambiguous { .. } => {
+                        Some("its device is mounted at several places".to_owned())
+                    }
+                    Whereabouts::OtherDevice { root, .. } => {
+                        Some(format!("another device is at {}", root.display()))
+                    }
+                    _ => Some("location root is not available".to_owned()),
                 };
                 let source = match source_for(&location) {
-                    Ok(source) if reachable => source,
+                    Ok(source) if unreachable.is_none() => source,
                     result => {
-                        let reason = result.err().map_or_else(
-                            || "location root is not available".to_owned(),
-                            |e| e.to_string(),
-                        );
+                        let reason = result
+                            .err()
+                            .map_or_else(|| unreachable.unwrap_or_default(), |e| e.to_string());
                         failed.extend(jobs.iter().map(|job| job.id));
                         summary.unreachable.push(label.clone());
                         if on_event(ResolveEvent::Unreachable { label, reason }).is_break() {
