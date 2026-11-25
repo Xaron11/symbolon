@@ -431,3 +431,22 @@ fn a_location_being_scanned_is_not_replaced() {
         Err(TransferError::Busy(_))
     ));
 }
+
+/// Catalogs and exports list private files; other users of the computer must not read them
+/// (#86).
+#[cfg(unix)]
+#[test]
+fn catalogs_exports_and_locks_are_private() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    let machine = Machine::new();
+    machine.location("photos", FILES);
+    let file = machine.export("photos");
+    assert_eq!(mode(machine.catalog.path()), 0o600);
+    assert_eq!(mode(&file), 0o600);
+    let locks = machine.dir.path().join("catalog.db-locks");
+    assert_eq!(mode(&locks), 0o700);
+    for lock in fs::read_dir(&locks).unwrap() {
+        assert_eq!(mode(&lock.unwrap().path()), 0o600);
+    }
+}

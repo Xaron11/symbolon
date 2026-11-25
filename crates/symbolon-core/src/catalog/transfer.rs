@@ -548,37 +548,28 @@ fn meta(conn: &Connection, key: &str) -> Result<Option<String>, TransferError> {
 }
 
 /// A temporary copy of a file, removed with everything SQLite and migrations put next to it.
+///
+/// It lives in a new directory only its owner can enter, created exclusively, so other users
+/// of the computer can neither read it nor plant files in its place.
 struct TempCopy {
     path: PathBuf,
+    _dir: tempfile::TempDir,
 }
 
 impl TempCopy {
     fn new(original: &Path) -> Result<Self, TransferError> {
-        let nanos = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
-        let path = std::env::temp_dir().join(format!(
-            "symbolon-import-{}-{nanos}.symbolon",
-            std::process::id()
-        ));
+        let dir = tempfile::Builder::new()
+            .prefix("symbolon-import-")
+            .tempdir()
+            .map_err(io(
+                "cannot create a temporary directory to migrate the file",
+            ))?;
+        let path = dir.path().join("export.symbolon");
         fs::copy(original, &path).map_err(io(format!(
             "cannot copy {} to migrate it",
             original.display()
         )))?;
-        Ok(Self { path })
-    }
-}
-
-impl Drop for TempCopy {
-    fn drop(&mut self) {
-        let mut doomed = vec![self.path.clone()];
-        for suffix in ["-wal", "-shm"] {
-            doomed.push(with_suffix(&self.path, suffix));
-        }
-        doomed.extend((0..SCHEMA_VERSION).map(|v| with_suffix(&self.path, &format!(".v{v}.bak"))));
-        for path in doomed {
-            remove_if_exists(&path).ok();
-        }
+        Ok(Self { path, _dir: dir })
     }
 }
 

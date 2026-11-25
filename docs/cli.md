@@ -20,7 +20,7 @@ Everything `symbolon` learns goes into one SQLite database, the catalog: saved l
 | Windows  | `%LOCALAPPDATA%\symbolon\catalog.db`                |
 | macOS    | `~/Library/Application Support/symbolon/catalog.db` |
 
-`--catalog <PATH>` or the `SYMBOLON_CATALOG` environment variable selects another one. The catalog contains full paths and hashes of your files, so treat it, and the export files below, as private data.
+`--catalog <PATH>` or the `SYMBOLON_CATALOG` environment variable selects another one. The catalog contains full paths and hashes of your files, so treat it, and the export files below, as private data. On Linux and macOS Symbolon creates them readable only by you (mode `0600`, and `0700` for directories it creates). Files and directories that already exist keep their permissions.
 
 ## A session
 

@@ -36,7 +36,13 @@ fn open_catalog(global: &Global) -> anyhow::Result<Catalog> {
         None => default_catalog()?,
     };
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        std::fs::create_dir_all(parent)
+        // Directories created here hold a catalog of private paths: owner only on Unix.
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        builder
+            .create(parent)
             .with_context(|| format!("cannot create {}", parent.display()))?;
     }
     Catalog::open(&path).with_context(|| format!("cannot open the catalog {}", path.display()))
