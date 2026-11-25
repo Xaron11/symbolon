@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-24
+- **Amended by:** [0014](0014-imports-and-local-locations.md) for locations scanned on this computer
 
 ## Context
 

@@ -42,7 +42,8 @@ pub struct ImportOptions {
     /// Replace the entries of this existing location: the file's device saved under another
     /// label.
     pub merge_into: Option<String>,
-    /// Replace the location with the file's label even though it is another device.
+    /// Replace the location with the file's label even though it is another device or was
+    /// scanned on this computer. A local location becomes imported (ADR-0014).
     pub replace: bool,
     /// Replace entries even when the catalog's scan is newer than the file's.
     pub force: bool,
@@ -131,6 +132,13 @@ pub enum ImportConflict {
         label: String,
         /// The saved location with the same fingerprint.
         existing: String,
+    },
+    /// The label belongs to a location scanned on this computer, whose data an import would
+    /// replace: resolved by `as_label` or `replace` (ADR-0014).
+    #[error("location {label:?} is scanned on this computer")]
+    LocalData {
+        /// The file's label.
+        label: String,
     },
 }
 
@@ -288,8 +296,9 @@ impl Catalog {
     /// Imports a `.symbolon` file written by [`Catalog::export`], resolving conflicts with
     /// saved locations as ADR-0005 describes. A new location is added as
     /// [`LocationRoot::Imported`](super::LocationRoot::Imported); an existing one has its
-    /// scans and entries replaced. The file itself is never modified; an older schema is
-    /// migrated in a temporary copy.
+    /// scans and entries replaced. A location scanned on this computer is only replaced with
+    /// `replace` or `merge_into`, and then becomes imported (ADR-0014). The file itself is
+    /// never modified; an older schema is migrated in a temporary copy.
     ///
     /// # Errors
     ///
@@ -325,13 +334,27 @@ impl Catalog {
             });
         }
         match self.location(&file.label) {
-            Ok(existing) if existing.fingerprint == file.fingerprint => Ok(Target::Existing {
-                location: existing,
-                check_age: true,
-            }),
             Ok(existing) if options.replace => Ok(Target::Existing {
                 location: existing,
                 check_age: false,
+            }),
+            // Equal fingerprints (both absent before M4) say the file is this location, but a
+            // scanned local location's data still needs a choice (ADR-0014).
+            Ok(existing) if matches!(existing.root, super::LocationRoot::Local(_)) => {
+                Err(if existing.fingerprint == file.fingerprint {
+                    ImportConflict::LocalData {
+                        label: file.label.clone(),
+                    }
+                } else {
+                    ImportConflict::LabelTaken {
+                        label: file.label.clone(),
+                    }
+                }
+                .into())
+            }
+            Ok(existing) if existing.fingerprint == file.fingerprint => Ok(Target::Existing {
+                location: existing,
+                check_age: true,
             }),
             Ok(_) => Err(ImportConflict::LabelTaken {
                 label: file.label.clone(),
@@ -446,9 +469,13 @@ impl Catalog {
              WHERE id = ?1",
             params![id, file.hash_algo, file.fingerprint],
         )?;
+        // A local location replaced by the file becomes imported, so no scan here reuses the
+        // file's digests for local files (ADR-0014).
         tx.execute(
-            "UPDATE imported_locations SET exported_at = ?2, exported_by = ?3, imported_at = ?4 \
-             WHERE location_id = ?1",
+            "INSERT INTO imported_locations (location_id, exported_at, exported_by, imported_at) \
+             VALUES (?1, ?2, ?3, ?4) \
+             ON CONFLICT (location_id) DO UPDATE SET exported_at = excluded.exported_at, \
+             exported_by = excluded.exported_by, imported_at = excluded.imported_at",
             params![id, file.exported_at, file.exported_by, now_ms()],
         )?;
         let scan_id = insert_scan(&tx, id, &file.scan)?;
