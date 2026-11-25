@@ -3882,6 +3882,7 @@ dependencies = [
  "anyhow",
  "clap",
  "mimalloc",
+ "rusqlite",
  "serde_json",
  "symbolon-core",
  "tempfile",

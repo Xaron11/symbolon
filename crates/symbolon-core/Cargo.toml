@@ -17,7 +17,7 @@ identity = []
 # The host/agent line protocol, shared by the Android agent and the ADB source (ADR-0017).
 agent-protocol = ["dep:serde", "dep:serde_json"]
 # Reaching Android phones through the system adb (ADR-0017).
-android-adb = ["agent-protocol"]
+android-adb = ["agent-protocol", "dep:ignore"]
 
 [dependencies]
 blake3.workspace = true
