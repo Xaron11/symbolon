@@ -7,6 +7,8 @@
 //! Problems with single entries (permission denied, a file vanishing mid-walk, I/O errors)
 //! are reported as [`SourceWarning`]s and never stop a walk; only an unusable root is an error.
 
+#[cfg(feature = "android-adb")]
+mod adb;
 #[cfg(feature = "local")]
 mod local;
 
@@ -16,6 +18,8 @@ use std::ops::ControlFlow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(feature = "android-adb")]
+pub use self::adb::{AdbMode, AdbOptions, AdbSource};
 #[cfg(feature = "local")]
 pub use self::local::LocalSource;
 use crate::hash::{Digest, HashAlgo, PartialDigest};

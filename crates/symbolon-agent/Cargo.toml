@@ -19,6 +19,8 @@ symbolon-core = { workspace = true, default-features = false, features = [
 ] }
 
 [dev-dependencies]
+rusqlite.workspace = true
+symbolon-core = { workspace = true, features = ["android-adb"] }
 tempfile.workspace = true
 
 [lints]
