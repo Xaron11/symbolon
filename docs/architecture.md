@@ -65,7 +65,7 @@ With the `eager` policy every file gets a full hash during the scan; with `lazy`
 ## Concurrency
 
 - Plain threads, [`rayon`](https://docs.rs/rayon) for parallel hashing and [`crossbeam-channel`](https://docs.rs/crossbeam-channel) for events. No `tokio` in core; the Tauri backend wraps blocking calls with `spawn_blocking`.
-- Hashing parallelism is capped per device class: I/O, not CPU, is the bottleneck on HDDs, USB sticks and phones. On an Android phone over FUSE, two threads beat eight ([ADR-0003](adr/0003-android-agent-musl-spike.md)).
+- Hashing parallelism is capped per device class: I/O, not CPU, is the bottleneck on HDDs, USB sticks and phones. On Android phones, which thread count is fastest depends on the storage: two on a Galaxy A54, eight on a Pixel 10. Four is close to the best on both ([ADR-0018](adr/0018-phone-hashing-threads.md)).
 - One writer connection per scan; readers use their own connections. Write transactions stay short so readers are never blocked for long.
 - Scan events are best-effort for slow clients: a full buffer drops progress and per-file events instead of pausing the scan; `Finished` is always delivered, and the catalog is the authoritative record.
 

@@ -31,6 +31,7 @@
   - [0015 Opening files beneath the root](adr/0015-opening-files-beneath-the-root.md)
   - [0016 Device fingerprints](adr/0016-device-fingerprints.md)
   - [0017 Android over ADB](adr/0017-android-over-adb.md)
+  - [0018 Four hashing threads on phones](adr/0018-phone-hashing-threads.md)
 
 # Development
 

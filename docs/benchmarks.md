@@ -61,4 +61,20 @@ The first 200k × 2 measurement was 4.2 s. Profiling showed index maintenance du
 - **Diff of two 200k-entry locations in well under a few seconds:** met, 1.6 s (release build; the acceptance test fails above 3 s).
 - **GUI responsive during scans:** measured in M6.
 
-On phones and USB sticks, storage throughput dominates instead; see ADR-0003 for measurements over ADB.
+On phones and USB sticks, storage throughput dominates instead; see the next section.
+
+## Phones over ADB (M5, 2026-11-25)
+
+Hashing runs on the phone (the agent, [ADR-0017](adr/0017-android-over-adb.md)); only the index crosses USB. Phones connected over USB to the M1 machine, release builds. Details per device, warnings and the fallback are in [ADR-0003](adr/0003-android-agent-musl-spike.md#m5-results-on-real-phones-2026-11-25).
+
+| Scan                                                   | Galaxy A54        | Pixel 10                       |
+| ------------------------------------------------------ | ----------------- | ------------------------------ |
+| `DCIM` with the agent, BLAKE3, 2 threads               | 2.4 GiB in 13.7 s | 25.6 GiB in 48 s (542 MiB/s)   |
+| `DCIM` with the agent, BLAKE3, 4 threads (the default) | —                 | 25.6 GiB in 30 s (870 MiB/s)   |
+| `DCIM` with the fallback (toybox `sha256sum`)          | 55 s              | 1,189 s (22 MiB/s)             |
+| Whole `/sdcard` with the agent, BLAKE3, 4 threads      | —                 | 32.4 GiB in 51.6 s (640 MiB/s) |
+| Rescan, unchanged                                      | 1.1 s             | —                              |
+
+The hashing thread count is set by [ADR-0018](adr/0018-phone-hashing-threads.md), which has the measurements for 1 to 8 threads.
+
+**Against the milestone target (100 GB phone, bounded by storage speed):** the Pixel holds 97 GB, but only 32.5 GiB of it is readable as files by the shell user. At the whole-`/sdcard` rate, 100 GB takes about two and a half minutes, bounded by the phone's storage. The fallback is 4 to 25 times slower than the agent and is meant for phones the agent cannot run on.

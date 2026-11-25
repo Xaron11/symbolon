@@ -19,10 +19,11 @@ use symbolon_core::transport::android::{
     AdbError, AndroidTransport, Device, ExecStream, ShellOutput, parse_devices,
 };
 
-/// This computer pretending to be a phone; records the shell commands it ran.
+/// This computer pretending to be a phone; records the shell commands and programs it ran.
 #[derive(Default)]
 struct LocalPhone {
     shells: Mutex<Vec<String>>,
+    execs: Mutex<Vec<Vec<String>>>,
 }
 
 struct Running(Child, ChildStdout);
@@ -52,6 +53,7 @@ impl AndroidTransport for LocalPhone {
     }
 
     fn exec(&self, _serial: &str, argv: &[String]) -> Result<Box<dyn ExecStream>, AdbError> {
+        self.execs.lock().unwrap().push(argv.to_vec());
         let mut child = Command::new(&argv[0])
             .args(&argv[1..])
             .stdout(Stdio::piped())
@@ -181,6 +183,16 @@ fn the_agent_scans_like_a_local_scan_and_is_removed_afterwards() {
         Vec::<String>::new(),
         "nothing left on the phone"
     );
+}
+
+#[test]
+fn the_agent_hashes_with_four_threads_by_default() {
+    let phone = Phone::new();
+    scan_both(&phone, phone.source(Some(agent())), HashAlgo::Blake3);
+    let execs = phone.transport.execs.lock().unwrap();
+    let hash = execs.iter().find(|argv| argv[1] == "hash").unwrap();
+    let at = hash.iter().position(|arg| arg == "--threads").unwrap();
+    assert_eq!(hash[at + 1], "4");
 }
 
 #[test]
