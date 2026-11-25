@@ -4,7 +4,7 @@ This chapter defines the words used everywhere else: in the CLI, the GUI, the co
 
 ## Location
 
-A **location** is something you want to compare: a directory, a mounted disk or pendrive, or a directory on an Android phone (for example `adb:<serial>:/sdcard/DCIM`). Each location has:
+A **location** is something you want to compare: a directory, a mounted disk or pendrive, or a directory on an Android phone (for example `adb:<serial>:/sdcard/DCIM`, the camera folder in the phone's internal storage). Each location has:
 
 - a **label** you choose, such as `laptop-photos` or `blue-pendrive`. The label is the location's identity.
 - a **fingerprint** Symbolon detects automatically (filesystem UUID; ADB serial from M5). It only helps recognize a device plugged in at a different mount point; when it is ambiguous, or another device is in its place, Symbolon asks you instead of guessing (see below).
