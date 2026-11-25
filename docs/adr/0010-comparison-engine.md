@@ -1,6 +1,6 @@
 # 0010. Comparison engine
 
-- **Status:** Accepted
+- **Status:** Accepted; extended to directories and symlinks by [0019](0019-directories-and-symlinks-in-comparisons.md)
 - **Date:** 2026-11-24
 
 ## Context
@@ -13,7 +13,7 @@ M2 compares two or more locations from the catalog (spec §7): identical, differ
 
 - A comparison has N ≥ 2 **sides**. A side is a location label with an optional subpath (`label:sub/path`); the same location may appear twice with different subpaths. Keys are taken relative to the subpath.
 - All sides must use the same hash algorithm; otherwise `Comparison::new` fails with an error naming every location and its algorithm. Rehashing is a client action.
-- Only regular files take part in M2 (directories and symlinks: issue #49).
+- Only regular files take part in M2. [ADR-0019](0019-directories-and-symlinks-in-comparisons.md) adds directories and symlinks.
 - Options: `KeyOptions` (NFC, case-insensitive), an opt-in fast mode that assumes equal content from equal size and mtime (with a tolerance), and whether to list duplicates.
 
 ### Rows and categories
