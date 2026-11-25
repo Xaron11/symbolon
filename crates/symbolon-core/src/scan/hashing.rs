@@ -7,12 +7,15 @@ use std::time::Duration;
 use crossbeam_channel::RecvTimeoutError;
 use rayon::prelude::*;
 
-use super::Control;
+use std::num::NonZeroUsize;
+use std::ops::ControlFlow;
+
+use super::{Control, ScanError};
 use crate::hash::{
     Digest, HashAlgo, HashError, PARTIAL_BLOCK, PartialDigest, hash_reader, partial_hash,
 };
 use crate::pathkey::RelPath;
-use crate::source::{Source, SourceWarning, WarningKind};
+use crate::source::{HashReply, HashRequest, RemoteHasher, Source, SourceWarning, WarningKind};
 
 /// Which digest to compute.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -49,10 +52,26 @@ pub(crate) enum Outcome<'a> {
     Warning(&'a Job, SourceWarning),
 }
 
-/// Hashes `jobs` on `pool`, calling `handle` on this thread with every outcome, and with `None`
-/// at least every `tick` (for progress and batching). Returns when all jobs are done or
-/// cancelled, or on the first error from `handle`.
+/// Hashes `jobs` on `pool`, or on the source's side when it has a [`RemoteHasher`], calling
+/// `handle` on this thread with every outcome, and with `None` at least every `tick` (for
+/// progress and batching). Returns when all jobs are done or cancelled, or on the first error
+/// from `handle`.
 pub(crate) fn run<'j, E>(
+    pool: &rayon::ThreadPool,
+    source: &dyn Source,
+    algo: HashAlgo,
+    jobs: &'j [Job],
+    control: &Control,
+    tick: Duration,
+    handle: impl FnMut(Option<Outcome<'j>>) -> Result<(), E>,
+) -> Result<(), E> {
+    match source.remote_hasher() {
+        Some(remote) => run_remote(remote, algo, jobs, control, tick, handle),
+        None => run_local(pool, source, algo, jobs, control, tick, handle),
+    }
+}
+
+fn run_local<'j, E>(
     pool: &rayon::ThreadPool,
     source: &dyn Source,
     algo: HashAlgo,
@@ -81,6 +100,146 @@ pub(crate) fn run<'j, E>(
             }
         }
     })
+}
+
+/// Sends the jobs to the source's hasher. A partial job becomes a full request when the source
+/// has no partial digests, and its outcome is then [`Outcome::Full`]. Jobs the source never
+/// answers (it failed or was unplugged) become warnings.
+fn run_remote<'j, E>(
+    remote: &dyn RemoteHasher,
+    algo: HashAlgo,
+    jobs: &'j [Job],
+    control: &Control,
+    tick: Duration,
+    mut handle: impl FnMut(Option<Outcome<'j>>) -> Result<(), E>,
+) -> Result<(), E> {
+    if !remote.supports(algo) {
+        let message = format!("this source cannot compute {algo} digests");
+        for job in jobs {
+            handle(Some(Outcome::Warning(
+                job,
+                SourceWarning {
+                    path: Some(job.path.clone()),
+                    kind: WarningKind::Io,
+                    message: message.clone(),
+                },
+            )))?;
+        }
+        return Ok(());
+    }
+    let partial = remote.partial_digests();
+    let requests: Vec<HashRequest> = jobs
+        .iter()
+        .map(|job| HashRequest {
+            path: job.path.clone(),
+            size: job.size,
+            mtime_ns: job.mtime_ns,
+            partial: partial && job.tier == Tier::Partial,
+        })
+        .collect();
+    let (sender, results) = crossbeam_channel::bounded::<(usize, HashReply)>(512);
+    let mut answered = vec![false; jobs.len()];
+    let failure = std::thread::scope(|scope| {
+        let worker = scope.spawn(move || {
+            remote.hash(algo, &requests, &mut |index, reply| {
+                if control.proceed() && sender.send((index, reply)).is_ok() {
+                    ControlFlow::Continue(())
+                } else {
+                    ControlFlow::Break(())
+                }
+            })
+        });
+        loop {
+            match results.recv_timeout(tick) {
+                Ok((index, reply)) => {
+                    let Some(job) = jobs.get(index) else { continue };
+                    if let Some(done) = answered.get_mut(index) {
+                        *done = true;
+                    }
+                    handle(Some(match reply {
+                        HashReply::Full(digest) => Outcome::Full(job, digest),
+                        HashReply::Partial(digest) => Outcome::Partial(job, digest),
+                        HashReply::Warning(warning) => Outcome::Warning(job, warning),
+                    }))?;
+                }
+                Err(RecvTimeoutError::Timeout) => handle(None)?,
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        Ok(worker.join().ok().and_then(Result::err))
+    })?;
+    if let Some(error) = failure
+        && !control.is_cancelled()
+    {
+        let message = error.to_string();
+        for (job, _) in jobs.iter().zip(&answered).filter(|(_, done)| !**done) {
+            handle(Some(Outcome::Warning(
+                job,
+                SourceWarning {
+                    path: Some(job.path.clone()),
+                    kind: WarningKind::Io,
+                    message: message.clone(),
+                },
+            )))?;
+        }
+    }
+    Ok(())
+}
+
+/// Hashes `requests` in `source` on `threads` threads with exactly the checks scans use,
+/// calling `each` with each request's index and reply as they finish. This is what a remote
+/// source runs on its side (the Android agent, ADR-0017).
+///
+/// # Errors
+///
+/// [`ScanError::Threads`] if the threads cannot be started.
+pub fn hash_requests(
+    source: &dyn Source,
+    algo: HashAlgo,
+    requests: &[HashRequest],
+    threads: NonZeroUsize,
+    mut each: impl FnMut(usize, HashReply),
+) -> Result<(), ScanError> {
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(threads.get())
+        .build()
+        .map_err(|e| ScanError::Threads(e.to_string()))?;
+    let jobs: Vec<Job> = requests
+        .iter()
+        .zip(0_i64..)
+        .map(|(request, id)| Job {
+            id,
+            path: request.path.clone(),
+            size: request.size,
+            mtime_ns: request.mtime_ns,
+            tier: if request.partial {
+                Tier::Partial
+            } else {
+                Tier::Full
+            },
+        })
+        .collect();
+    let index = |job: &Job| usize::try_from(job.id).unwrap_or(usize::MAX);
+    run_local(
+        &pool,
+        source,
+        algo,
+        &jobs,
+        &Control::default(),
+        Duration::from_secs(1),
+        |outcome| {
+            let reply = match outcome {
+                Some(Outcome::Full(job, digest)) => Some((job, HashReply::Full(digest))),
+                Some(Outcome::Partial(job, digest)) => Some((job, HashReply::Partial(digest))),
+                Some(Outcome::Warning(job, warning)) => Some((job, HashReply::Warning(warning))),
+                None => None,
+            };
+            if let Some((job, reply)) = reply {
+                each(index(job), reply);
+            }
+            Ok::<(), ScanError>(())
+        },
+    )
 }
 
 /// Hashes one entry and re-checks it afterwards; any change turns the result into a warning.

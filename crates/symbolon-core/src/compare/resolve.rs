@@ -223,7 +223,9 @@ impl Comparison {
         failed: &mut HashSet<i64>,
     ) -> Result<(), CompareError> {
         let algo = self.sides[0].hash_algo;
-        let mut batch: Vec<(&Job, Vec<u8>)> = Vec::with_capacity(BATCH);
+        // The tier of the digest received: a source without partial digests answers a
+        // partial job with a full one.
+        let mut batch: Vec<(&Job, Tier, Vec<u8>)> = Vec::with_capacity(BATCH);
         let (mut files, mut bytes) = (0_u64, 0_u64);
         let mut last_progress = Instant::now();
         let conn = &mut self.conn;
@@ -237,10 +239,10 @@ impl Comparison {
             |outcome| {
                 match outcome {
                     Some(Outcome::Full(job, digest)) => {
-                        batch.push((job, digest.as_bytes().to_vec()));
+                        batch.push((job, Tier::Full, digest.as_bytes().to_vec()));
                     }
                     Some(Outcome::Partial(job, digest)) => {
-                        batch.push((job, digest.as_bytes().to_vec()));
+                        batch.push((job, Tier::Partial, digest.as_bytes().to_vec()));
                     }
                     Some(Outcome::Warning(job, warning)) => {
                         failed.insert(job.id);
@@ -356,7 +358,7 @@ impl Comparison {
 /// Stores digests with the guarded statements; returns the files and bytes stored.
 fn store(
     conn: &mut rusqlite::Connection,
-    batch: &mut Vec<(&Job, Vec<u8>)>,
+    batch: &mut Vec<(&Job, Tier, Vec<u8>)>,
     algo: HashAlgo,
 ) -> Result<(u64, u64), CompareError> {
     if batch.is_empty() {
@@ -367,8 +369,8 @@ fn store(
     {
         let mut full = tx.prepare_cached(hashing::store_statement(Tier::Full))?;
         let mut partial = tx.prepare_cached(hashing::store_statement(Tier::Partial))?;
-        for (job, digest) in batch.drain(..) {
-            let stmt = match job.tier {
+        for (job, tier, digest) in batch.drain(..) {
+            let stmt = match tier {
                 Tier::Full => &mut full,
                 Tier::Partial => &mut partial,
             };
@@ -381,7 +383,7 @@ fn store(
                 algo.name()
             ])?;
             files += 1;
-            bytes += job.tier.bytes(job.size);
+            bytes += tier.bytes(job.size);
         }
     }
     tx.commit()?;

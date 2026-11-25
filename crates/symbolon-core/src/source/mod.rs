@@ -18,6 +18,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "local")]
 pub use self::local::LocalSource;
+use crate::hash::{Digest, HashAlgo, PartialDigest};
 use crate::pathkey::RelPath;
 
 /// What kind of filesystem object an entry is.
@@ -183,6 +184,57 @@ pub enum SourceError {
         /// Why it is invalid.
         message: String,
     },
+    /// The connection to a remote source failed (for example the phone was unplugged).
+    #[error("{0}")]
+    Remote(String),
+}
+
+/// A file to hash where it is, with the metadata it was listed with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HashRequest {
+    /// The file.
+    pub path: RelPath,
+    /// Size when listed; a different size makes the reply a warning.
+    pub size: u64,
+    /// Modification time when listed; a different time makes the reply a warning.
+    pub mtime_ns: Option<i64>,
+    /// A partial digest (size plus the first and last 64 KiB) instead of the full content.
+    pub partial: bool,
+}
+
+/// The answer to one [`HashRequest`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HashReply {
+    /// The full-content digest.
+    Full(Digest),
+    /// The partial digest.
+    Partial(PartialDigest),
+    /// No digest: the file could not be read, or it changed since it was listed.
+    Warning(SourceWarning),
+}
+
+/// Hashes files on the source's side, for sources whose contents are expensive to move (a
+/// phone over ADB, ADR-0017). Digests must be exactly what [`crate::hash`] computes locally.
+pub trait RemoteHasher: Send + Sync {
+    /// Whether digests of `algo` can be computed.
+    fn supports(&self, algo: HashAlgo) -> bool;
+
+    /// Whether partial digests can be computed; if not, partial requests are sent as full ones.
+    fn partial_digests(&self) -> bool;
+
+    /// Hashes `requests`, calling `each` with each request's index and reply as they arrive,
+    /// in any order. Stops early when `each` returns [`ControlFlow::Break`].
+    ///
+    /// # Errors
+    ///
+    /// [`SourceError::Remote`] when the source becomes unusable; requests without a reply are
+    /// then reported as warnings by the caller.
+    fn hash(
+        &self,
+        algo: HashAlgo,
+        requests: &[HashRequest],
+        each: &mut dyn FnMut(usize, HashReply) -> ControlFlow<()>,
+    ) -> Result<(), SourceError>;
 }
 
 /// Readable and seekable file contents, as needed for full and partial hashing.
@@ -219,6 +271,12 @@ pub trait Source: Send + Sync {
     ///
     /// The I/O error from inspecting the entry.
     fn stat(&self, path: &RelPath) -> io::Result<SourceEntry>;
+
+    /// Hashing on the source's side, if the source offers it; scans and comparisons then never
+    /// [`open`](Source::open) its files.
+    fn remote_hasher(&self) -> Option<&dyn RemoteHasher> {
+        None
+    }
 }
 
 /// Nanoseconds since the Unix epoch (negative before it), saturating at the `i64` range.
