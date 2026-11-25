@@ -1,6 +1,6 @@
 # Catalog schema
 
-The catalog is one SQLite database. Its schema is a public contract: the CLI, the app, `.symbolon` exports and third-party tools read it. This page describes the current version (**v2**) and the rules for changing it. The DDL lives in `crates/symbolon-core/src/catalog/schema.rs`.
+The catalog is one SQLite database. Its schema is a public contract: the CLI, the app, `.symbolon` exports and third-party tools read it. This page describes the current version (**v3**) and the rules for changing it. The DDL lives in `crates/symbolon-core/src/catalog/schema.rs`.
 
 ## Versioning policy
 
@@ -19,7 +19,7 @@ The catalog is one SQLite database. Its schema is a public contract: the CLI, th
 - Digests are raw bytes. The algorithm is a property of the location, not of each digest: every digest of a location uses `locations.hash_algo`.
 - Enumerations are lowercase text with a `CHECK` constraint.
 
-## Tables (v2)
+## Tables (v3)
 
 ### `meta`
 
@@ -27,22 +27,26 @@ Key/value facts about the file: `kind` (`catalog` or `export`), `created_at`, `c
 
 ### `locations`
 
-| Column            | Type    | Notes                                                                                                                                                                        |
-| ----------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`              | INTEGER | Primary key.                                                                                                                                                                 |
-| `label`           | TEXT    | Unique; 1–64 characters, no `:`, `/`, `\`, control characters or surrounding spaces. The location's identity.                                                                |
-| `root_kind`       | TEXT    | `local` (Android roots arrive in M5). Imported locations are `local` with an `imported_locations` row.                                                                       |
-| `root_raw`        | BLOB    | Absolute root path in `path_encoding`.                                                                                                                                       |
-| `path_encoding`   | TEXT    | `posix` or `wtf8`; applies to the root and all entry paths.                                                                                                                  |
-| `fingerprint`     | TEXT    | Best-effort device identity: `fs:<filesystem UUID>:<path inside the filesystem>` ([ADR-0016](adr/0016-device-fingerprints.md)); NULL when the root's filesystem has no UUID. |
-| `hash_algo`       | TEXT    | `blake3`, `xxh3` or `sha256`.                                                                                                                                                |
-| `hash_policy`     | TEXT    | `lazy` or `eager`.                                                                                                                                                           |
-| `ignore_patterns` | TEXT    | `.gitignore`-style patterns, one per line.                                                                                                                                   |
-| `created_at`      | INTEGER |                                                                                                                                                                              |
+| Column            | Type    | Notes                                                                                                                                                                                                                                             |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | INTEGER | Primary key.                                                                                                                                                                                                                                      |
+| `label`           | TEXT    | Unique; 1–64 characters, no `:`, `/`, `\`, control characters or surrounding spaces. The location's identity.                                                                                                                                     |
+| `root_kind`       | TEXT    | `local`. Imported locations have an `imported_locations` row, and phone locations an `adb_locations` row.                                                                                                                                         |
+| `root_raw`        | BLOB    | Absolute root path in `path_encoding`.                                                                                                                                                                                                            |
+| `path_encoding`   | TEXT    | `posix` or `wtf8`; applies to the root and all entry paths.                                                                                                                                                                                       |
+| `fingerprint`     | TEXT    | Best-effort device identity: `fs:<filesystem UUID>:<path inside the filesystem>` ([ADR-0016](adr/0016-device-fingerprints.md)), or `adb:<ro.serialno>:<path>` for phones ([ADR-0017](adr/0017-android-over-adb.md)); NULL when none was detected. |
+| `hash_algo`       | TEXT    | `blake3`, `xxh3` or `sha256`.                                                                                                                                                                                                                     |
+| `hash_policy`     | TEXT    | `lazy` or `eager`.                                                                                                                                                                                                                                |
+| `ignore_patterns` | TEXT    | `.gitignore`-style patterns, one per line.                                                                                                                                                                                                        |
+| `created_at`      | INTEGER |                                                                                                                                                                                                                                                   |
 
 ### `imported_locations` (v2)
 
 Locations created by importing a `.symbolon` file ([ADR-0013](adr/0013-imported-locations.md)); their files are on another computer, so they are compared but never scanned. `location_id` (primary key, cascades on delete), `exported_at`, `exported_by` (app version that wrote the file), `imported_at`.
+
+### `adb_locations` (v3)
+
+Locations on Android phones ([ADR-0017](adr/0017-android-over-adb.md)). They have two columns: `location_id`, the primary key, which cascades on delete, and `serial`, the connection serial that `adb -s` takes. The path on the phone is in `locations.root_raw`, with `posix` encoding. Such a location is shown as `adb:<serial>:<path>`.
 
 ### `scans`
 

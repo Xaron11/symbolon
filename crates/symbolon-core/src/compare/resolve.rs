@@ -162,7 +162,7 @@ impl Comparison {
                     }
                     _ => Some("location root is not available".to_owned()),
                 };
-                let source = match source_for(&location) {
+                let source = match source_for(&self.catalog, &location) {
                     Ok(source) if unreachable.is_none() => source,
                     result => {
                         let reason = result

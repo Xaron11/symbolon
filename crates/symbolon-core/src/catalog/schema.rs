@@ -2,7 +2,7 @@
 //!
 //! Never edit a released migration; add a new one and a fixture (`docs/schema.md`).
 
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3];
 
 /// Schema version this build creates and understands.
 #[expect(
@@ -90,5 +90,14 @@ CREATE TABLE imported_locations (
     exported_at INTEGER NOT NULL,
     exported_by TEXT NOT NULL,
     imported_at INTEGER NOT NULL
+) STRICT;
+";
+
+/// Locations on Android phones (ADR-0017): reached through `adb` by the device serial, with
+/// the path on the phone in `locations.root_raw`.
+const V3: &str = r"
+CREATE TABLE adb_locations (
+    location_id INTEGER PRIMARY KEY REFERENCES locations (id) ON DELETE CASCADE,
+    serial TEXT NOT NULL
 ) STRICT;
 ";

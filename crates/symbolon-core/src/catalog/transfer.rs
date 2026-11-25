@@ -353,7 +353,12 @@ impl Catalog {
             }),
             // Equal fingerprints (both absent before M4) say the file is this location, but a
             // scanned local location's data still needs a choice (ADR-0014).
-            Ok(existing) if matches!(existing.root, super::LocationRoot::Local(_)) => {
+            Ok(existing)
+                if matches!(
+                    existing.root,
+                    super::LocationRoot::Local(_) | super::LocationRoot::Android { .. }
+                ) =>
+            {
                 Err(if existing.fingerprint == file.fingerprint {
                     ImportConflict::LocalData {
                         label: file.label.clone(),
