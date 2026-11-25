@@ -412,7 +412,7 @@ fn push_escaped_text(key: &mut String, text: &str) {
     }
 }
 
-fn push_escaped_byte(key: &mut String, byte: u8) {
+pub(crate) fn push_escaped_byte(key: &mut String, byte: u8) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     key.push('%');
     key.push(char::from(HEX[usize::from(byte >> 4)]));

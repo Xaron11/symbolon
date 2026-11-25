@@ -23,6 +23,7 @@
 //! | [`catalog`] | SQLite catalog: opening, migrations, locations                     |
 //! | [`compare`] | `Comparison` of two or more sides: categories, summary, paged rows |
 //! | [`hash`]    | Hash algorithms, streaming full digests and partial digests        |
+//! | [`identity`] | Device fingerprints: finding a location's device again (M4)       |
 //! | [`pathkey`] | Lossless relative paths and normalized matching keys               |
 //! | [`query`]   | `Query`: browse, search, duplicates, scan history; paginated       |
 //! | [`scan`]    | `Scanner`: walk, store, hash; events, cancel, pause, rescans       |
@@ -42,6 +43,7 @@
 pub mod catalog;
 pub mod compare;
 pub mod hash;
+pub mod identity;
 pub mod pathkey;
 pub mod query;
 pub mod scan;

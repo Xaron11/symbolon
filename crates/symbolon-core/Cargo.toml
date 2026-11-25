@@ -9,9 +9,11 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-default = ["local"]
+default = ["local", "identity"]
 # Walking and reading local or mounted filesystems (ADR-0006).
 local = ["dep:ignore", "dep:rustix"]
+# Detecting device fingerprints of local roots (ADR-0016).
+identity = []
 
 [dependencies]
 blake3.workspace = true
