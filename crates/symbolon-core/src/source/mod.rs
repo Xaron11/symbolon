@@ -298,6 +298,12 @@ pub trait Source: Send + Sync {
     fn remote_hasher(&self) -> Option<&dyn RemoteHasher> {
         None
     }
+
+    /// Something the user should know about how the location is read, such as which path a
+    /// phone is scanned through and why.
+    fn note(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Nanoseconds since the Unix epoch (negative before it), saturating at the `i64` range.

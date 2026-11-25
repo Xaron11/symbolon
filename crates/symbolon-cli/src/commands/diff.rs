@@ -13,7 +13,7 @@ use symbolon_core::pathkey::KeyOptions;
 use symbolon_core::query::Page;
 use symbolon_core::scan::ScanOptions;
 
-use super::{devices, open_catalog};
+use super::{follow, open_catalog};
 use crate::cli::{DiffArgs, Global};
 use crate::exit::Exit;
 use crate::interrupt;
@@ -37,7 +37,7 @@ pub(super) fn run(global: &Global, args: &DiffArgs) -> anyhow::Result<Exit> {
         options = options.assume_equal_within(tolerance);
     }
     for side in &sides {
-        devices::follow_moves(&catalog, &side.label, global.quiet)?;
+        follow::follow_moves(&catalog, &side.label, global.quiet)?;
     }
     let mut cmp = Comparison::new(&catalog, &sides, options)?;
     let mut interrupted = false;

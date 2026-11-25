@@ -51,7 +51,7 @@ impl DeviceState {
         match self {
             Self::Device => None,
             Self::Unauthorized => Some(
-                "accept the \"Allow USB debugging\" prompt on the phone (unlock it to see it)"
+                "accept the 'Allow USB debugging' prompt on the phone (unlock it to see it)"
                     .to_owned(),
             ),
             Self::Offline => {

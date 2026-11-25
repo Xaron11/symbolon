@@ -24,8 +24,8 @@ pub(super) fn run(global: &Global, command: &LocationCommand) -> anyhow::Result<
 struct LocationRecord {
     label: String,
     root: String,
-    /// `local`, `imported` (from a .symbolon file) or `other_platform` (a catalog moved
-    /// between operating systems).
+    /// `local`, `android` (a phone over adb), `imported` (from a .symbolon file) or
+    /// `other_platform` (a catalog moved between operating systems).
     kind: &'static str,
     /// Only local locations can be scanned; the others can be compared.
     scannable: bool,
@@ -104,10 +104,14 @@ fn record(query: &Query, location: &Location) -> anyhow::Result<LocationRecord> 
         root: location.root.display(),
         kind: match location.root {
             LocationRoot::Local(_) => "local",
+            LocationRoot::Android { .. } => "android",
             LocationRoot::Imported { .. } => "imported",
             _ => "other_platform",
         },
-        scannable: matches!(location.root, LocationRoot::Local(_)),
+        scannable: matches!(
+            location.root,
+            LocationRoot::Local(_) | LocationRoot::Android { .. }
+        ),
         hash_policy: location.hash_policy.to_string(),
         hash_algo: location.hash_algo.to_string(),
         files: stats.files,
@@ -121,7 +125,12 @@ fn record(query: &Query, location: &Location) -> anyhow::Result<LocationRecord> 
 
 fn add(global: &Global, args: &AddArgs) -> anyhow::Result<Exit> {
     let catalog = open_catalog(global)?;
-    let mut new = NewLocation::local(&args.label, &args.path).ignore_patterns(args.ignore.clone());
+    let root = args.path.to_str().and_then(LocationRoot::parse_android);
+    let mut new = match root {
+        Some((serial, path)) => NewLocation::android(&args.label, serial, path),
+        None => NewLocation::local(&args.label, &args.path),
+    }
+    .ignore_patterns(args.ignore.clone());
     if let Some(policy) = args.policy {
         new = new.hash_policy(policy.into());
     }

@@ -97,6 +97,9 @@ pub(super) fn run(
         scan_id,
         location: location.label.clone(),
     });
+    if let Some(note) = source.note() {
+        scan.emit(ScanEvent::Note(note));
+    }
     match scan.execute() {
         Ok(status) => scan.finish(status, None),
         Err(error) => {

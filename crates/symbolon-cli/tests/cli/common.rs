@@ -25,6 +25,8 @@ pub(crate) struct Env {
     /// The simulated mount table every run uses (`SYMBOLON_TEST_MOUNTS`): empty unless a test
     /// plugs devices in, so no test depends on the real filesystems.
     mounts: PathBuf,
+    /// The `adb` every run uses (`SYMBOLON_ADB`): a fake one, so no test reaches a real phone.
+    adb: PathBuf,
 }
 
 /// One finished run.
@@ -44,12 +46,24 @@ impl Env {
         let catalog = root.join("catalog.db");
         let mounts = root.join("mounts.txt");
         fs::write(&mounts, "").unwrap();
+        let adb = root.join("fake-adb/adb");
+        write_fake_adb(&adb);
         Self {
             _dir: dir,
             root,
             catalog,
             mounts,
+            adb,
         }
+    }
+
+    /// Connects simulated phones: `devices` as `adb devices -l` lists them, and the hardware
+    /// serial (`ro.serialno`) of each.
+    pub(crate) fn phones(&self, devices: &str, hardware: &[(&str, &str)]) {
+        let dir = self.adb.parent().unwrap();
+        fs::write(dir.join("devices"), devices).unwrap();
+        let lines: Vec<String> = hardware.iter().map(|(s, h)| format!("{s} {h}")).collect();
+        fs::write(dir.join("hardware"), lines.join("\n")).unwrap();
     }
 
     /// Replaces the simulated mount table: `(filesystem UUID, mount point relative to the
@@ -92,6 +106,8 @@ impl Env {
             .args(args)
             .env("SYMBOLON_CATALOG", &self.catalog)
             .env("SYMBOLON_TEST_MOUNTS", &self.mounts)
+            .env("SYMBOLON_ADB", &self.adb)
+            .env_remove("SYMBOLON_AGENT")
             .stdin(Stdio::null())
             .output()
             .unwrap();
@@ -134,4 +150,41 @@ pub(crate) fn settings(table: bool) -> insta::Settings {
         settings.add_filter(r" {2,}", "  ");
     }
     settings
+}
+
+/// A fake `adb` whose phones are this computer: it lists `devices`, answers `getprop` from
+/// `hardware`, copies for `push` and runs `shell` and `exec-out` command lines with bash. On
+/// Windows it is never executed (phone tests are Unix-only); its path still keeps the real
+/// `adb` out of every test.
+fn write_fake_adb(path: &std::path::Path) {
+    let dir = path.parent().unwrap();
+    fs::create_dir_all(dir).unwrap();
+    fs::write(dir.join("devices"), "").unwrap();
+    fs::write(dir.join("hardware"), "").unwrap();
+    fs::write(
+        path,
+        r#"#!/usr/bin/env bash
+dir="$(dirname "$0")"
+if [ "$1" = devices ]; then echo "List of devices attached"; cat "$dir/devices"; exit 0; fi
+[ "$1" = -s ] || { echo "unexpected: $*" >&2; exit 1; }
+serial=$2; cmd=$3; shift 3
+case "$cmd" in
+  push) cp -- "$1" "$2" ;;
+  shell)
+    case "$1" in
+      "getprop ro.serialno") awk -v s="$serial" '$1 == s { print $2 }' "$dir/hardware" ;;
+      "getprop ro.product.cpu.abi") echo arm64-v8a ;;
+      *) exec bash -c "$1" ;;
+    esac ;;
+  exec-out) exec bash -c "$1" ;;
+  *) echo "unexpected: $cmd" >&2; exit 1 ;;
+esac
+"#,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
 }
