@@ -53,5 +53,5 @@ After M0 the project needs a workflow that scales past a single bootstrap sessio
 
 - Nothing reaches `main` without green CI and a signed, conventional, reviewed-by-PR commit; the changelog is generated, not written by hand.
 - Releases need no stored secrets; only an admin with the signing key can publish.
-- Since the repository became public (2026-11-24), CodeQL default setup, secret scanning with push protection, immutable releases and build-provenance attestations are on, all free for public repositories. Third-party coverage services are still not adopted.
+- Since the repository became public (2026-11-24), CodeQL, secret scanning with push protection, immutable releases and build-provenance attestations are on, all free for public repositories. CodeQL runs from `.github/workflows/codeql.yml` on pushes to `main` and weekly, not on pull requests, which CI already gates. Third-party coverage services are still not adopted.
 - Mutation testing (`cargo-mutants`) is a follow-up once `compare` exists.
