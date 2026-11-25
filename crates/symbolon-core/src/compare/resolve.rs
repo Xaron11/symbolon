@@ -8,7 +8,7 @@ use rusqlite::{named_params, params};
 
 use super::{CompareError, Comparison};
 use crate::catalog::{CatalogError, LocationRoot};
-use crate::hash::PARTIAL_BLOCK;
+use crate::hash::{HashAlgo, PARTIAL_BLOCK};
 use crate::pathkey::RelPath;
 use crate::scan::hashing::{self, Job, Outcome, Tier};
 use crate::scan::{Control, ScanOptions, hashing_pool, source_for};
@@ -246,7 +246,7 @@ impl Comparison {
                     None => {}
                 }
                 if batch.len() >= BATCH || last_progress.elapsed() >= options.progress_interval {
-                    let (stored_files, stored_bytes) = store(conn, &mut batch)?;
+                    let (stored_files, stored_bytes) = store(conn, &mut batch, algo)?;
                     files += stored_files;
                     bytes += stored_bytes;
                     last_progress = Instant::now();
@@ -262,7 +262,7 @@ impl Comparison {
                 Ok::<(), CompareError>(())
             },
         )?;
-        let (stored_files, stored_bytes) = store(conn, &mut batch)?;
+        let (stored_files, stored_bytes) = store(conn, &mut batch, algo)?;
         summary.hashed_files += files + stored_files;
         summary.hashed_bytes += bytes + stored_bytes;
         Ok(())
@@ -347,6 +347,7 @@ impl Comparison {
 fn store(
     conn: &mut rusqlite::Connection,
     batch: &mut Vec<(&Job, Vec<u8>)>,
+    algo: HashAlgo,
 ) -> Result<(u64, u64), CompareError> {
     if batch.is_empty() {
         return Ok((0, 0));
@@ -361,7 +362,14 @@ fn store(
                 Tier::Full => &mut full,
                 Tier::Partial => &mut partial,
             };
-            stmt.execute(params![digest, job.id, job.size, job.mtime_ns])?;
+            stmt.execute(params![
+                digest,
+                job.id,
+                job.size,
+                job.mtime_ns,
+                job.path.as_bytes(),
+                algo.name()
+            ])?;
             files += 1;
             bytes += job.tier.bytes(job.size);
         }

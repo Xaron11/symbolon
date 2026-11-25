@@ -355,7 +355,14 @@ impl Scan<'_> {
             // The guard skips entries a newer scan changed in the meantime.
             let mut update = tx.prepare_cached(hashing::store_statement(Tier::Full))?;
             for (job, digest) in batch.drain(..) {
-                update.execute(params![digest.as_bytes(), job.id, job.size, job.mtime_ns])?;
+                update.execute(params![
+                    digest.as_bytes(),
+                    job.id,
+                    job.size,
+                    job.mtime_ns,
+                    job.path.as_bytes(),
+                    digest.algo().name()
+                ])?;
             }
             insert_warnings(&tx, self.id, &mut self.pending_warnings)?;
         }

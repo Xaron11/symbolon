@@ -159,3 +159,19 @@ fn catalog_option_overrides_the_environment() {
     assert_eq!(out, "{\n  \"locations\": []\n}\n");
     assert!(other.exists(), "the catalog is created on first use");
 }
+
+/// A catalog lists private paths and hashes; directories created for it are owner-only (#86).
+#[cfg(unix)]
+#[test]
+fn a_new_catalog_directory_is_private() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let env = Env::new();
+    let catalog = env.path("new/dir/catalog.db");
+    env.ok(&["--catalog", catalog.to_str().unwrap(), "location", "list"]);
+    for dir in [env.path("new"), env.path("new/dir")] {
+        let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700, "{}", dir.display());
+    }
+    let mode = std::fs::metadata(&catalog).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+}
