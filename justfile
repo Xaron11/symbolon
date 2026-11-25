@@ -13,7 +13,7 @@ build:
 
 # Static aarch64 binary pushed to Android over adb.
 android-scanner:
-    cargo zigbuild -p symbolon-agent --profile release-agent --target {{ agent_target }}
+    cargo zigbuild --locked -p symbolon-agent --profile release-agent --target {{ agent_target }}
     @echo target/{{ agent_target }}/release-agent/symbolon-agent
 
 # Fail unless the agent is fully static and its segments suit 4/16/64 KiB page kernels (ADR-0003).
