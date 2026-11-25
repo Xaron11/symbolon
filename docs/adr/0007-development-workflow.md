@@ -53,5 +53,5 @@ After M0 the project needs a workflow that scales past a single bootstrap sessio
 
 - Nothing reaches `main` without green CI and a signed, conventional, reviewed-by-PR commit; the changelog is generated, not written by hand.
 - Releases need no stored secrets; only an admin with the signing key can publish.
-- Not adopted (cost or plan limits): CodeQL and secret scanning (paid for private repositories), artifact attestations (Enterprise for private repositories), third-party coverage services. Revisit if the repository becomes public, where all three are free.
+- Since the repository became public (2026-11-24), CodeQL default setup, secret scanning with push protection, immutable releases and build-provenance attestations are on, all free for public repositories. Third-party coverage services are still not adopted.
 - Mutation testing (`cargo-mutants`) is a follow-up once `compare` exists.
