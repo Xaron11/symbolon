@@ -59,6 +59,7 @@ impl Env {
 
     /// Connects simulated phones: `devices` as `adb devices -l` lists them, and the hardware
     /// serial (`ro.serialno`) of each.
+    #[cfg(unix)]
     pub(crate) fn phones(&self, devices: &str, hardware: &[(&str, &str)]) {
         let dir = self.adb.parent().unwrap();
         fs::write(dir.join("devices"), devices).unwrap();
