@@ -32,6 +32,7 @@
   - [0016 Device fingerprints](adr/0016-device-fingerprints.md)
   - [0017 Android over ADB](adr/0017-android-over-adb.md)
   - [0018 Four hashing threads on phones](adr/0018-phone-hashing-threads.md)
+  - [0019 Directories and symlinks in comparisons](adr/0019-directories-and-symlinks-in-comparisons.md)
 
 # Development
 
