@@ -19,6 +19,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0013](0013-imported-locations.md)                 | Imported locations, export contents, replacing data on import           |
 | [0014](0014-imports-and-local-locations.md)        | Imports never replace a scanned local location without a choice         |
 | [0015](0015-opening-files-beneath-the-root.md)     | Files are opened component by component without following links         |
+| [0016](0016-device-fingerprints.md)                | Filesystem fingerprints, finding moved locations, confirmation rules    |
 
 ## Writing a new ADR
 
