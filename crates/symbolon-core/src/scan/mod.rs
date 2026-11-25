@@ -13,6 +13,7 @@ pub(crate) mod hashing;
 pub(crate) mod lock;
 mod run;
 
+pub use self::hashing::hash_requests;
 pub(crate) use self::run::{hashing_pool, source_for};
 
 use std::fmt;
