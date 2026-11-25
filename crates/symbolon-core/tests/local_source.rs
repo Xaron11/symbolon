@@ -9,7 +9,7 @@ use std::ops::ControlFlow;
 use std::path::Path;
 use std::time::{Duration, UNIX_EPOCH};
 
-use symbolon_core::pathkey::{PathEncoding, RelPath};
+use symbolon_core::pathkey::RelPath;
 use symbolon_core::source::{
     EntryKind, LocalSource, Source, SourceEntry, SourceError, WalkItem, WalkOutcome, WarningKind,
 };
@@ -183,6 +183,8 @@ fn open_and_stat_read_single_entries() {
 mod unix {
     use std::os::unix::ffi::OsStrExt as _;
     use std::os::unix::fs::{PermissionsExt as _, symlink};
+
+    use symbolon_core::pathkey::PathEncoding;
 
     use super::*;
 
