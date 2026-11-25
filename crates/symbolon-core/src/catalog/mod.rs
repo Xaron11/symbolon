@@ -8,6 +8,8 @@
 //! forward-only migrations it is missing, after backing it up, and refuses catalogs written by a
 //! newer version.
 
+#[cfg(feature = "android-adb")]
+mod android;
 mod locate;
 mod schema;
 mod transfer;
@@ -82,6 +84,9 @@ pub enum CatalogError {
     /// A stored value this build cannot interpret.
     #[error("catalog contains an invalid value: {0}")]
     Corrupt(String),
+    /// A phone cannot be used as asked: not connected, not authorized, ambiguous.
+    #[error("{0}")]
+    Device(String),
 }
 
 /// Handle to a catalog database file.
@@ -92,6 +97,9 @@ pub struct Catalog {
     path: PathBuf,
     /// The mounted filesystems, for device fingerprints (ADR-0016).
     volumes: Arc<dyn Volumes>,
+    /// How phones are reached (ADR-0017).
+    #[cfg(feature = "android-adb")]
+    android: Arc<android::Access>,
 }
 
 impl fmt::Debug for Catalog {
@@ -125,6 +133,8 @@ impl Catalog {
         Ok(Self {
             path,
             volumes: Arc::new(SystemVolumes),
+            #[cfg(feature = "android-adb")]
+            android: Arc::new(android::Access::default()),
         })
     }
 
@@ -154,9 +164,12 @@ impl Catalog {
         validate_label(&new.label)?;
         let root = match &new.root {
             LocationRoot::Local(root) => root,
-            LocationRoot::Foreign { display, .. } | LocationRoot::Imported { display, .. } => {
-                return Err(CatalogError::InvalidRoot(PathBuf::from(display)));
+            #[cfg(feature = "android-adb")]
+            LocationRoot::Android { serial, path } => {
+                let (serial, path) = (serial.clone(), path.clone());
+                return self.add_android(new, &serial, &path);
             }
+            other => return Err(CatalogError::InvalidRoot(PathBuf::from(other.display()))),
         };
         let root = std::fs::canonicalize(root)
             .ok()
@@ -491,6 +504,14 @@ pub enum LocationRoot {
         /// The root on the computer that exported it, with non-Unicode bytes shown as `%XX`.
         display: String,
     },
+    /// A directory on an Android phone, reached through `adb` (ADR-0017). Written
+    /// `adb:<serial>:<path>`.
+    Android {
+        /// The serial `adb -s` takes.
+        serial: String,
+        /// The absolute path on the phone, with non-Unicode bytes shown as `%XX`.
+        path: String,
+    },
 }
 
 impl LocationRoot {
@@ -510,7 +531,27 @@ impl LocationRoot {
             Self::Foreign { display, .. } | Self::Imported { display, .. } => {
                 strip_verbatim(display).to_owned()
             }
+            Self::Android { serial, path } => format!("adb:{serial}:{path}"),
         }
+    }
+
+    /// Reads a phone root written `adb:<serial>:<absolute path>`; the serial may be empty
+    /// (the only connected phone).
+    ///
+    /// ```
+    /// use symbolon_core::catalog::LocationRoot;
+    ///
+    /// assert_eq!(
+    ///     LocationRoot::parse_android("adb:39151FDJH000LN:/sdcard/DCIM"),
+    ///     Some(("39151FDJH000LN", "/sdcard/DCIM"))
+    /// );
+    /// assert_eq!(LocationRoot::parse_android("adb::/sdcard"), Some(("", "/sdcard")));
+    /// assert_eq!(LocationRoot::parse_android("/home/me"), None);
+    /// ```
+    pub fn parse_android(text: &str) -> Option<(&str, &str)> {
+        let (serial, path) = text.strip_prefix("adb:")?.split_once(":/")?;
+        let path = text.get(text.len() - path.len() - 1..)?;
+        Some((serial, path))
     }
 }
 
@@ -541,6 +582,22 @@ impl NewLocation {
             hash_algo: HashAlgo::default(),
             hash_policy: HashPolicy::default(),
             ignore_patterns: Vec::new(),
+        }
+    }
+
+    /// A directory on an Android phone: `serial` as `adb -s` takes it (empty for the only
+    /// connected phone) and the absolute path on the phone (ADR-0017).
+    pub fn android(
+        label: impl Into<String>,
+        serial: impl Into<String>,
+        path: impl Into<String>,
+    ) -> Self {
+        Self {
+            root: LocationRoot::Android {
+                serial: serial.into(),
+                path: path.into(),
+            },
+            ..Self::local(label, PathBuf::new())
         }
     }
 
@@ -596,7 +653,8 @@ pub struct Location {
 
 const LOCATION_COLUMNS: &str = "id, label, root_kind, root_raw, path_encoding, fingerprint, \
      hash_algo, hash_policy, ignore_patterns, created_at, \
-     EXISTS (SELECT 1 FROM imported_locations i WHERE i.location_id = locations.id)";
+     EXISTS (SELECT 1 FROM imported_locations i WHERE i.location_id = locations.id), \
+     (SELECT serial FROM adb_locations a WHERE a.location_id = locations.id)";
 
 struct RawLocation {
     id: i64,
@@ -610,6 +668,7 @@ struct RawLocation {
     ignore_patterns: String,
     created_at: i64,
     imported: bool,
+    adb_serial: Option<String>,
 }
 
 impl RawLocation {
@@ -626,6 +685,7 @@ impl RawLocation {
             ignore_patterns: row.get(8)?,
             created_at: row.get(9)?,
             imported: row.get(10)?,
+            adb_serial: row.get(11)?,
         })
     }
 
@@ -637,6 +697,10 @@ impl RawLocation {
             .parse()
             .map_err(|_| corrupt("path encoding"))?;
         let root = match self.root_kind.as_str() {
+            "local" if self.adb_serial.is_some() => LocationRoot::Android {
+                serial: self.adb_serial.clone().unwrap_or_default(),
+                path: display_raw(PathEncoding::Posix, &self.root_raw),
+            },
             "local" if self.imported => LocationRoot::Imported {
                 encoding: path_encoding,
                 display: display_raw(path_encoding, &self.root_raw),

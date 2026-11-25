@@ -60,6 +60,10 @@ impl Catalog {
     }
 
     pub(crate) fn locate_location(&self, location: &Location) -> Result<Whereabouts, CatalogError> {
+        #[cfg(feature = "android-adb")]
+        if let LocationRoot::Android { serial, path } = &location.root {
+            return Ok(self.locate_android(location, serial, path));
+        }
         let LocationRoot::Local(root) = &location.root else {
             return Ok(Whereabouts::NotLocal);
         };
@@ -104,7 +108,8 @@ impl Catalog {
     }
 
     /// Moves the location to `root` (an existing directory) and records the fingerprint of
-    /// what is there. Also used to accept another device at the same root.
+    /// what is there. Also used to accept another device at the same root. For a phone
+    /// location, `root` is written `adb:<serial>:<path>`.
     ///
     /// # Errors
     ///
@@ -112,6 +117,11 @@ impl Catalog {
     /// directory or the location is not local, or a database or mount-table error.
     pub fn relocate(&self, label: &str, root: &Path) -> Result<Location, CatalogError> {
         let location = self.location(label)?;
+        #[cfg(feature = "android-adb")]
+        if let LocationRoot::Android { .. } = location.root {
+            let spec = root.to_str().unwrap_or_default();
+            return self.relocate_android(&location, spec);
+        }
         let LocationRoot::Local(_) = location.root else {
             return Err(CatalogError::InvalidRoot(root.to_path_buf()));
         };
@@ -139,12 +149,16 @@ impl Catalog {
         &self,
         location: &Location,
     ) -> Result<(), CatalogError> {
-        let LocationRoot::Local(root) = &location.root else {
-            return Ok(());
-        };
         if location.fingerprint.is_some() {
             return Ok(());
         }
+        #[cfg(feature = "android-adb")]
+        if let LocationRoot::Android { .. } = location.root {
+            return self.record_android_fingerprint(location);
+        }
+        let LocationRoot::Local(root) = &location.root else {
+            return Ok(());
+        };
         if let Some(fingerprint) = self.fingerprint_of(root)? {
             self.connect()?.execute(
                 "UPDATE locations SET fingerprint = ?2 WHERE id = ?1 AND fingerprint IS NULL",

@@ -46,8 +46,19 @@ ON CONFLICT (location_id, rel_path_raw) DO UPDATE SET
 const INSERT_WARNING: &str =
     "INSERT INTO scan_warnings (scan_id, rel_path_raw, kind, message) VALUES (?1, ?2, ?3, ?4)";
 
-pub(crate) fn source_for(location: &Location) -> Result<Arc<dyn Source>, ScanError> {
+pub(crate) fn source_for(
+    #[cfg_attr(
+        not(feature = "android-adb"),
+        expect(unused_variables, reason = "only phone locations need the catalog")
+    )]
+    catalog: &crate::catalog::Catalog,
+    location: &Location,
+) -> Result<Arc<dyn Source>, ScanError> {
     match &location.root {
+        #[cfg(feature = "android-adb")]
+        LocationRoot::Android { .. } => Ok(Arc::new(catalog.adb_source(location)?)),
+        #[cfg(not(feature = "android-adb"))]
+        LocationRoot::Android { .. } => Err(ScanError::Unsupported(location.label.clone())),
         #[cfg(feature = "local")]
         LocationRoot::Local(root) => Ok(Arc::new(LocalSource::new(
             root.clone(),

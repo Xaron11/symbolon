@@ -383,7 +383,7 @@ impl Scanner {
             // A missing root fails the walk like before; imported roots fail below.
             _ => {}
         }
-        let source = source_for(&location)?;
+        let source = source_for(catalog, &location)?;
         Self::spawn(catalog, location, source, options)
     }
 
