@@ -27,18 +27,18 @@ Key/value facts about the file: `kind` (`catalog` or `export`), `created_at`, `c
 
 ### `locations`
 
-| Column            | Type    | Notes                                                                                                         |
-| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
-| `id`              | INTEGER | Primary key.                                                                                                  |
-| `label`           | TEXT    | Unique; 1–64 characters, no `:`, `/`, `\`, control characters or surrounding spaces. The location's identity. |
-| `root_kind`       | TEXT    | `local` (Android roots arrive in M5). Imported locations are `local` with an `imported_locations` row.        |
-| `root_raw`        | BLOB    | Absolute root path in `path_encoding`.                                                                        |
-| `path_encoding`   | TEXT    | `posix` or `wtf8`; applies to the root and all entry paths.                                                   |
-| `fingerprint`     | TEXT    | Best-effort device identity (M4); nullable.                                                                   |
-| `hash_algo`       | TEXT    | `blake3`, `xxh3` or `sha256`.                                                                                 |
-| `hash_policy`     | TEXT    | `lazy` or `eager`.                                                                                            |
-| `ignore_patterns` | TEXT    | `.gitignore`-style patterns, one per line.                                                                    |
-| `created_at`      | INTEGER |                                                                                                               |
+| Column            | Type    | Notes                                                                                                                                                                        |
+| ----------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | INTEGER | Primary key.                                                                                                                                                                 |
+| `label`           | TEXT    | Unique; 1–64 characters, no `:`, `/`, `\`, control characters or surrounding spaces. The location's identity.                                                                |
+| `root_kind`       | TEXT    | `local` (Android roots arrive in M5). Imported locations are `local` with an `imported_locations` row.                                                                       |
+| `root_raw`        | BLOB    | Absolute root path in `path_encoding`.                                                                                                                                       |
+| `path_encoding`   | TEXT    | `posix` or `wtf8`; applies to the root and all entry paths.                                                                                                                  |
+| `fingerprint`     | TEXT    | Best-effort device identity: `fs:<filesystem UUID>:<path inside the filesystem>` ([ADR-0016](adr/0016-device-fingerprints.md)); NULL when the root's filesystem has no UUID. |
+| `hash_algo`       | TEXT    | `blake3`, `xxh3` or `sha256`.                                                                                                                                                |
+| `hash_policy`     | TEXT    | `lazy` or `eager`.                                                                                                                                                           |
+| `ignore_patterns` | TEXT    | `.gitignore`-style patterns, one per line.                                                                                                                                   |
+| `created_at`      | INTEGER |                                                                                                                                                                              |
 
 ### `imported_locations` (v2)
 
