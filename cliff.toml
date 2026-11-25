@@ -27,12 +27,13 @@ trim = true
 [git]
 conventional_commits = true
 filter_unconventional = true
+# Only the commit type decides the group: every squashed PR body has a "Security impact"
+# heading, so matching the body would file unrelated commits under Security.
 commit_parsers = [
   { message = "^feat", group = "<!-- 0 -->Added" },
   { message = "^fix", group = "<!-- 2 -->Fixed" },
   { message = "^perf", group = "<!-- 1 -->Changed" },
   { message = "^refactor", group = "<!-- 1 -->Changed" },
-  { body = ".*security", group = "<!-- 3 -->Security" },
   { message = "^(build|chore|ci|docs|style|test)", skip = true },
 ]
 protect_breaking_commits = true

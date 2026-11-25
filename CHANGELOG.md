@@ -27,10 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **cli:** Escape control characters in tables and warnings (#89)
 - **scan:** Open files beneath the root without following symlinks (#91)
 
-### Security
-
-- Run fewer model-test cases on Windows (#60)
-
 ## [0.3.0] - 2026-11-24
 
 ### Added
