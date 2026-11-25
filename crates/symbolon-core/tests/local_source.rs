@@ -9,7 +9,7 @@ use std::ops::ControlFlow;
 use std::path::Path;
 use std::time::{Duration, UNIX_EPOCH};
 
-use symbolon_core::pathkey::RelPath;
+use symbolon_core::pathkey::{PathEncoding, RelPath};
 use symbolon_core::source::{
     EntryKind, LocalSource, Source, SourceEntry, SourceError, WalkItem, WalkOutcome, WarningKind,
 };
@@ -213,6 +213,47 @@ mod unix {
             .unwrap();
         assert_eq!(link.kind, EntryKind::Symlink);
         assert_eq!(link.size, "target.txt".len() as u64);
+    }
+
+    /// A listed path whose directory, or the file itself, is replaced by a symlink before it is
+    /// hashed must not be read through the link (#82).
+    #[test]
+    fn open_never_follows_symlinks_swapped_in_after_the_walk() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("root");
+        write(&root.join("sub/file"), b"inside");
+        write(&root.join("leaf"), b"inside");
+        write(&dir.path().join("outside/file"), b"secret");
+        write(&dir.path().join("outside/leaf"), b"secret");
+        let source = LocalSource::new(&root, &[]).unwrap();
+        let rel = |key: &str| RelPath::from_raw(PathEncoding::native(), key.into()).unwrap();
+        let mut contents = String::new();
+        source
+            .open(&rel("sub/file"))
+            .unwrap()
+            .read_to_string(&mut contents)
+            .unwrap();
+        assert_eq!(contents, "inside");
+
+        fs::rename(root.join("sub"), root.join("sub.orig")).unwrap();
+        symlink(dir.path().join("outside"), root.join("sub")).unwrap();
+        fs::remove_file(root.join("leaf")).unwrap();
+        symlink(dir.path().join("outside/leaf"), root.join("leaf")).unwrap();
+        assert!(source.open(&rel("sub/file")).is_err(), "directory symlink");
+        assert!(source.open(&rel("leaf")).is_err(), "file symlink");
+    }
+
+    #[test]
+    fn open_refuses_special_files_without_blocking() {
+        let dir = tempfile::tempdir().unwrap();
+        let fifo = dir.path().join("fifo");
+        let made = std::process::Command::new("mkfifo").arg(&fifo).status();
+        if !made.is_ok_and(|status| status.success()) {
+            return;
+        }
+        let source = LocalSource::new(dir.path(), &[]).unwrap();
+        let rel = RelPath::from_raw(PathEncoding::native(), b"fifo".to_vec()).unwrap();
+        assert!(source.open(&rel).is_err());
     }
 
     #[test]

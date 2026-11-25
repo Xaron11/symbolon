@@ -162,12 +162,106 @@ impl Source for LocalSource {
     }
 
     fn open(&self, path: &RelPath) -> io::Result<Box<dyn ReadSeek + Send>> {
-        Ok(Box::new(fs::File::open(self.native(path)?)?))
+        let rel = path
+            .to_native(Path::new(""))
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+        let file = beneath::open(&self.root, &rel)?;
+        if !file.metadata()?.is_file() {
+            return Err(not_followed());
+        }
+        Ok(Box::new(file))
     }
 
     fn stat(&self, path: &RelPath) -> io::Result<SourceEntry> {
         let meta = fs::symlink_metadata(self.native(path)?)?;
         Ok(entry_from_metadata(path.clone(), &meta))
+    }
+}
+
+fn not_followed() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        "no longer a regular file under the location root (symlinks are not followed)",
+    )
+}
+
+/// Opening a listed file without following a symlink in any component, so a directory or file
+/// replaced by a link after the walk cannot make hashing read outside the root (spec §6).
+#[cfg(unix)]
+mod beneath {
+    use std::fs::File;
+    use std::io;
+    use std::path::{Component, Path};
+
+    use rustix::fs::{CWD, Mode, OFlags, openat};
+
+    /// Each directory is opened relative to its parent with `O_NOFOLLOW`; the file is opened
+    /// non-blocking, so a FIFO swapped in cannot stall the hashing thread.
+    pub(super) fn open(root: &Path, rel: &Path) -> io::Result<File> {
+        let dir_flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
+        let mut dir = openat(CWD, root, dir_flags, Mode::empty())?;
+        let mut names = rel.components().peekable();
+        while let Some(component) = names.next() {
+            let Component::Normal(name) = component else {
+                return Err(super::not_followed());
+            };
+            if names.peek().is_none() {
+                let flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
+                return Ok(File::from(openat(&dir, name, flags, Mode::empty())?));
+            }
+            dir = openat(&dir, name, dir_flags | OFlags::NOFOLLOW, Mode::empty())?;
+        }
+        Err(super::not_followed())
+    }
+}
+
+/// Windows has no `openat`: each directory is opened without following reparse points and
+/// held without delete sharing, so it cannot be renamed or replaced while the file is opened.
+#[cfg(windows)]
+mod beneath {
+    use std::fs::{File, OpenOptions};
+    use std::io;
+    use std::os::windows::fs::{MetadataExt as _, OpenOptionsExt as _};
+    use std::path::{Component, Path};
+
+    const FILE_SHARE_READ: u32 = 0x1;
+    const FILE_SHARE_WRITE: u32 = 0x2;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+
+    pub(super) fn open(root: &Path, rel: &Path) -> io::Result<File> {
+        let mut held = Vec::new();
+        let mut path = root.to_path_buf();
+        let mut names = rel.components().peekable();
+        while let Some(component) = names.next() {
+            let Component::Normal(name) = component else {
+                return Err(super::not_followed());
+            };
+            path.push(name);
+            let last = names.peek().is_none();
+            let mut options = OpenOptions::new();
+            options.read(true);
+            if last {
+                options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+            } else {
+                options
+                    .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+                    .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
+            }
+            let handle = options.open(&path)?;
+            let meta = handle.metadata()?;
+            if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+                || (!last && !meta.is_dir())
+            {
+                return Err(super::not_followed());
+            }
+            if last {
+                return Ok(handle);
+            }
+            held.push(handle);
+        }
+        Err(super::not_followed())
     }
 }
 

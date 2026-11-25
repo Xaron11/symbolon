@@ -21,7 +21,7 @@ Catalogs contain the full paths and content hashes of your files. Treat them lik
 
 ## Scan and entries
 
-A **scan** walks a location and records one **entry** per file, directory or symlink: its relative path, size, modification time, kind, and hashes once known. Symlinks are recorded, never followed. Unreadable files become warnings on their entries; they never abort the scan.
+A **scan** walks a location and records one **entry** per file, directory or symlink: its relative path, size, modification time, kind, and hashes once known. Symlinks are recorded, never followed, also when a file is opened for hashing ([ADR-0015](adr/0015-opening-files-beneath-the-root.md)). Unreadable files become warnings on their entries; they never abort the scan.
 
 Rescans are incremental: entries whose size and modification time did not change keep their hashes, so only new or changed files are read.
 

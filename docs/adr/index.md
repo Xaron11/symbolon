@@ -17,6 +17,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0011](0011-cli-conventions.md)                    | Catalog location, output formats, exit codes, Ctrl-C                    |
 | [0012](0012-scan-lock.md)                          | One scan per location, enforced with an OS file lock                    |
 | [0013](0013-imported-locations.md)                 | Imported locations, export contents, replacing data on import           |
+| [0015](0015-opening-files-beneath-the-root.md)     | Files are opened component by component without following links         |
 
 ## Writing a new ADR
 

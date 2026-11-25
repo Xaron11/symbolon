@@ -27,6 +27,7 @@
   - [0011 CLI conventions](adr/0011-cli-conventions.md)
   - [0012 Scan lock](adr/0012-scan-lock.md)
   - [0013 Imported locations](adr/0013-imported-locations.md)
+  - [0015 Opening files beneath the root](adr/0015-opening-files-beneath-the-root.md)
 
 # Development
 
