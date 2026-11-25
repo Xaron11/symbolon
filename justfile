@@ -95,7 +95,7 @@ mutants *args:
 bench:
     cargo bench --workspace
 
-# PoC spike (M0): push the agent, hash a directory on the device, then remove the binary.
+# Push the agent, list a directory on the device through it (NDJSON), then remove the binary.
 android-probe dir="/sdcard/DCIM" serial="": android-scanner
     #!/usr/bin/env bash
     set -euo pipefail
@@ -109,7 +109,7 @@ android-probe dir="/sdcard/DCIM" serial="": android-scanner
     adb "${adb_args[@]}" push target/{{ agent_target }}/release-agent/symbolon-agent "$remote" >&2
     adb "${adb_args[@]}" shell chmod 755 "$remote"
     # adb joins its arguments into one device shell command line, so quote the directory.
-    adb "${adb_args[@]}" exec-out "$remote" "'${dir//\'/\'\\\'\'}'"
+    adb "${adb_args[@]}" exec-out "$remote" walk "'${dir//\'/\'\\\'\'}'"
 
 # --- documentation -----------------------------------------------------------
 

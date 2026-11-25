@@ -66,7 +66,7 @@ impl Fingerprint {
     pub fn filesystem_parts(&self) -> Option<(&str, Vec<u8>)> {
         let rest = self.0.strip_prefix("fs:")?;
         let (uuid, path) = rest.split_once(':')?;
-        Some((uuid, unescape(path)?))
+        Some((uuid, pathkey::raw_from_escaped(path)?))
     }
 }
 
@@ -101,21 +101,6 @@ impl FromStr for Fingerprint {
         }
         Ok(fingerprint)
     }
-}
-
-/// Reverses the `%XX` escapes of [`Fingerprint::filesystem`].
-fn unescape(text: &str) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity(text.len());
-    let mut bytes = text.bytes();
-    while let Some(byte) = bytes.next() {
-        if byte == b'%' {
-            let hex = [bytes.next()?, bytes.next()?];
-            out.push(u8::from_str_radix(std::str::from_utf8(&hex).ok()?, 16).ok()?);
-        } else {
-            out.push(byte);
-        }
-    }
-    Some(out)
 }
 
 /// One mounted filesystem.

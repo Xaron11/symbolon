@@ -412,6 +412,22 @@ fn push_escaped_text(key: &mut String, text: &str) {
     }
 }
 
+/// The bytes of text escaped like a POSIX path key (`%XX` for `%` and non-UTF-8 bytes);
+/// `None` for a malformed escape.
+pub(crate) fn raw_from_escaped(text: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(text.len());
+    let mut bytes = text.bytes();
+    while let Some(byte) = bytes.next() {
+        if byte == b'%' {
+            let hex = [bytes.next()?, bytes.next()?];
+            out.push(u8::from_str_radix(std::str::from_utf8(&hex).ok()?, 16).ok()?);
+        } else {
+            out.push(byte);
+        }
+    }
+    Some(out)
+}
+
 pub(crate) fn push_escaped_byte(key: &mut String, byte: u8) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     key.push('%');

@@ -14,8 +14,10 @@ default = ["local", "identity", "android-adb"]
 local = ["dep:ignore", "dep:rustix"]
 # Detecting device fingerprints of local roots (ADR-0016).
 identity = []
+# The host/agent line protocol, shared by the Android agent and the ADB source (ADR-0017).
+agent-protocol = ["dep:serde", "dep:serde_json"]
 # Reaching Android phones through the system adb (ADR-0017).
-android-adb = []
+android-adb = ["agent-protocol"]
 
 [dependencies]
 blake3.workspace = true
@@ -23,6 +25,8 @@ crossbeam-channel.workspace = true
 ignore = { workspace = true, optional = true }
 rayon.workspace = true
 rusqlite.workspace = true
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true

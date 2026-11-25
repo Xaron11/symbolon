@@ -1,262 +1,154 @@
-//! `PoC`: M0 spike probe for running a static binary on Android over `adb exec-out`.
-//! It reports the execution environment, then walks and hashes a tree, streaming NDJSON.
-//! Follow-up (M5): replace with the real scanner built on `symbolon-core`.
+//! `symbolon-agent`: the scanner pushed to an Android phone and run through `adb exec-out`
+//! (ADR-0003, ADR-0017). It walks and hashes on the device with `symbolon-core` and writes
+//! [`Line`]s to stdout, so only the index travels to the host.
 
 use std::fs;
-use std::io::{self, BufWriter, Write};
-use std::num::NonZero;
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Instant, UNIX_EPOCH};
+use std::io::{self, BufWriter, Write as _};
+use std::num::NonZeroUsize;
+use std::path::PathBuf;
+use std::process::ExitCode;
 
-use anyhow::Context;
-use clap::Parser;
-use rayon::prelude::*;
-use serde::Serialize;
+use anyhow::Context as _;
+use clap::{Parser, Subcommand};
+use symbolon_core::agent::{Line, Request};
+use symbolon_core::hash::HashAlgo;
+use symbolon_core::scan::hash_requests;
+use symbolon_core::source::{LocalSource, Source as _, WalkItem};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Debug, Parser)]
-#[command(name = "symbolon-agent", version)]
+#[command(name = "symbolon-agent", version, about)]
 struct Args {
-    /// Directory to walk and hash.
-    root: PathBuf,
-    /// Worker threads for hashing (default: available parallelism).
-    #[arg(long)]
-    threads: Option<usize>,
-    /// Emit one event per hashed file instead of only the summary.
-    #[arg(long)]
-    emit_files: bool,
-    /// Only walk, do not read file contents.
-    #[arg(long)]
-    walk_only: bool,
+    #[command(subcommand)]
+    command: Command,
 }
 
-#[derive(Serialize)]
-#[serde(tag = "event", rename_all = "snake_case")]
-enum Event<'a> {
-    Env {
-        version: &'a str,
-        arch: &'a str,
-        os: &'a str,
-        parallelism: usize,
-        threads: usize,
-        exe: Option<String>,
-        uid_line: Option<String>,
-        selinux_context: Option<String>,
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// List every entry under ROOT without reading contents
+    Walk {
+        /// Directory to list
+        root: PathBuf,
+        /// Skip paths matching a pattern in .gitignore syntax; repeatable
+        #[arg(long = "ignore", value_name = "PATTERN")]
+        ignore: Vec<String>,
     },
-    Walked {
-        files: u64,
-        dirs: u64,
-        symlinks: u64,
-        bytes: u64,
-        elapsed_ms: u128,
-    },
-    File {
-        path: String,
-        size: u64,
-        mtime_ns: Option<i128>,
-        blake3: String,
-    },
-    Warning {
-        path: String,
-        error: String,
-    },
-    Finished {
-        files: u64,
-        bytes: u64,
-        warnings: u64,
-        elapsed_ms: u128,
-        mib_per_s: f64,
+    /// Hash the files listed in a request file, one JSON request per line
+    Hash {
+        /// Directory the requested paths are relative to
+        root: PathBuf,
+        /// Hash algorithm
+        #[arg(long)]
+        algo: HashAlgo,
+        /// Hashing threads; on phone storage more than two are slower (ADR-0003)
+        #[arg(long, default_value = "2")]
+        threads: NonZeroUsize,
+        /// The request file
+        #[arg(long)]
+        requests: PathBuf,
     },
 }
 
-struct Emitter {
-    out: Mutex<BufWriter<io::Stdout>>,
-    warnings: AtomicU64,
-}
+/// Lines go to stdout, buffered; a broken pipe means the host is gone and ends the run.
+struct Out(BufWriter<io::Stdout>);
 
-impl Emitter {
-    fn emit(&self, event: &Event<'_>) {
-        if let Ok(mut out) = self.out.lock() {
-            // A broken pipe means the host went away; nothing useful to do with the error.
-            serde_json::to_writer(&mut *out, event)
-                .map_err(io::Error::from)
-                .and_then(|()| out.write_all(b"\n"))
-                .ok();
-        }
-    }
-
-    fn warn(&self, path: &Path, error: &io::Error) {
-        self.warnings.fetch_add(1, Ordering::Relaxed);
-        self.emit(&Event::Warning {
-            path: path.to_string_lossy().into_owned(),
-            error: error.to_string(),
-        });
+impl Out {
+    fn line(&mut self, line: &Line) -> io::Result<()> {
+        serde_json::to_writer(&mut self.0, line)?;
+        self.0.write_all(b"\n")
     }
 }
 
-struct FileEntry {
-    path: PathBuf,
-    size: u64,
-    mtime_ns: Option<i128>,
-}
-
-#[derive(Default)]
-struct Walk {
-    files: Vec<FileEntry>,
-    dirs: u64,
-    symlinks: u64,
-}
-
-fn main() -> anyhow::Result<()> {
+fn main() -> ExitCode {
     let args = Args::parse();
-    let parallelism = std::thread::available_parallelism().map_or(1, NonZero::get);
-    let threads = args.threads.unwrap_or(parallelism);
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
-        .build_global()
-        .context("building thread pool")?;
-
-    let emitter = Emitter {
-        out: Mutex::new(BufWriter::new(io::stdout())),
-        warnings: AtomicU64::new(0),
+    let mut out = Out(BufWriter::new(io::stdout()));
+    let result = out
+        .line(&Line::hello())
+        .map_err(anyhow::Error::from)
+        .and_then(|()| run(&args.command, &mut out));
+    let end = match &result {
+        Ok(count) => Line::Done { count: *count },
+        Err(error) => Line::Error {
+            message: format!("{error:#}"),
+        },
     };
-    emitter.emit(&env_event(parallelism, threads));
-
-    let start = Instant::now();
-    let walk = walk(&args.root, &emitter);
-    emitter.emit(&Event::Walked {
-        files: walk.files.len() as u64,
-        dirs: walk.dirs,
-        symlinks: walk.symlinks,
-        bytes: walk.files.iter().map(|f| f.size).sum(),
-        elapsed_ms: start.elapsed().as_millis(),
-    });
-
-    let (files, bytes) = if args.walk_only {
-        (0, 0)
+    let written = out.line(&end).and_then(|()| out.0.flush());
+    if result.is_ok() && written.is_ok() {
+        ExitCode::SUCCESS
     } else {
-        hash_all(&walk.files, args.emit_files, &emitter)
-    };
-
-    let elapsed = start.elapsed();
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "throughput is informational; f64 precision is plenty"
-    )]
-    let mib = bytes as f64 / (1024.0 * 1024.0);
-    emitter.emit(&Event::Finished {
-        files,
-        bytes,
-        warnings: emitter.warnings.load(Ordering::Relaxed),
-        elapsed_ms: elapsed.as_millis(),
-        mib_per_s: mib / elapsed.as_secs_f64().max(1e-9),
-    });
-    emitter
-        .out
-        .into_inner()
-        .map_err(|_| anyhow::anyhow!("output lock poisoned"))?
-        .flush()
-        .context("flushing output")?;
-    Ok(())
-}
-
-fn env_event(parallelism: usize, threads: usize) -> Event<'static> {
-    Event::Env {
-        version: env!("CARGO_PKG_VERSION"),
-        arch: std::env::consts::ARCH,
-        os: std::env::consts::OS,
-        parallelism,
-        threads,
-        exe: std::env::current_exe()
-            .ok()
-            .map(|p| p.to_string_lossy().into_owned()),
-        uid_line: fs::read_to_string("/proc/self/status")
-            .ok()
-            .and_then(|s| s.lines().find(|l| l.starts_with("Uid:")).map(str::to_owned)),
-        selinux_context: fs::read_to_string("/proc/self/attr/current")
-            .ok()
-            .map(|s| s.trim_end_matches(['\0', '\n']).to_owned()),
+        ExitCode::FAILURE
     }
 }
 
-fn walk(root: &Path, emitter: &Emitter) -> Walk {
-    let mut walk = Walk::default();
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        walk.dirs += 1;
-        let read = match fs::read_dir(&dir) {
-            Ok(read) => read,
-            Err(e) => {
-                emitter.warn(&dir, &e);
-                continue;
+fn run(command: &Command, out: &mut Out) -> anyhow::Result<u64> {
+    match command {
+        Command::Walk { root, ignore } => walk(root, ignore, out),
+        Command::Hash {
+            root,
+            algo,
+            threads,
+            requests,
+        } => hash(root, *algo, *threads, requests, out),
+    }
+}
+
+fn walk(root: &PathBuf, ignore: &[String], out: &mut Out) -> anyhow::Result<u64> {
+    let source = LocalSource::new(root, ignore)?;
+    let mut count = 0;
+    let mut written = Ok(());
+    source.walk(&mut |item| {
+        let line = match &item {
+            WalkItem::Entry(entry) => {
+                count += 1;
+                Line::entry(entry)
             }
+            WalkItem::Warning(warning) => Line::warning(None, warning),
         };
-        for entry in read {
-            let path = match entry {
-                Ok(entry) => entry.path(),
-                Err(e) => {
-                    emitter.warn(&dir, &e);
-                    continue;
-                }
-            };
-            // symlink_metadata: never follow links, so cycles are impossible.
-            let meta = match fs::symlink_metadata(&path) {
-                Ok(meta) => meta,
-                Err(e) => {
-                    emitter.warn(&path, &e);
-                    continue;
-                }
-            };
-            let kind = meta.file_type();
-            if kind.is_symlink() {
-                walk.symlinks += 1;
-            } else if kind.is_dir() {
-                stack.push(path);
-            } else if kind.is_file() {
-                let mtime_ns = meta
-                    .modified()
-                    .ok()
-                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                    .map(|d| d.as_nanos().cast_signed());
-                walk.files.push(FileEntry {
-                    path,
-                    size: meta.len(),
-                    mtime_ns,
-                });
-            }
+        written = out.line(&line);
+        if written.is_ok() {
+            std::ops::ControlFlow::Continue(())
+        } else {
+            std::ops::ControlFlow::Break(())
         }
-    }
-    walk
+    })?;
+    written?;
+    Ok(count)
 }
 
-fn hash_all(files: &[FileEntry], emit_files: bool, emitter: &Emitter) -> (u64, u64) {
-    let hashed_files = AtomicU64::new(0);
-    let hashed_bytes = AtomicU64::new(0);
-    files.par_iter().for_each(|f| match hash_file(&f.path) {
-        Ok((hash, len)) => {
-            hashed_files.fetch_add(1, Ordering::Relaxed);
-            hashed_bytes.fetch_add(len, Ordering::Relaxed);
-            if emit_files {
-                emitter.emit(&Event::File {
-                    path: f.path.to_string_lossy().into_owned(),
-                    size: f.size,
-                    mtime_ns: f.mtime_ns,
-                    blake3: hash.to_hex().to_string(),
-                });
+fn hash(
+    root: &PathBuf,
+    algo: HashAlgo,
+    threads: NonZeroUsize,
+    requests: &PathBuf,
+    out: &mut Out,
+) -> anyhow::Result<u64> {
+    let text = fs::read_to_string(requests)
+        .with_context(|| format!("cannot read the request file {}", requests.display()))?;
+    let requests = text
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            serde_json::from_str::<Request>(line)
+                .ok()
+                .and_then(|request| request.to_hash_request())
+                .with_context(|| format!("invalid request {line:?}"))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let source = LocalSource::new(root, &[])?;
+    let mut count = 0;
+    let mut written = Ok(());
+    hash_requests(&source, algo, &requests, threads, |index, reply| {
+        count += 1;
+        if written.is_ok() {
+            written = out.line(&Line::reply(index, &reply));
+            if written.is_ok() {
+                // Each digest can take a while; let the host see progress.
+                written = out.0.flush();
             }
         }
-        Err(e) => emitter.warn(&f.path, &e),
-    });
-    (hashed_files.into_inner(), hashed_bytes.into_inner())
-}
-
-fn hash_file(path: &Path) -> io::Result<(blake3::Hash, u64)> {
-    let mut hasher = blake3::Hasher::new();
-    let file = fs::File::open(path)?;
-    hasher.update_reader(file)?;
-    Ok((hasher.finalize(), hasher.count()))
+    })?;
+    written?;
+    Ok(count)
 }

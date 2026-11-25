@@ -119,6 +119,23 @@ impl WarningKind {
     }
 }
 
+impl FromStr for WarningKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        [
+            Self::Permission,
+            Self::Vanished,
+            Self::Changed,
+            Self::Cycle,
+            Self::Io,
+        ]
+        .into_iter()
+        .find(|kind| kind.name() == s)
+        .ok_or_else(|| format!("unknown warning kind {s:?}"))
+    }
+}
+
 impl fmt::Display for WarningKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
