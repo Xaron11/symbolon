@@ -41,6 +41,8 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
+#[cfg(feature = "agent-protocol")]
+pub mod agent;
 pub mod catalog;
 pub mod compare;
 pub mod hash;

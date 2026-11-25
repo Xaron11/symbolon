@@ -10,12 +10,16 @@ publish.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-blake3.workspace = true
 clap.workspace = true
 mimalloc.workspace = true
-rayon.workspace = true
-serde.workspace = true
 serde_json.workspace = true
+symbolon-core = { workspace = true, default-features = false, features = [
+  "local",
+  "agent-protocol",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true
