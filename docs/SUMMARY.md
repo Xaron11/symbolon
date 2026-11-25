@@ -28,6 +28,7 @@
   - [0012 Scan lock](adr/0012-scan-lock.md)
   - [0013 Imported locations](adr/0013-imported-locations.md)
   - [0014 Imports and local locations](adr/0014-imports-and-local-locations.md)
+  - [0015 Opening files beneath the root](adr/0015-opening-files-beneath-the-root.md)
 
 # Development
 

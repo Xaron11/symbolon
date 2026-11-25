@@ -18,6 +18,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0012](0012-scan-lock.md)                          | One scan per location, enforced with an OS file lock                    |
 | [0013](0013-imported-locations.md)                 | Imported locations, export contents, replacing data on import           |
 | [0014](0014-imports-and-local-locations.md)        | Imports never replace a scanned local location without a choice         |
+| [0015](0015-opening-files-beneath-the-root.md)     | Files are opened component by component without following links         |
 
 ## Writing a new ADR
 
