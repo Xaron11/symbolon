@@ -21,6 +21,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0015](0015-opening-files-beneath-the-root.md)     | Files are opened component by component without following links                    |
 | [0016](0016-device-fingerprints.md)                | Filesystem fingerprints, finding moved locations, confirmation rules               |
 | [0017](0017-android-over-adb.md)                   | Android transport, agent protocol, hashing on the phone, fallback, phone locations |
+| [0018](0018-phone-hashing-threads.md)              | Four hashing threads on phones                                                     |
 
 ## Writing a new ADR
 

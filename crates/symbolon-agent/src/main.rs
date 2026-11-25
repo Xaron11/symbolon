@@ -42,8 +42,8 @@ enum Command {
         /// Hash algorithm
         #[arg(long)]
         algo: HashAlgo,
-        /// Hashing threads; on phone storage more than two are slower (ADR-0003)
-        #[arg(long, default_value = "2")]
+        /// Hashing threads; four suit both slow and fast phone storage (ADR-0018)
+        #[arg(long, default_value = "4")]
         threads: NonZeroUsize,
         /// The request file
         #[arg(long)]

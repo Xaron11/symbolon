@@ -28,7 +28,8 @@ use crate::transport::android::{AndroidTransport, shell_quote};
 pub struct AdbOptions {
     /// Directory on the phone the agent and request files are pushed to.
     pub remote_dir: String,
-    /// Hashing threads on the phone; more than two were slower on phone storage (ADR-0003).
+    /// Hashing threads on the phone. Four is near the best on both slow and fast phone storage
+    /// (ADR-0018).
     pub threads: NonZeroUsize,
 }
 
@@ -36,7 +37,7 @@ impl Default for AdbOptions {
     fn default() -> Self {
         Self {
             remote_dir: "/data/local/tmp".to_owned(),
-            threads: NonZeroUsize::new(2).unwrap_or(NonZeroUsize::MIN),
+            threads: NonZeroUsize::new(4).unwrap_or(NonZeroUsize::MIN),
         }
     }
 }
