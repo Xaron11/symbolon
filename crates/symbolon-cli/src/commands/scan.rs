@@ -10,9 +10,9 @@ use symbolon_core::scan::{
     ScanEvent, ScanId, ScanOptions, ScanPhase, ScanProgress, ScanStatus, ScanSummary, Scanner,
 };
 
-use super::open_catalog;
+use super::{devices, open_catalog};
 use crate::cli::{Global, ScanArgs};
-use crate::exit::Exit;
+use crate::exit::{Exit, Refused};
 use crate::interrupt;
 use crate::output::{self, Record};
 use crate::progress::Progress;
@@ -33,6 +33,24 @@ pub(super) fn run(global: &Global, args: &ScanArgs) -> anyhow::Result<Exit> {
         }
         args.labels.clone()
     };
+    // Devices are followed or confirmed for every location before the first scan starts.
+    let mut ready = Vec::new();
+    let mut refusals = Vec::new();
+    for label in labels {
+        match devices::prepare(&catalog, &label, args.yes, args.all, global.quiet)? {
+            devices::Ready::Yes => ready.push(label),
+            devices::Ready::Skip(reason) if args.all => {
+                if !global.quiet {
+                    eprintln!("{reason}");
+                }
+            }
+            devices::Ready::Skip(reason) => refusals.push(reason),
+        }
+    }
+    if !refusals.is_empty() {
+        return Err(Refused(refusals.join("\n")).into());
+    }
+    let labels = ready;
     interrupt::install()?;
     let mut progress = Progress::new(global.quiet);
     let mut records = Vec::new();

@@ -48,9 +48,10 @@ All of this sits behind a `Volumes` trait that lists mounts. Tests and other pla
 - **Comparisons.** A comparison hashes on demand only in a location that is `Here`. Any other location is reported as unreachable, with the reason.
 - **The CLI.**
   - `scan` and `diff` follow an unambiguous move: they relocate and print a notice.
-  - For `Ambiguous`, they ask on a terminal which candidate to use.
-  - For `OtherDevice`, they ask whether to accept the device now at the root. Without a terminal, `--yes` accepts the other device.
-  - Otherwise they stop with exit code 4 and name `symbolon location set <label> --root <path>`.
+  - For `Ambiguous`, `scan` asks on a terminal which candidate to use.
+  - For `OtherDevice`, `scan` asks whether to accept the device now at the root. Without a terminal, `--yes` accepts the other device.
+  - Otherwise `scan` stops with exit code 4 and names `symbolon location set <label> --root <path>`. `scan --all` skips such locations, and missing ones, instead.
+  - `diff` asks nothing. It reads the catalog, and a location whose device is not here is only left unhashed, as the comparison rule above says.
 - **`location set`.** It changes a location's label, root or hash policy.
 
 ## Consequences

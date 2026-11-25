@@ -9,6 +9,7 @@ mod exit;
 mod interrupt;
 mod output;
 mod progress;
+mod prompt;
 
 use std::process::ExitCode;
 

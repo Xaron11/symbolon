@@ -213,6 +213,10 @@ fn parse_duration(text: &str) -> Result<Duration, String> {
 }
 
 #[derive(Debug, Args)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent command-line flags"
+)]
 pub(crate) struct ScanArgs {
     /// Locations to scan, one after another
     #[arg(required_unless_present = "all", conflicts_with = "all")]
@@ -226,6 +230,10 @@ pub(crate) struct ScanArgs {
     /// List every warning instead of counting them
     #[arg(long, short)]
     pub(crate) verbose: bool,
+    /// When another device (or an empty mount point) is at a location's root, scan what is
+    /// there as the location without asking
+    #[arg(long, short)]
+    pub(crate) yes: bool,
 }
 
 #[derive(Debug, Subcommand)]

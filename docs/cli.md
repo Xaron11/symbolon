@@ -60,6 +60,13 @@ A progress line shows on the terminal while it runs. Rescans are incremental: fi
 
 `symbolon location list` shows every location with its last scan.
 
+Before reading a location, `scan` checks that its device is where it was recorded:
+
+- **Moved device.** When the device is mounted somewhere else now, for example a pendrive plugged into another port or computer, `scan` follows it to the new place and says so: `photos: its device is now at /run/media/me/USB (was /media/usb); following it`. `diff` does the same.
+- **Several matches.** When the device matches several mounted directories, `scan` asks which one to use. Without a terminal it stops with exit code 4 and lists them; pick one with `symbolon location set photos --root <path>`.
+- **Another device at the root.** When another device, or an empty mount point, is at the location's root and its own device is not plugged in, scanning would record every file as gone. `scan` asks first. Without a terminal it stops with exit code 4, unless you pass `--yes` to scan what is there as the location.
+- **`scan --all`.** It skips locations whose device is not connected and scans the rest.
+
 ### Compare
 
 ```console
@@ -148,13 +155,13 @@ $ symbolon dupes laptop --json | jq '.totals[].redundant_bytes'
 
 ## Exit codes
 
-| Code | Meaning                                                                                  |
-| ---- | ---------------------------------------------------------------------------------------- |
-| 0    | Success. For `diff`: everything compared is identical.                                   |
-| 1    | `diff` found differences (anything not identical, including unverified files).           |
-| 2    | Invalid command line.                                                                    |
-| 3    | Error: unknown label, unreadable catalog, mixed hash algorithms, I/O failure.            |
-| 4    | Needs a choice: an import conflict, a location already being scanned, a missing `--yes`. |
-| 130  | Stopped with Ctrl-C after cleaning up.                                                   |
+| Code | Meaning                                                                                                                          |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | Success. For `diff`: everything compared is identical.                                                                           |
+| 1    | `diff` found differences (anything not identical, including unverified files).                                                   |
+| 2    | Invalid command line.                                                                                                            |
+| 3    | Error: unknown label, unreadable catalog, mixed hash algorithms, I/O failure.                                                    |
+| 4    | Needs a choice: an import conflict, a location already being scanned, a missing `--yes`, a device that is ambiguous or replaced. |
+| 130  | Stopped with Ctrl-C after cleaning up.                                                                                           |
 
 So `symbolon diff laptop backup --quiet --summary >/dev/null && echo "backup is current"` works as a check in scripts.
