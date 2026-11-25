@@ -74,6 +74,11 @@ fn choices(conflict: &ImportConflict) -> String {
             "a location labelled {label:?} already exists for another device; import the file \
              as a new location (--as <LABEL>) or replace that location's data (--replace)"
         ),
+        ImportConflict::LocalData { label } => format!(
+            "location {label:?} is scanned on this computer; import the file as a new location \
+             (--as <LABEL>) or replace that location's data with the file's, which makes it an \
+             imported location that is no longer scanned here (--replace)"
+        ),
         ImportConflict::SameDevice { existing, .. } => format!(
             "the file's device is already saved as {existing:?}; update that location \
              (--into {existing}) or import the file as a new location (--as <LABEL>)"
