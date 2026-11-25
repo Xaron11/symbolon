@@ -124,7 +124,12 @@ fn report_warnings(
             .path
             .as_ref()
             .map_or_else(|| label.to_owned(), |p| format!("{label}:{}", p.key()));
-        eprintln!("warning: {path}: {} ({})", warning.message, warning.kind);
+        eprintln!(
+            "warning: {}: {} ({})",
+            output::printable(&path),
+            output::printable(&warning.message),
+            warning.kind
+        );
     })
 }
 

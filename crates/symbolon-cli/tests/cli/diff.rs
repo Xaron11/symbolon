@@ -215,3 +215,27 @@ fn bad_sides_fail_clearly() {
     assert_eq!(env.run(&["diff", "a", "b", "--only", "dupes"]).code, 2);
     assert_eq!(env.run(&["diff", "a", "b", "--fast", "soon"]).code, 2);
 }
+
+/// File names come from whoever wrote the scanned tree; tables must not pass their control
+/// characters to the terminal (#83). Windows does not allow them in names.
+#[cfg(unix)]
+#[test]
+fn control_characters_in_names_are_escaped_in_tables() {
+    let evil = "evil\u{1b}]0;title\u{7}\u{1b}[2K";
+    let env = Env::new();
+    let a = env.tree("a", &[(evil, "x")]);
+    let b = env.tree("b", &[]);
+    env.ok(&["location", "add", "a", a.to_str().unwrap()]);
+    env.ok(&["location", "add", "b", b.to_str().unwrap()]);
+    env.ok(&["scan", "a", "b", "--json"]);
+
+    let table = env.run(&["diff", "a", "b"]);
+    assert!(!table.stdout.contains('\u{1b}'), "{:?}", table.stdout);
+    assert!(
+        table.stdout.contains("evil%1B]0;title%07%1B[2K"),
+        "{:?}",
+        table.stdout
+    );
+    let json = env.run(&["diff", "a", "b", "--json"]);
+    assert!(!json.stdout.contains('\u{1b}'), "{:?}", json.stdout);
+}
