@@ -152,7 +152,9 @@ impl RelPath {
     ///
     /// # Errors
     ///
-    /// [`PathError::Malformed`] if the bytes are not a valid relative path in `encoding`.
+    /// [`PathError::Malformed`] if the bytes are not a valid relative path in `encoding`: an
+    /// empty, `.` or `..` component, a NUL byte, or for [`PathEncoding::Wtf8`] invalid WTF-8,
+    /// `\` or `:`.
     pub fn from_raw(encoding: PathEncoding, bytes: Vec<u8>) -> Result<Self, PathError> {
         let malformed = PathError::Malformed { encoding };
         if !bytes.is_empty()
@@ -162,7 +164,11 @@ impl RelPath {
         {
             return Err(malformed);
         }
-        if encoding == PathEncoding::Wtf8 && wtf8_units(&bytes).is_none() {
+        // Windows names never contain `\` or `:`; in a component they are a separator, a drive
+        // or a stream, which would leave the root when joined.
+        if encoding == PathEncoding::Wtf8
+            && (wtf8_units(&bytes).is_none() || bytes.iter().any(|&b| b == b'\\' || b == b':'))
+        {
             return Err(malformed);
         }
         Ok(Self { encoding, bytes })
@@ -639,6 +645,32 @@ mod tests {
     }
 
     #[test]
+    fn wtf8_paths_reject_windows_separators_and_prefixes() {
+        // Windows names never hold `\` or `:`; inside a component they would let a stored path
+        // leave the root when joined (#84).
+        for bad in [
+            &br"..\..\x"[..],
+            br"C:\x",
+            br"C:x",
+            br"\\host\share\x",
+            br"\x",
+            br"a/b\c",
+            br"a/stream:x",
+        ] {
+            assert!(
+                RelPath::from_raw(PathEncoding::Wtf8, bad.to_vec()).is_err(),
+                "{bad:?}"
+            );
+        }
+        for good in [&br"a\b"[..], br"a:b"] {
+            assert!(
+                RelPath::from_raw(PathEncoding::Posix, good.to_vec()).is_ok(),
+                "{good:?} is a valid POSIX name"
+            );
+        }
+    }
+
+    #[test]
     fn join_builds_children_and_rejects_bad_names() {
         let root = RelPath::root(PathEncoding::native());
         let child = root
@@ -802,7 +834,7 @@ mod tests {
         }
 
         #[test]
-        fn valid_unicode_keys_match_across_encodings(name in "[^/\u{0}]{1,16}") {
+        fn valid_unicode_keys_match_across_encodings(name in "[^/\u{0}\\\\:]{1,16}") {
             prop_assume!(name != "." && name != "..");
             let p = RelPath::from_raw(PathEncoding::Posix, name.as_bytes().to_vec()).unwrap();
             let w = wtf8(&[&name.encode_utf16().collect::<Vec<_>>()]);

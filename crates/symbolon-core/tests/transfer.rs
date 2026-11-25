@@ -431,3 +431,61 @@ fn a_location_being_scanned_is_not_replaced() {
         Err(TransferError::Busy(_))
     ));
 }
+
+/// An export is another catalog's claim; its rows are checked before anything is written
+/// (#84).
+#[test]
+fn invalid_entries_are_refused_before_anything_is_written() {
+    let laptop = Machine::new();
+    laptop.location("photos", FILES);
+    let original = laptop.export("photos");
+    let forged = |name: &str, sql: &str| -> PathBuf {
+        let path = laptop.dir.path().join(name);
+        fs::copy(&original, &path).unwrap();
+        Connection::open(&path).unwrap().execute_batch(sql).unwrap();
+        path
+    };
+    let files = [
+        forged(
+            "key.symbolon",
+            "UPDATE entries SET path_key = 'elsewhere.jpg' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "parent.symbolon",
+            "UPDATE entries SET parent_key = 'dir' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "digest.symbolon",
+            "UPDATE entries SET hash_full = x'00' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "path.symbolon",
+            "UPDATE entries SET rel_path_raw = CAST('../x' AS BLOB), path_key = '../x', \
+             parent_key = '..' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "windows.symbolon",
+            "UPDATE locations SET path_encoding = 'wtf8'; \
+             UPDATE meta SET value = 'wtf8' WHERE key = 'path_encoding'; \
+             UPDATE entries SET rel_path_raw = CAST('C:\\x' AS BLOB), path_key = 'C:\\x', \
+             parent_key = '' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "meta.symbolon",
+            "UPDATE meta SET value = 'sha256' WHERE key = 'hash_algo'",
+        ),
+    ];
+    let desktop = Machine::new();
+    for file in &files {
+        let result = desktop.catalog.import(file, &ImportOptions::default());
+        assert!(
+            matches!(
+                result,
+                Err(TransferError::InvalidEntry { .. } | TransferError::NotAnExport(_))
+            ),
+            "{}: {result:?}",
+            file.display()
+        );
+        assert_eq!(desktop.catalog.locations().unwrap(), Vec::new());
+    }
+}
