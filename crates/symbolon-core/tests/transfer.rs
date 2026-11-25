@@ -268,6 +268,65 @@ fn a_device_saved_under_another_label_needs_a_choice() {
     assert_eq!(separate.action, ImportAction::Added);
 }
 
+/// Neither side has a fingerprint before M4, so "both absent" says nothing about whether a
+/// scanned local location and the file are the same device (#81).
+#[test]
+fn a_scanned_local_location_is_only_replaced_by_choice() {
+    let here = Machine::new();
+    here.location("photos", &[("a.jpg", "aaaa"), ("b.jpg", "bbbb")]);
+    let before = here.entries("photos");
+    std::thread::sleep(std::time::Duration::from_millis(5));
+
+    // Another computer's newer scan under the same label claims both files are equal.
+    let other = Machine::new();
+    other.location("photos", &[("a.jpg", "aaaa"), ("b.jpg", "aaaa")]);
+    let file = other.export("photos");
+
+    assert_eq!(
+        conflict(here.catalog.import(&file, &ImportOptions::default())),
+        ImportConflict::LocalData {
+            label: "photos".into()
+        }
+    );
+    assert_eq!(here.entries("photos"), before, "untouched");
+
+    // Replacing on purpose turns it into an imported location, so a later scan cannot keep
+    // the file's digests for the local files.
+    let replaced = here
+        .catalog
+        .import(&file, &ImportOptions::default().replace(true))
+        .unwrap();
+    assert_eq!(replaced.action, ImportAction::Replaced);
+    assert_eq!(here.entries("photos"), other.entries("photos"));
+    assert!(matches!(
+        here.catalog.location("photos").unwrap().root,
+        LocationRoot::Imported { .. }
+    ));
+    assert!(matches!(
+        Scanner::start(&here.catalog, "photos", ScanOptions::default()),
+        Err(ScanError::NotScannable(_))
+    ));
+}
+
+#[test]
+fn merging_into_a_local_location_makes_it_imported() {
+    let here = Machine::new();
+    here.location("usb", &[("old.txt", "x")]);
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let other = Machine::new();
+    other.location("photos", FILES);
+    let file = other.export("photos");
+
+    here.catalog
+        .import(&file, &ImportOptions::default().merge_into("usb"))
+        .unwrap();
+    assert_eq!(here.entries("usb"), other.entries("photos"));
+    assert!(matches!(
+        Scanner::start(&here.catalog, "usb", ScanOptions::default()),
+        Err(ScanError::NotScannable(_))
+    ));
+}
+
 #[test]
 fn other_files_are_refused() {
     let machine = Machine::new();
@@ -385,7 +444,9 @@ fn paths_of_another_encoding_are_not_merged() {
     let desktop = Machine::new();
     desktop.location("photos", FILES);
     assert!(matches!(
-        desktop.catalog.import(&file, &ImportOptions::default()),
+        desktop
+            .catalog
+            .import(&file, &ImportOptions::default().replace(true)),
         Err(TransferError::EncodingMismatch { .. })
     ));
 }
@@ -427,7 +488,84 @@ fn a_location_being_scanned_is_not_replaced() {
     assert!(matches!(
         desktop
             .catalog
-            .import(&file, &ImportOptions::default().force(true)),
+            .import(&file, &ImportOptions::default().replace(true)),
         Err(TransferError::Busy(_))
     ));
+}
+
+/// An export is another catalog's claim; its rows are checked before anything is written
+/// (#84).
+#[test]
+fn invalid_entries_are_refused_before_anything_is_written() {
+    let laptop = Machine::new();
+    laptop.location("photos", FILES);
+    let original = laptop.export("photos");
+    let forged = |name: &str, sql: &str| -> PathBuf {
+        let path = laptop.dir.path().join(name);
+        fs::copy(&original, &path).unwrap();
+        Connection::open(&path).unwrap().execute_batch(sql).unwrap();
+        path
+    };
+    let files = [
+        forged(
+            "key.symbolon",
+            "UPDATE entries SET path_key = 'elsewhere.jpg' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "parent.symbolon",
+            "UPDATE entries SET parent_key = 'dir' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "digest.symbolon",
+            "UPDATE entries SET hash_full = x'00' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "path.symbolon",
+            "UPDATE entries SET rel_path_raw = CAST('../x' AS BLOB), path_key = '../x', \
+             parent_key = '..' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "windows.symbolon",
+            "UPDATE locations SET path_encoding = 'wtf8'; \
+             UPDATE meta SET value = 'wtf8' WHERE key = 'path_encoding'; \
+             UPDATE entries SET rel_path_raw = CAST('C:\\x' AS BLOB), path_key = 'C:\\x', \
+             parent_key = '' WHERE path_key = 'a.jpg'",
+        ),
+        forged(
+            "meta.symbolon",
+            "UPDATE meta SET value = 'sha256' WHERE key = 'hash_algo'",
+        ),
+    ];
+    let desktop = Machine::new();
+    for file in &files {
+        let result = desktop.catalog.import(file, &ImportOptions::default());
+        assert!(
+            matches!(
+                result,
+                Err(TransferError::InvalidEntry { .. } | TransferError::NotAnExport(_))
+            ),
+            "{}: {result:?}",
+            file.display()
+        );
+        assert_eq!(desktop.catalog.locations().unwrap(), Vec::new());
+    }
+}
+
+/// Catalogs and exports list private files; other users of the computer must not read them
+/// (#86).
+#[cfg(unix)]
+#[test]
+fn catalogs_exports_and_locks_are_private() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    let machine = Machine::new();
+    machine.location("photos", FILES);
+    let file = machine.export("photos");
+    assert_eq!(mode(machine.catalog.path()), 0o600);
+    assert_eq!(mode(&file), 0o600);
+    let locks = machine.dir.path().join("catalog.db-locks");
+    assert_eq!(mode(&locks), 0o700);
+    for lock in fs::read_dir(&locks).unwrap() {
+        assert_eq!(mode(&lock.unwrap().path()), 0o600);
+    }
 }

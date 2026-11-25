@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-24
+- **Amended by:** [0014](0014-imports-and-local-locations.md): a location scanned on this computer is never replaced without a choice
 
 ## Context
 

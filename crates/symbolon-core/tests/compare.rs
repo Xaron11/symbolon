@@ -662,6 +662,26 @@ mod resolve {
         String::from_utf8(text).unwrap()
     }
 
+    /// A location's algorithm can change while a comparison is open (an import replacing its
+    /// data); digests of the old algorithm must not be stored for it (#86).
+    #[test]
+    fn digests_are_not_stored_after_the_algorithm_changed() {
+        let fx = Fixture::new();
+        lazy(&fx, "a", &[("same", "aaaa".into())]);
+        lazy(&fx, "b", &[("same", "aaaa".into())]);
+        let mut cmp = fx.compare(&["a", "b"], CompareOptions::default());
+        rusqlite::Connection::open(fx.catalog.path())
+            .unwrap()
+            .execute(
+                "UPDATE locations SET hash_algo = 'sha256' WHERE label = 'a'",
+                [],
+            )
+            .unwrap();
+        resolve(&mut cmp);
+        assert_eq!(state(&fx, "a", "same"), HashState::Unhashed);
+        assert_eq!(state(&fx, "b", "same"), HashState::Verified);
+    }
+
     #[test]
     fn only_deciding_files_are_hashed_and_unique_sizes_never_read() {
         let fx = Fixture::new();

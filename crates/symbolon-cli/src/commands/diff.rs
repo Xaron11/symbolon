@@ -129,7 +129,12 @@ pub(super) fn resolve(
                     .path
                     .as_ref()
                     .map_or_else(|| label.clone(), |p| format!("{label}:{}", p.key()));
-                eprintln!("warning: {path}: {} ({})", warning.message, warning.kind);
+                eprintln!(
+                    "warning: {}: {} ({})",
+                    output::printable(&path),
+                    output::printable(&warning.message),
+                    warning.kind
+                );
             }
             ResolveEvent::Unreachable { label, reason } if !quiet => {
                 progress.clear();

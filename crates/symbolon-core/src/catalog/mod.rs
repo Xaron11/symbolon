@@ -102,6 +102,9 @@ impl Catalog {
     /// - [`CatalogError::Sqlite`] for database errors, for example a missing parent directory.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, CatalogError> {
         let path = path.as_ref().to_path_buf();
+        // SQLite would create it with the umask's permissions; catalogs list private files.
+        // Failures are left for SQLite to report.
+        private::create_file(&path).ok();
         let mut conn = Connection::open(&path)?;
         configure(&conn).map_err(|e| not_a_database(e, &path))?;
         migrate(&mut conn, &path)?;
@@ -266,8 +269,11 @@ fn migrate(conn: &mut Connection, path: &Path) -> Result<(), CatalogError> {
         return Ok(());
     }
     if version > 0 {
-        let backup = PathBuf::from(format!("{}.v{version}.bak", path.display()));
-        conn.execute("VACUUM INTO ?1", [backup.to_string_lossy()])?;
+        // The name as bytes, so a non-Unicode path is not written somewhere else.
+        let mut backup = path.as_os_str().to_owned();
+        backup.push(format!(".v{version}.bak"));
+        private::create_file(Path::new(&backup)).ok();
+        conn.execute("VACUUM INTO CAST(?1 AS TEXT)", [backup.as_encoded_bytes()])?;
     }
     for (index, sql) in schema::MIGRATIONS.iter().enumerate() {
         let target = u32::try_from(index + 1)
@@ -587,6 +593,36 @@ impl RawLocation {
             path_encoding,
             fingerprint: self.fingerprint,
         })
+    }
+}
+
+/// Files and directories readable only by their owner on Unix. Elsewhere the default
+/// permissions apply (on Windows, those of the parent directory).
+pub(crate) mod private {
+    use std::fs;
+    use std::io;
+    use std::path::Path;
+
+    /// Creates `path` empty if it does not exist.
+    pub(crate) fn create_file(path: &Path) -> io::Result<()> {
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        match options.open(path) {
+            Ok(_) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Creates `path` and missing parents; the ones created here are private.
+    pub(crate) fn create_dir_all(path: &Path) -> io::Result<()> {
+        let mut builder = fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        builder.create(path)
     }
 }
 

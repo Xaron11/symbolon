@@ -126,15 +126,20 @@ fn hash_one<'a>(source: &dyn Source, algo: HashAlgo, job: &'a Job) -> Outcome<'a
     }
 }
 
-/// The guarded statement storing a digest of `tier`: it does nothing if the entry changed since
-/// it was listed.
+/// The guarded statement storing a digest of `tier`, with parameters digest, id, size,
+/// mtime, raw path and algorithm name. It does nothing if the entry changed since it was
+/// listed, or if the location's algorithm changed meanwhile (an import replacing its data).
 pub(crate) const fn store_statement(tier: Tier) -> &'static str {
     match tier {
         Tier::Full => {
-            "UPDATE main.entries SET hash_full = ?1 WHERE id = ?2 AND size = ?3 AND mtime_ns IS ?4"
+            "UPDATE main.entries SET hash_full = ?1 WHERE id = ?2 AND size = ?3 AND mtime_ns IS ?4 \
+             AND rel_path_raw = ?5 \
+             AND (SELECT hash_algo FROM main.locations WHERE id = location_id) = ?6"
         }
         Tier::Partial => {
-            "UPDATE main.entries SET hash_partial = ?1 WHERE id = ?2 AND size = ?3 AND mtime_ns IS ?4"
+            "UPDATE main.entries SET hash_partial = ?1 WHERE id = ?2 AND size = ?3 AND mtime_ns IS ?4 \
+             AND rel_path_raw = ?5 \
+             AND (SELECT hash_algo FROM main.locations WHERE id = location_id) = ?6"
         }
     }
 }

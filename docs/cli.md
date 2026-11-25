@@ -20,7 +20,7 @@ Everything `symbolon` learns goes into one SQLite database, the catalog: saved l
 | Windows  | `%LOCALAPPDATA%\symbolon\catalog.db`                |
 | macOS    | `~/Library/Application Support/symbolon/catalog.db` |
 
-`--catalog <PATH>` or the `SYMBOLON_CATALOG` environment variable selects another one. The catalog contains full paths and hashes of your files, so treat it, and the export files below, as private data.
+`--catalog <PATH>` or the `SYMBOLON_CATALOG` environment variable selects another one. The catalog contains full paths and hashes of your files, so treat it, and the export files below, as private data. On Linux and macOS Symbolon creates them readable only by you (mode `0600`, and `0700` for directories it creates). Files and directories that already exist keep their permissions.
 
 ## A session
 
@@ -116,13 +116,13 @@ symbolon import backup.symbolon
 symbolon diff laptop backup
 ```
 
-An imported location compares like any other but cannot be scanned there. Importing again updates it if the file holds a newer scan. When an import is ambiguous, for example a location with that label already exists for another device, `import` stops with exit code 4 and says which choice resolves it: `--as <label>` to import under a new label, `--replace` to replace the existing location's data, `--into <label>` to update the location that is the same device, or `--force` to accept an older scan. [ADR-0005](adr/0005-export-format-and-import-conflicts.md) has the full rules.
+An imported location compares like any other but cannot be scanned there. Importing again updates it if the file holds a newer scan. When an import is ambiguous, `import` stops with exit code 4 and says which choice resolves it. That happens, for example, when the label belongs to a location scanned on this computer or to another device. The choices are `--as <label>` to import under a new label, `--replace` to replace the existing location's data, `--into <label>` to update the location that is the same device, or `--force` to accept an older scan. Replacing or updating a location scanned on this computer turns it into an imported location, which is no longer scanned there. [ADR-0005](adr/0005-export-format-and-import-conflicts.md) and [ADR-0014](adr/0014-imports-and-local-locations.md) have the full rules.
 
 ## Output for scripts
 
 Results go to stdout; progress, warnings and errors go to stderr, so piping is safe. `--quiet` turns progress and warnings off.
 
-`--format json` (or `--json`) and `--format csv` are stable for scripts: field names only change in a minor release with a changelog entry, and only by adding fields. Sizes are bytes, times are RFC 3339 in UTC, digests are lowercase hex, and paths are written with `/`, with bytes that are not valid UTF-8 escaped as `%XX`. The table format is for people and may change.
+`--format json` (or `--json`) and `--format csv` are stable for scripts: field names only change in a minor release with a changelog entry, and only by adding fields. Sizes are bytes, times are RFC 3339 in UTC, digests are lowercase hex, and paths are written with `/`, with bytes that are not valid UTF-8 escaped as `%XX`. The table format is for people and may change; it shows control characters in file names (which could otherwise drive the terminal) as `%XX`, while JSON and CSV keep them exact.
 
 ```console
 $ symbolon diff laptop backup --json | jq -r '.rows[] | select(.category == "only_in") | .key'
