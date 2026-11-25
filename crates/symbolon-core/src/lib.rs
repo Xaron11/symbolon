@@ -28,6 +28,7 @@
 //! | [`query`]   | `Query`: browse, search, duplicates, scan history; paginated       |
 //! | [`scan`]    | `Scanner`: walk, store, hash; events, cancel, pause, rescans       |
 //! | [`source`]  | Walking and reading a location; `LocalSource` (feature `local`)    |
+//! | [`transport`] | `AndroidTransport` over `adb` (feature `android-adb`, M5)        |
 //!
 //! _(planned)_ `plan` (M7). See the book chapter *Architecture* in `docs/`.
 //!
@@ -48,6 +49,7 @@ pub mod pathkey;
 pub mod query;
 pub mod scan;
 pub mod source;
+pub mod transport;
 
 /// Version of this crate, shared by the whole workspace.
 ///
