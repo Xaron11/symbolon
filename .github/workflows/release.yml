@@ -76,8 +76,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.verify.outputs.sha }}
+          ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
+      - name: Tag still points at the verified commit
+        env:
+          SHA: ${{ needs.verify.outputs.sha }}
+        run: '[[ "$(git rev-parse HEAD)" == "$SHA" ]] || { echo "::error::$TAG moved after it was verified"; exit 1; }'
       - env:
           TARGET: ${{ matrix.target }}
         run: rustup toolchain install && rustup target add "$TARGET"
@@ -112,8 +116,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.verify.outputs.sha }}
+          ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
+      - name: Tag still points at the verified commit
+        env:
+          SHA: ${{ needs.verify.outputs.sha }}
+        run: '[[ "$(git rev-parse HEAD)" == "$SHA" ]] || { echo "::error::$TAG moved after it was verified"; exit 1; }'
       - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
       - run: nix develop .#android -c just android-scanner check-agent
       - name: Package
@@ -139,7 +147,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.verify.outputs.sha }}
+          ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
