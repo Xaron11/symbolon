@@ -807,7 +807,10 @@ mod tests {
 
     fn wide_component() -> impl Strategy<Value = Vec<u16>> {
         proptest::collection::vec(
-            any::<u16>().prop_filter("no separator or NUL", |u| *u != u16::from(b'/') && *u != 0),
+            // Windows names hold no `\` or `:`, so WTF-8 paths reject them (#84).
+            any::<u16>().prop_filter("no separator, drive, stream or NUL", |u| {
+                ![u16::from(b'/'), u16::from(b'\\'), u16::from(b':'), 0].contains(u)
+            }),
             1..12,
         )
         .prop_filter("not . or ..", |c| c != &[46] && c != &[46, 46])
