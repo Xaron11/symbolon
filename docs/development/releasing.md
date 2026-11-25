@@ -17,7 +17,7 @@ The next version is derived from the Conventional Commits since the last tag: `f
 4. The release workflow then:
    - verifies the tag signature against the allowed signers on `main`;
    - checks that the tag matches the workspace version;
-   - builds the CLI for Linux and Windows and the Android agent, after checking in every job that the tag still points at the verified commit;
+   - builds the Android agent once, checks that it is static and suits 16 KiB-page kernels, and builds the CLI for Linux and Windows with the agent next to it in each archive. Every job first checks that the tag still points at the verified commit;
    - attests the build provenance of every archive;
    - publishes a GitHub release with `SHA256SUMS` and the changelog section.
 

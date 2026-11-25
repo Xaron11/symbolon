@@ -12,8 +12,10 @@ build:
     cargo build --workspace
 
 # Static aarch64 binary pushed to Android over adb.
+# zig's linker ignores the `-O1` rustc passes and warns about it on every link.
 android-scanner:
-    cargo zigbuild --locked -p symbolon-agent --profile release-agent --target {{ agent_target }}
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="-A linker_messages" \
+        cargo zigbuild --locked -p symbolon-agent --profile release-agent --target {{ agent_target }}
     @echo target/{{ agent_target }}/release-agent/symbolon-agent
 
 # Fail unless the agent is fully static and its segments suit 4/16/64 KiB page kernels (ADR-0003).
