@@ -410,22 +410,21 @@ impl AdbSource {
         result.map(drop)
     }
 
-    /// One `cat | sha256sum` per file under `pipefail`, with the file's size and time read
-    /// back, in batches.
+    /// One `cat | sha256sum` per file under `pipefail`, then one `stat` for the batch to read
+    /// sizes and times back. Two processes per file: forking dominates on phones.
     fn hash_fallback(
         &self,
         requests: &[HashRequest],
         each: &mut dyn FnMut(usize, HashReply) -> ControlFlow<()>,
     ) -> Result<(), SourceError> {
-        const BATCH: usize = 100;
+        const BATCH: usize = 200;
         for (start, batch) in (0..).step_by(BATCH).zip(requests.chunks(BATCH)) {
-            let mut names = Vec::with_capacity(batch.len());
+            // (index, request, name) of the requests the phone's shell can be given.
+            let mut asked = Vec::with_capacity(batch.len());
             for (offset, request) in batch.iter().enumerate() {
                 if let Ok(name) = std::str::from_utf8(request.path.as_bytes()) {
-                    names.push(shell_quote(name));
+                    asked.push((start + offset, request, name));
                 } else {
-                    // Keeps the output aligned with the requests; this line is skipped below.
-                    names.push(shell_quote("\u{fffd}/unlisted"));
                     let reply =
                         warning(request, "the fallback cannot pass a name that is not UTF-8");
                     if each(start + offset, reply).is_break() {
@@ -433,12 +432,16 @@ impl AdbSource {
                     }
                 }
             }
+            if asked.is_empty() {
+                continue;
+            }
+            let names: Vec<String> = asked.iter().map(|(_, _, name)| shell_quote(name)).collect();
+            let names = names.join(" ");
             let command = format!(
-                "set -o pipefail; cd {} || exit 2; for f in {}; do \
-                 if h=$(cat -- \"$f\" | sha256sum) && s=$(stat -c '%s|%Y' -- \"$f\"); \
-                 then printf 'ok|%s|%s\\n' \"$s\" \"${{h%% *}}\"; else printf 'fail\\n'; fi; done",
+                "set -o pipefail; cd {} || exit 2; \
+                 for f in {names}; do cat -- \"$f\" | sha256sum; echo \"status|$?\"; done; \
+                 echo 'stat|'; stat -c '%s|%Y|%n' -- {names}",
                 shell_quote(&self.root),
-                names.join(" ")
             );
             let output = self
                 .transport
@@ -452,19 +455,32 @@ impl AdbSource {
                 )));
             }
             let text = String::from_utf8_lossy(&output.stdout);
-            let mut lines = text.lines();
-            for (offset, request) in batch.iter().enumerate() {
-                if std::str::from_utf8(request.path.as_bytes()).is_err() {
-                    lines.next();
-                    continue;
+            let (hashes, stats) = text.split_once("stat|\n").unwrap_or((&text, ""));
+            // Each file prints its digest line, then its pipeline's status.
+            let mut digests = Vec::with_capacity(asked.len());
+            let mut last_hex = None;
+            for line in hashes.lines() {
+                if let Some(status) = line.strip_prefix("status|") {
+                    digests.push(last_hex.take().filter(|_| status == "0"));
+                } else {
+                    last_hex = line.split_whitespace().next().map(str::to_owned);
                 }
-                let reply = match lines.next().map(|l| l.split('|').collect::<Vec<_>>()) {
-                    Some(fields) if fields.first() == Some(&"ok") => {
-                        fallback_reply(request, fields.get(1..).unwrap_or_default())
-                    }
+            }
+            let mut metadata = std::collections::HashMap::new();
+            for line in stats.lines() {
+                let mut fields = line.splitn(3, '|');
+                if let (Some(size), Some(secs), Some(name)) =
+                    (fields.next(), fields.next(), fields.next())
+                {
+                    metadata.insert(name, (size, secs));
+                }
+            }
+            for (i, (index, request, name)) in asked.iter().enumerate() {
+                let reply = match (digests.get(i).cloned().flatten(), metadata.get(name)) {
+                    (Some(hex), Some((size, secs))) => fallback_reply(request, &[size, secs, &hex]),
                     _ => warning(request, "could not be read on the phone"),
                 };
-                if each(start + offset, reply).is_break() {
+                if each(*index, reply).is_break() {
                     return Ok(());
                 }
             }
