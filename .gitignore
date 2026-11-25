@@ -8,6 +8,16 @@ node_modules/
 /crates/symbolon-app/gen/
 *.symbolon
 *.symbolon.zst
+*.symbolon.partial
+# Catalogs list private paths and hashes; never commit one by accident.
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.v[0-9]*.bak
+*-locks/
+.env
+.env.*
 /.pre-commit-config.yaml
 /docs/mermaid.min.js
 /docs/mermaid-init.js
