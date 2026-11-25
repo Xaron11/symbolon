@@ -1,7 +1,5 @@
 //! `symbolon location add|list|set|remove`.
 
-use std::io::{self, BufRead as _, IsTerminal as _, Write as _};
-
 use serde::Serialize;
 use symbolon_core::catalog::{Location, LocationRoot, NewLocation};
 use symbolon_core::query::{Page, Query};
@@ -10,6 +8,7 @@ use super::open_catalog;
 use crate::cli::{AddArgs, Global, LocationCommand, SetArgs};
 use crate::exit::{Exit, Refused};
 use crate::output::{self, Format, Record};
+use crate::prompt;
 
 pub(super) fn run(global: &Global, command: &LocationCommand) -> anyhow::Result<Exit> {
     match command {
@@ -203,19 +202,15 @@ fn remove(global: &Global, label: &str, yes: bool) -> anyhow::Result<Exit> {
 
 /// Asks on the terminal; without one, the user has to decide with `--yes` up front.
 fn confirm(label: &str) -> anyhow::Result<bool> {
-    if !(io::stdin().is_terminal() && io::stderr().is_terminal()) {
+    if !prompt::interactive() {
         return Err(Refused(format!(
             "removing location {label:?} needs confirmation; pass --yes to remove it"
         ))
         .into());
     }
-    eprint!(
-        "Remove location {label:?} and everything recorded about it? Its files are not touched. [y/N] "
-    );
-    io::stderr().flush()?;
-    let mut answer = String::new();
-    io::stdin().lock().read_line(&mut answer)?;
-    Ok(matches!(answer.trim(), "y" | "Y" | "yes" | "Yes"))
+    Ok(prompt::yes(&format!(
+        "Remove location {label:?} and everything recorded about it? Its files are not touched."
+    ))?)
 }
 
 #[cfg(test)]

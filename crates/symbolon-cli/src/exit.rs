@@ -36,7 +36,12 @@ impl Exit {
             cause.is::<Refused>()
                 || matches!(
                     cause.downcast_ref::<ScanError>(),
-                    Some(ScanError::AlreadyScanning { .. })
+                    Some(
+                        ScanError::AlreadyScanning { .. }
+                            | ScanError::Moved { .. }
+                            | ScanError::Ambiguous { .. }
+                            | ScanError::OtherDevice { .. }
+                    )
                 )
                 || matches!(
                     cause.downcast_ref::<TransferError>(),

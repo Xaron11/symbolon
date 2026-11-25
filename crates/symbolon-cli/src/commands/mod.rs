@@ -1,5 +1,6 @@
 //! One module per command; each returns the exit status of a successful run.
 
+mod devices;
 mod diff;
 mod dupes;
 mod generate;
