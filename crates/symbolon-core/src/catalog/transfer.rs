@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use rusqlite::config::DbConfig;
 use rusqlite::types::Value;
 use rusqlite::{Connection, OpenFlags, OptionalExtension as _, TransactionBehavior, params};
 
@@ -16,7 +17,8 @@ use super::{
     APPLICATION_ID, Catalog, CatalogError, Location, SCHEMA_VERSION, ms_to_system_time, now_ms,
     validate_label,
 };
-use crate::pathkey::PathEncoding;
+use crate::hash::HashAlgo;
+use crate::pathkey::{PathEncoding, RelPath};
 use crate::scan::ScanError;
 use crate::scan::lock::ScanLock;
 
@@ -185,6 +187,17 @@ pub enum TransferError {
     /// The receiving location is being scanned.
     #[error("location {0:?} is being scanned; import again when the scan ends")]
     Busy(String),
+    /// An entry in the file is not what Symbolon writes: an invalid relative path, keys not
+    /// derived from it, or a digest of the wrong length. Nothing was imported.
+    #[error("{} has an invalid entry {entry:?}: {reason}", path.display())]
+    InvalidEntry {
+        /// The file.
+        path: PathBuf,
+        /// The entry's stored path, with non-Unicode bytes shown as `%XX`.
+        entry: String,
+        /// What is wrong with it.
+        reason: &'static str,
+    },
 }
 
 fn io(context: impl Into<String>) -> impl FnOnce(std::io::Error) -> TransferError {
@@ -262,7 +275,7 @@ impl Catalog {
         )?;
         let to = tx.last_insert_rowid();
         let scan_id = insert_scan(&tx, to, &scan)?;
-        let entries = copy_entries(&src, &tx, location.id.get(), to, scan_id)?;
+        let entries = copy_entries(&src, &tx, location.id.get(), to, scan_id, None)?;
         let meta = [
             ("kind", "export".to_owned()),
             ("exported_at", now_ms().to_string()),
@@ -414,7 +427,7 @@ impl Catalog {
             params![to, file.exported_at, file.exported_by, now_ms()],
         )?;
         let scan_id = insert_scan(&tx, to, &file.scan)?;
-        let entries = copy_entries(&file.conn, &tx, file.location_id, to, scan_id)?;
+        let entries = copy_entries(&file.conn, &tx, file.location_id, to, scan_id, Some(file))?;
         tx.commit()?;
         Ok(ImportSummary {
             label: label.to_owned(),
@@ -479,7 +492,7 @@ impl Catalog {
             params![id, file.exported_at, file.exported_by, now_ms()],
         )?;
         let scan_id = insert_scan(&tx, id, &file.scan)?;
-        let entries = copy_entries(&file.conn, &tx, file.location_id, id, scan_id)?;
+        let entries = copy_entries(&file.conn, &tx, file.location_id, id, scan_id, Some(file))?;
         tx.commit()?;
         Ok(ImportSummary {
             label: location.label.clone(),
@@ -497,6 +510,7 @@ enum Target {
 
 /// An export file opened for reading, possibly through a migrated temporary copy.
 struct ExportFile {
+    path: PathBuf,
     conn: Connection,
     _copy: Option<TempCopy>,
     location_id: i64,
@@ -512,7 +526,7 @@ struct ExportFile {
 impl ExportFile {
     fn open(path: &Path) -> Result<Self, TransferError> {
         let not_export = || TransferError::NotAnExport(path.to_path_buf());
-        let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let conn = untrusted(path)?;
         let header = || -> rusqlite::Result<(i32, u32)> {
             Ok((
                 conn.pragma_query_value(None, "application_id", |r| r.get(0))?,
@@ -537,7 +551,7 @@ impl ExportFile {
             drop(conn);
             let copy = TempCopy::new(path)?;
             Catalog::open(&copy.path)?;
-            let conn = Connection::open_with_flags(&copy.path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+            let conn = untrusted(&copy.path)?;
             (conn, Some(copy))
         } else {
             (conn, None)
@@ -551,14 +565,27 @@ impl ExportFile {
             return Err(not_export());
         }
         let scan = newest_completed_scan(&conn, location_id)?.ok_or_else(not_export)?;
+        let hash_algo = required("hash_algo")?;
+        let path_encoding = required("path_encoding")?;
+        // The location row is copied as it is, so it must agree with the header.
+        let (row_algo, row_encoding): (String, String) = conn.query_row(
+            "SELECT hash_algo, path_encoding FROM locations WHERE id = ?1",
+            [location_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        if (row_algo.as_str(), row_encoding.as_str())
+            != (hash_algo.as_str(), path_encoding.as_str())
+            || hash_algo.parse::<HashAlgo>().is_err()
+        {
+            return Err(not_export());
+        }
         Ok(Self {
+            path: path.to_path_buf(),
             location_id,
             label: required("label")?,
             fingerprint: meta(&conn, "fingerprint")?,
-            hash_algo: required("hash_algo")?,
-            path_encoding: required("path_encoding")?
-                .parse()
-                .map_err(|_| not_export())?,
+            hash_algo,
+            path_encoding: path_encoding.parse().map_err(|_| not_export())?,
             exported_at: required("exported_at")?.parse().map_err(|_| not_export())?,
             exported_by: required("exported_by")?,
             scan,
@@ -566,6 +593,67 @@ impl ExportFile {
             _copy: copy,
         })
     }
+}
+
+/// The text in a stored value, if it is text.
+fn text(value: Option<&Value>) -> Option<&str> {
+    match value {
+        Some(Value::Text(text)) => Some(text.as_str()),
+        _ => None,
+    }
+}
+
+impl ExportFile {
+    /// Checks one entry row (`ENTRY_COLUMNS`) against what a scan would have written.
+    fn check_entry(&self, row: &[Value]) -> Result<(), TransferError> {
+        let invalid = |entry: String, reason| TransferError::InvalidEntry {
+            path: self.path.clone(),
+            entry,
+            reason,
+        };
+        let Some(Value::Blob(raw)) = row.first() else {
+            return Err(invalid(String::new(), "the path is not stored as bytes"));
+        };
+        let shown = || String::from_utf8_lossy(raw).into_owned();
+        let rel = RelPath::from_raw(self.path_encoding, raw.clone())
+            .map_err(|_| invalid(shown(), "not a valid relative path"))?;
+        let key = rel.key();
+        if rel.is_root()
+            || text(row.get(1)) != Some(key.as_str())
+            || text(row.get(2)) != Some(key.parent())
+        {
+            return Err(invalid(
+                key.as_str().to_owned(),
+                "its keys do not match its path",
+            ));
+        }
+        let algo: HashAlgo = self
+            .hash_algo
+            .parse()
+            .map_err(|_| invalid(key.as_str().to_owned(), "unknown hash algorithm"))?;
+        for digest in [row.get(6), row.get(7)] {
+            match digest {
+                None | Some(Value::Null) => {}
+                Some(Value::Blob(bytes)) if bytes.len() == algo.digest_len() => {}
+                Some(_) => {
+                    return Err(invalid(
+                        key.as_str().to_owned(),
+                        "a digest does not fit the hash algorithm",
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Opens a file from someone else read-only, without trusting its schema: views and triggers
+/// cannot call functions with side effects, and the schema cannot be made inconsistent.
+fn untrusted(path: &Path) -> rusqlite::Result<Connection> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false)?;
+    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
+    Ok(conn)
 }
 
 fn meta(conn: &Connection, key: &str) -> Result<Option<String>, TransferError> {
@@ -660,13 +748,15 @@ fn insert_scan(dst: &Connection, location_id: i64, scan: &ScanRow) -> rusqlite::
 
 /// Copies the entries of location `from` in `src` to location `to` in `dst`, all seen by
 /// scan `scan`.
+/// Copies a location's entries; rows from an imported `file` are checked first.
 fn copy_entries(
     src: &Connection,
     dst: &Connection,
     from: i64,
     to: i64,
     scan: i64,
-) -> rusqlite::Result<u64> {
+    file: Option<&ExportFile>,
+) -> Result<u64, TransferError> {
     let mut read = src.prepare(&format!(
         "SELECT {ENTRY_COLUMNS} FROM entries WHERE location_id = ?1"
     ))?;
@@ -680,6 +770,9 @@ fn copy_entries(
         let mut values = vec![Value::Integer(to), Value::Integer(scan)];
         for i in 0..9 {
             values.push(row.get(i)?);
+        }
+        if let Some(file) = file {
+            file.check_entry(&values[2..])?;
         }
         write.execute(rusqlite::params_from_iter(values))?;
         copied += 1;
