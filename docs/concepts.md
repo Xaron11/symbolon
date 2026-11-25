@@ -7,11 +7,27 @@ This chapter defines the words used everywhere else: in the CLI, the GUI, the co
 A **location** is something you want to compare: a directory, a mounted disk or pendrive, or a directory on an Android phone (for example `adb:<serial>:/sdcard/DCIM`). Each location has:
 
 - a **label** you choose, such as `laptop-photos` or `blue-pendrive`. The label is the location's identity.
-- a **fingerprint** Symbolon detects automatically (filesystem UUID, ADB serial). It only helps recognize a device plugged in at a different mount point; when it is missing or ambiguous, Symbolon asks you instead of guessing.
+- a **fingerprint** Symbolon detects automatically (filesystem UUID; ADB serial from M5). It only helps recognize a device plugged in at a different mount point; when it is ambiguous, or another device is in its place, Symbolon asks you instead of guessing (see below).
 - a **hash algorithm** (BLAKE3 by default; xxh3 or SHA-256 possible). Locations hashed with different algorithms cannot be compared until one is rehashed.
 - a **hash policy**: `lazy` (hash only what a comparison needs; good for always-connected storage) or `eager` (hash everything during the scan; good for removable media you will not have later).
 
 A comparison can target a sub-path of a location, written `label:subpath`.
+
+### Devices and moved locations
+
+A fingerprint names a directory on a specific device: `fs:<filesystem UUID>:<path inside the filesystem>`, for example `fs:5ADB-A50A:/DCIM`. It does not depend on where the filesystem is mounted, so it stays the same whether a pendrive shows up at `/media/usb` or `/run/media/me/USB`. It is detected on Linux. Filesystems without a UUID (tmpfs, network shares) and other operating systems have none yet, and for those locations the root path is trusted ([ADR-0016](adr/0016-device-fingerprints.md)).
+
+Before scanning, or hashing during a comparison, Symbolon checks where the location's device is:
+
+| Situation                                                      | What happens                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| The device is at the location's root                           | It is read as usual.                                                           |
+| The device is mounted at exactly one other place               | The location follows it there, and you are told.                               |
+| The device matches several mounted directories (a cloned disk) | You pick one; until then it is not scanned.                                    |
+| Another device, or an empty mount point, is at the root        | You confirm before it is scanned as the location; it is never hashed silently. |
+| Neither the root nor the device is there                       | The device is not connected: nothing is read, and the catalog still compares.  |
+
+This is what keeps an unplugged pendrive's empty mount point from being scanned as a location whose files all vanished. `symbolon location set <label> --root <path>` points a location somewhere else by hand.
 
 ## Catalog
 
