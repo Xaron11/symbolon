@@ -328,7 +328,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let volumes = Fake(vec![
-            mount(Some("disk"), "/", Path::new("/")),
+            mount(Some("disk"), "/", root),
             mount(Some("usb"), "/", &root.join("media/usb")),
             mount(None, "/", &root.join("media/usb/tmp")),
         ]);
@@ -339,7 +339,8 @@ mod tests {
         );
         assert_eq!(fp(&root.join("media/usb")).as_deref(), Some("fs:usb:/"));
         assert_eq!(fp(&root.join("media/usb/tmp/x")), None, "no UUID");
-        assert!(fp(&root.join("media")).unwrap().starts_with("fs:disk:/"));
+        assert_eq!(fp(&root.join("media")).as_deref(), Some("fs:disk:/media"));
+        assert_eq!(fp(Path::new("/elsewhere")), None, "outside every mount");
     }
 
     #[test]
