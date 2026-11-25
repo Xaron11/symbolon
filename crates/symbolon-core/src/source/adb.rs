@@ -549,6 +549,15 @@ impl Source for AdbSource {
     fn remote_hasher(&self) -> Option<&dyn RemoteHasher> {
         Some(self)
     }
+
+    fn note(&self) -> Option<String> {
+        Some(match self.mode() {
+            AdbMode::Agent => "hashing on the phone with the agent".to_owned(),
+            AdbMode::Fallback { reason } => format!(
+                "using the toybox fallback, which can only compute SHA-256 digests: {reason}"
+            ),
+        })
+    }
 }
 
 impl RemoteHasher for AdbSource {

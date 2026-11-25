@@ -58,6 +58,8 @@ pub(crate) enum Command {
     Import(ImportArgs),
     /// List files with identical content within each location
     Dupes(DupesArgs),
+    /// List phones connected over adb and whether they are ready
+    Devices,
     /// Print a shell completion script, for example: symbolon completions bash > ~/.local/share/bash-completion/completions/symbolon
     Completions {
         /// The shell
@@ -258,7 +260,8 @@ pub(crate) enum LocationCommand {
 pub(crate) struct AddArgs {
     /// Name for the location, used by every other command
     pub(crate) label: String,
-    /// Directory holding the files
+    /// Directory holding the files, or a directory on a phone written adb:SERIAL:/PATH; leave
+    /// SERIAL empty for the only connected phone
     pub(crate) path: PathBuf,
     /// When to hash contents: during every scan (eager) or only when a comparison needs it (lazy)
     #[arg(long, value_enum)]

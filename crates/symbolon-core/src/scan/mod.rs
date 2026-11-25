@@ -331,6 +331,9 @@ pub enum ScanEvent {
         /// Its full-content digest.
         digest: Digest,
     },
+    /// Something about how the location is read (see [`Source::note`]), right after
+    /// [`ScanEvent::Started`].
+    Note(String),
     /// Periodic progress.
     Progress(ScanProgress),
     /// A problem with one entry; the scan continues.

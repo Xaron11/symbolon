@@ -10,7 +10,7 @@ use symbolon_core::scan::{
     ScanEvent, ScanId, ScanOptions, ScanPhase, ScanProgress, ScanStatus, ScanSummary, Scanner,
 };
 
-use super::{devices, open_catalog};
+use super::{follow, open_catalog};
 use crate::cli::{Global, ScanArgs};
 use crate::exit::{Exit, Refused};
 use crate::interrupt;
@@ -23,7 +23,12 @@ pub(super) fn run(global: &Global, args: &ScanArgs) -> anyhow::Result<Exit> {
         catalog
             .locations()?
             .into_iter()
-            .filter(|location| matches!(location.root, LocationRoot::Local(_)))
+            .filter(|location| {
+                matches!(
+                    location.root,
+                    LocationRoot::Local(_) | LocationRoot::Android { .. }
+                )
+            })
             .map(|location| location.label)
             .collect()
     } else {
@@ -37,14 +42,14 @@ pub(super) fn run(global: &Global, args: &ScanArgs) -> anyhow::Result<Exit> {
     let mut ready = Vec::new();
     let mut refusals = Vec::new();
     for label in labels {
-        match devices::prepare(&catalog, &label, args.yes, args.all, global.quiet)? {
-            devices::Ready::Yes => ready.push(label),
-            devices::Ready::Skip(reason) if args.all => {
+        match follow::prepare(&catalog, &label, args.yes, args.all, global.quiet)? {
+            follow::Ready::Yes => ready.push(label),
+            follow::Ready::Skip(reason) if args.all => {
                 if !global.quiet {
                     eprintln!("{reason}");
                 }
             }
-            devices::Ready::Skip(reason) => refusals.push(reason),
+            follow::Ready::Skip(reason) => refusals.push(reason),
         }
     }
     if !refusals.is_empty() {
@@ -56,7 +61,7 @@ pub(super) fn run(global: &Global, args: &ScanArgs) -> anyhow::Result<Exit> {
     let mut records = Vec::new();
     let mut exit = Exit::Success;
     for label in &labels {
-        let summary = scan_one(&catalog, label, args.full, &mut progress)?;
+        let summary = scan_one(&catalog, label, args.full, global.quiet, &mut progress)?;
         if !global.quiet {
             report_warnings(&catalog, label, &summary, args.verbose)?;
         }
@@ -74,6 +79,7 @@ fn scan_one(
     catalog: &Catalog,
     label: &str,
     full: bool,
+    quiet: bool,
     progress: &mut Progress,
 ) -> anyhow::Result<ScanSummary> {
     let handle = Scanner::start(catalog, label, ScanOptions::default().hash_all(full))?;
@@ -83,6 +89,12 @@ fn scan_one(
         }
         match handle.events().recv_timeout(Duration::from_millis(100)) {
             Ok(ScanEvent::Progress(update)) => progress.show(&describe(label, &update)),
+            Ok(ScanEvent::Note(note)) => {
+                progress.clear();
+                if !quiet {
+                    eprintln!("{label}: {note}");
+                }
+            }
             Ok(ScanEvent::Finished(_)) | Err(RecvTimeoutError::Disconnected) => break,
             Ok(_) | Err(RecvTimeoutError::Timeout) => {}
         }

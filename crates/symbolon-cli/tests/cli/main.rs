@@ -8,6 +8,7 @@ mod diff;
 mod dupes;
 mod generate;
 mod location;
+mod phones;
 mod scan;
 mod transfer;
 mod workflow;

@@ -1,125 +1,71 @@
-//! Before a location's files are read: follow its device when it moved, and ask when it is
-//! not clear which directory is the location (ADR-0016).
+//! `symbolon devices`: phones adb can see, and what to do about the ones that are not ready.
 
-use std::path::Path;
+use serde::Serialize;
+use symbolon_core::transport::android::{AndroidTransport as _, SystemAdb};
 
-use symbolon_core::catalog::{Catalog, LocationRoot, Whereabouts};
+use crate::cli::Global;
+use crate::exit::Exit;
+use crate::output::{self, Record};
 
-use crate::output;
-use crate::prompt;
-
-/// Whether a location can be read now.
-pub(super) enum Ready {
-    Yes,
-    /// Not read, and why.
-    Skip(String),
+/// One device as adb reports it.
+#[derive(Debug, Serialize)]
+struct DeviceRecord {
+    serial: String,
+    /// `device` when ready; otherwise adb's state, such as `unauthorized` or `offline`.
+    state: String,
+    model: Option<String>,
+    product: Option<String>,
+    /// What to do to make it ready; absent when it is.
+    hint: Option<String>,
 }
 
-/// What `scan` does with a location's whereabouts. A missing root is left for the scan to
-/// report unless `skip_missing` (scanning every location: unplugged devices are normal).
-pub(super) fn prepare(
-    catalog: &Catalog,
-    label: &str,
-    accept_other: bool,
-    skip_missing: bool,
-    quiet: bool,
-) -> anyhow::Result<Ready> {
-    Ok(match catalog.locate(label)? {
-        Whereabouts::Moved { from, to } => {
-            follow(catalog, label, &from, &to, quiet)?;
-            Ready::Yes
-        }
-        Whereabouts::Ambiguous { root, candidates } => {
-            let options: Vec<String> = candidates.iter().map(|c| shown(c)).collect();
-            if !prompt::interactive() {
-                return Ok(Ready::Skip(format!(
-                    "location {label:?} is not at {}, and its device is mounted at several places: \
-                     {}; choose one with `symbolon location set {label} --root <PATH>`",
-                    shown(&root),
-                    options.join(", ")
-                )));
-            }
-            let question = format!(
-                "Location {label:?} is not at {}, and its device is mounted at several places.",
-                shown(&root)
-            );
-            match prompt::choose(&question, &options)?.and_then(|i| candidates.get(i)) {
-                Some(choice) => {
-                    follow(catalog, label, &root, choice, quiet)?;
-                    Ready::Yes
-                }
-                None => Ready::Skip(format!("{label}: no directory chosen")),
-            }
-        }
-        Whereabouts::OtherDevice {
-            root,
-            expected,
-            found,
-        } => {
-            let found = found.map_or_else(
-                || "a directory without a device ID".to_owned(),
-                |f| format!("device {f}"),
-            );
-            let accepted = accept_other
-                || (prompt::interactive()
-                    && prompt::yes(&format!(
-                        "Location {label:?} expects device {expected} at {}, but {found} is there. \
-                         Scan it as {label:?}, replacing what is recorded?",
-                        shown(&root)
-                    ))?);
-            if accepted {
-                catalog.relocate(label, &root)?;
-                if !quiet {
-                    eprintln!("{label}: using {found} at {}", shown(&root));
-                }
-                Ready::Yes
-            } else if prompt::interactive() {
-                Ready::Skip(format!("{label}: not scanned"))
-            } else {
-                Ready::Skip(format!(
-                    "location {label:?} expects device {expected} at {}, but {found} is there; \
-                     plug its device in, or pass --yes to scan what is there as {label:?}",
-                    shown(&root)
-                ))
-            }
-        }
-        Whereabouts::Missing(root) if skip_missing => Ready::Skip(format!(
-            "{label}: skipped, {} is not available",
-            shown(&root)
-        )),
-        _ => Ready::Yes,
-    })
-}
+impl Record for DeviceRecord {
+    const FIELDS: &'static [&'static str] = &["serial", "state", "model", "product", "hint"];
+    const HEADERS: &'static [&'static str] = &["SERIAL", "STATE", "MODEL", "HINT"];
 
-/// Follows a location whose device moved, without asking: the device is unambiguous.
-pub(super) fn follow_moves(catalog: &Catalog, label: &str, quiet: bool) -> anyhow::Result<()> {
-    if let Whereabouts::Moved { from, to } = catalog.locate(label)? {
-        follow(catalog, label, &from, &to, quiet)?;
+    fn cells(&self) -> Vec<String> {
+        vec![
+            self.serial.clone(),
+            self.state.clone(),
+            self.model.clone().unwrap_or_default(),
+            self.hint.clone().unwrap_or_default(),
+        ]
     }
-    Ok(())
 }
 
-fn follow(
-    catalog: &Catalog,
-    label: &str,
-    from: &Path,
-    to: &Path,
-    quiet: bool,
-) -> anyhow::Result<()> {
-    catalog.relocate(label, to)?;
-    if !quiet {
+pub(super) fn run(global: &Global) -> anyhow::Result<Exit> {
+    let records: Vec<DeviceRecord> = SystemAdb::new()
+        .devices()?
+        .into_iter()
+        .map(|device| DeviceRecord {
+            hint: device.state.hint(),
+            state: device.state.to_string(),
+            serial: device.serial,
+            model: device.model,
+            product: device.product,
+        })
+        .collect();
+    if records.is_empty() && !global.quiet {
         eprintln!(
-            "{label}: its device is now at {} (was {}); following it",
-            shown(to),
-            shown(from)
+            "No phones found. Connect one with USB debugging on (Settings > Developer options)."
         );
     }
-    Ok(())
+    output::list(global.format(), "devices", &records)?;
+    Ok(Exit::Success)
 }
 
-/// A path as `location list` shows roots: without Windows' `\\?\` prefix, control
-/// characters escaped.
-fn shown(path: &Path) -> String {
-    let display = LocationRoot::Local(path.to_path_buf()).display();
-    output::printable(&display).into_owned()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fields_match_the_record() {
+        output::assert_fields(&DeviceRecord {
+            serial: String::new(),
+            state: String::new(),
+            model: None,
+            product: None,
+            hint: None,
+        });
+    }
 }
