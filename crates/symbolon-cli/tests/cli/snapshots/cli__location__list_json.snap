@@ -15,7 +15,8 @@ expression: "env.ok(&[\"location\", \"list\", \"--json\"])"
       "bytes": 0,
       "hashed_files": 0,
       "last_scan_status": null,
-      "last_scan_started_at": null
+      "last_scan_started_at": null,
+      "fingerprint": null
     },
     {
       "label": "photos",
@@ -28,7 +29,8 @@ expression: "env.ok(&[\"location\", \"list\", \"--json\"])"
       "bytes": 6,
       "hashed_files": 2,
       "last_scan_status": "completed",
-      "last_scan_started_at": "[TIME]"
+      "last_scan_started_at": "[TIME]",
+      "fingerprint": null
     }
   ]
 }

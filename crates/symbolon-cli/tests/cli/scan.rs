@@ -5,7 +5,6 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use serde_json::Value;
-use symbolon_core::catalog::Catalog;
 use symbolon_core::pathkey::RelPath;
 use symbolon_core::scan::{ScanOptions, Scanner};
 use symbolon_core::source::{ReadSeek, Source, SourceEntry, SourceError, WalkItem, WalkOutcome};
@@ -146,7 +145,7 @@ impl Source for Stuck {
 #[test]
 fn a_location_being_scanned_is_refused() {
     let env = env_with("eager");
-    let catalog = Catalog::open(&env.catalog).unwrap();
+    let catalog = env.open_catalog();
     let _running =
         Scanner::start_with_source(&catalog, "photos", Arc::new(Stuck), ScanOptions::default())
             .unwrap();

@@ -32,12 +32,20 @@ A location is a directory with a label. Every other command refers to it by labe
 
 ```console
 $ symbolon location add laptop ~/Documents
-LABEL   ROOT                POLICY  ALGO    FILES  SIZE  HASHED  LAST SCAN
-laptop  /home/me/Documents  lazy    blake3  0      0 B   0       never
+LABEL   ROOT                POLICY  ALGO    FILES  SIZE  HASHED  LAST SCAN  DEVICE
+laptop  /home/me/Documents  lazy    blake3  0      0 B   0       never      fs:9ee6adca-89bf-4eaf-9e85-4f0a008d8b53:/me/Documents
 $ symbolon location add backup /mnt/usb/Documents --policy eager
 ```
 
 The **hash policy** decides when file contents are read. `eager` hashes every file during a scan; `lazy` (the default) only records names, sizes and times, and hashes later, only the files a comparison cannot decide otherwise. Lazy is much faster for large locations; eager makes later comparisons instant. `--algo` picks the hash (`blake3` by default); only locations with the same algorithm can be compared. `--ignore <pattern>` skips paths in `.gitignore` syntax.
+
+On Linux, Symbolon also records which **device** a location is on: the filesystem's UUID and the path inside it (`DEVICE`). This lets it recognize a pendrive mounted somewhere else next time, and keeps it from scanning an empty mount point or another device as the location ([ADR-0016](adr/0016-device-fingerprints.md)). Filesystems without a UUID, such as tmpfs and network shares, have no device ID; for those the root path is trusted as before.
+
+`symbolon location set <label>` changes a saved location:
+
+- `--label <new>` renames it.
+- `--root <path>` points it at another directory, for example where its device is mounted now, and records the device found there.
+- `--policy lazy|eager` changes when files are hashed from the next scan on.
 
 ### Scan
 

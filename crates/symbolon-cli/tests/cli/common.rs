@@ -3,12 +3,28 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+
+use symbolon_core::catalog::Catalog;
+use symbolon_core::identity::{Mount, Volumes};
+
+/// An empty mount table, so scans started from tests record no fingerprints either.
+struct NoMounts;
+
+impl Volumes for NoMounts {
+    fn mounts(&self) -> std::io::Result<Vec<Mount>> {
+        Ok(Vec::new())
+    }
+}
 
 pub(crate) struct Env {
     _dir: tempfile::TempDir,
     /// The temporary directory as the binary prints it: canonical, without `\\?\`.
     root: PathBuf,
     pub(crate) catalog: PathBuf,
+    /// The simulated mount table every run uses (`SYMBOLON_TEST_MOUNTS`): empty unless a test
+    /// plugs devices in, so no test depends on the real filesystems.
+    mounts: PathBuf,
 }
 
 /// One finished run.
@@ -26,11 +42,31 @@ impl Env {
         let text = canonical.to_str().unwrap();
         let root = PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(text));
         let catalog = root.join("catalog.db");
+        let mounts = root.join("mounts.txt");
+        fs::write(&mounts, "").unwrap();
         Self {
             _dir: dir,
             root,
             catalog,
+            mounts,
         }
+    }
+
+    /// Replaces the simulated mount table: `(filesystem UUID, mount point relative to the
+    /// temporary directory)`, mounted at its root.
+    pub(crate) fn mount(&self, mounts: &[(&str, &str)]) {
+        let lines: Vec<String> = mounts
+            .iter()
+            .map(|(uuid, at)| format!("{uuid}\t{}", self.root.join(at).display()))
+            .collect();
+        fs::write(&self.mounts, lines.join("\n")).unwrap();
+    }
+
+    /// The catalog opened in this process, seeing no mounted filesystems like the binary.
+    pub(crate) fn open_catalog(&self) -> Catalog {
+        Catalog::open(&self.catalog)
+            .unwrap()
+            .with_volumes(Arc::new(NoMounts))
     }
 
     /// Creates `dir` under the temporary directory with the given files.
@@ -55,6 +91,7 @@ impl Env {
         let output = Command::new(env!("CARGO_BIN_EXE_symbolon"))
             .args(args)
             .env("SYMBOLON_CATALOG", &self.catalog)
+            .env("SYMBOLON_TEST_MOUNTS", &self.mounts)
             .stdin(Stdio::null())
             .output()
             .unwrap();

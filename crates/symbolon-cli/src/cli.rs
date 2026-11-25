@@ -234,6 +234,8 @@ pub(crate) enum LocationCommand {
     Add(AddArgs),
     /// List saved locations
     List,
+    /// Change a location's label, root or hash policy
+    Set(SetArgs),
     /// Forget a location and everything recorded about it; its files are not touched
     Remove {
         /// The location's label
@@ -259,6 +261,24 @@ pub(crate) struct AddArgs {
     /// Skip paths matching a pattern in .gitignore syntax; repeatable
     #[arg(long = "ignore", value_name = "PATTERN")]
     pub(crate) ignore: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+#[command(group(clap::ArgGroup::new("change").required(true).multiple(true).args(["new_label", "root", "policy"])))]
+pub(crate) struct SetArgs {
+    /// The location's current label
+    pub(crate) label: String,
+    /// New label
+    #[arg(long = "label", value_name = "NEW_LABEL")]
+    pub(crate) new_label: Option<String>,
+    /// New root directory, for example where its device is mounted now; records the device
+    /// found there
+    #[arg(long, value_name = "PATH")]
+    pub(crate) root: Option<PathBuf>,
+    /// When to hash contents from now on: during every scan (eager) or only when a comparison
+    /// needs it (lazy)
+    #[arg(long, value_enum)]
+    pub(crate) policy: Option<Policy>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

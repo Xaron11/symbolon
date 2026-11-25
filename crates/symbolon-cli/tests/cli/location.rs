@@ -1,6 +1,5 @@
 //! `symbolon location add|list|remove`.
 
-use symbolon_core::catalog::Catalog;
 use symbolon_core::scan::{ScanOptions, Scanner};
 
 use crate::common::{Env, settings};
@@ -27,7 +26,7 @@ fn two_locations() -> Env {
         "--ignore",
         "*.tmp",
     ]);
-    let catalog = Catalog::open(&env.catalog).unwrap();
+    let catalog = env.open_catalog();
     Scanner::start(&catalog, "photos", ScanOptions::default())
         .unwrap()
         .wait()
@@ -79,7 +78,7 @@ fn an_empty_catalog_lists_nothing_and_hints_on_stderr() {
     );
     assert_eq!(
         env.ok(&["location", "list", "--format", "csv"]),
-        "label,root,kind,scannable,hash_policy,hash_algo,files,bytes,hashed_files,last_scan_status,last_scan_started_at\n"
+        "label,root,kind,scannable,hash_policy,hash_algo,files,bytes,hashed_files,last_scan_status,last_scan_started_at,fingerprint\n"
     );
 }
 
@@ -174,4 +173,59 @@ fn a_new_catalog_directory_is_private() {
     }
     let mode = std::fs::metadata(&catalog).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
+}
+
+#[test]
+fn set_renames_moves_and_changes_the_policy() {
+    let env = two_locations();
+    let json = |args: &[&str]| -> serde_json::Value {
+        let run = env.run(args);
+        assert_eq!(run.code, 0, "{args:?}: {}", run.stderr);
+        serde_json::from_str(&run.stdout).unwrap()
+    };
+
+    let renamed = json(&["location", "set", "photos", "--label", "pictures", "--json"]);
+    assert_eq!(renamed["locations"][0]["label"], "pictures");
+    assert_eq!(renamed["locations"][0]["files"], 2, "the scan stays");
+
+    let taken = env.run(&["location", "set", "pictures", "--label", "backup"]);
+    assert_eq!(taken.code, 3);
+    assert!(taken.stderr.contains("already exists"), "{}", taken.stderr);
+    let invalid = env.run(&["location", "set", "pictures", "--label", "a:b"]);
+    assert_eq!(invalid.code, 3);
+
+    let eager = json(&["location", "set", "backup", "--policy", "eager", "--json"]);
+    assert_eq!(eager["locations"][0]["hash_policy"], "eager");
+
+    // A new root records the device found there.
+    env.tree("usb/photos", &[("a.jpg", "aaaa")]);
+    env.mount(&[("usb-1", "usb")]);
+    let usb = env.path("usb/photos");
+    let moved = json(&[
+        "location",
+        "set",
+        "pictures",
+        "--root",
+        usb.to_str().unwrap(),
+        "--json",
+    ]);
+    assert_eq!(moved["locations"][0]["root"], "[TMP]/usb/photos");
+    assert_eq!(moved["locations"][0]["fingerprint"], "fs:usb-1:/photos");
+
+    let missing = env.path("nowhere");
+    let run = env.run(&[
+        "location",
+        "set",
+        "pictures",
+        "--root",
+        missing.to_str().unwrap(),
+    ]);
+    assert_eq!(run.code, 3);
+    assert!(run.stderr.contains("is not a directory"), "{}", run.stderr);
+
+    assert_eq!(
+        env.run(&["location", "set", "pictures"]).code,
+        2,
+        "nothing to change"
+    );
 }
