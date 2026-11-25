@@ -78,3 +78,11 @@ Per-entry problems found during a scan (permission denied, vanished, changed whi
 ## `.symbolon` export files
 
 An export is a database with the same schema, `meta.kind = 'export'` and exactly one location: its newest completed scan and its entries, all marked as seen by that scan. It uses `journal_mode = DELETE`, so it is one self-contained file. `Catalog::export` writes it and `Catalog::import` reads it; the conflict rules are in [ADR-0005](adr/0005-export-format-and-import-conflicts.md) and [ADR-0013](adr/0013-imported-locations.md). Exports contain full paths and hashes of private files: treat them as sensitive.
+
+An export comes from another catalog, so `Catalog::import` does not trust it. It opens the file read-only, with SQLite's defensive mode on and the schema untrusted. The header's `hash_algo` and `path_encoding` must match the location row. Every entry is checked before anything is written:
+
+- `rel_path_raw` must be a valid relative path in its encoding. For `wtf8`, this also means no `\` or `:`, which on Windows would be a separator, a drive or a stream.
+- `path_key` and `parent_key` must be the keys derived from it.
+- Each digest must have its algorithm's length.
+
+A file that fails a check is refused with `TransferError::InvalidEntry`.

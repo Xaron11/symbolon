@@ -110,6 +110,27 @@ fn existing_files_and_older_scans_need_force() {
 }
 
 #[test]
+fn a_scanned_location_with_the_same_label_needs_a_choice() {
+    let env = laptop();
+    let file = env.path("photos.symbolon");
+    let file = file.to_str().unwrap();
+    env.ok(&["export", "photos", "-o", file]);
+
+    let refused = env.run(&["import", file]);
+    assert_eq!(refused.code, 4);
+    assert!(
+        refused.stderr.contains("is scanned on this computer") && refused.stderr.contains("--as"),
+        "{}",
+        refused.stderr
+    );
+
+    let replaced = env.run(&["import", file, "--replace", "--json"]);
+    assert_eq!(replaced.code, 0, "{}", replaced.stderr);
+    let list: Value = serde_json::from_str(&env.ok(&["location", "list", "--json"])).unwrap();
+    assert_eq!(list["locations"][0]["kind"], "imported");
+}
+
+#[test]
 fn bad_input_fails_clearly() {
     let env = laptop();
     let text = env.path("notes.txt");

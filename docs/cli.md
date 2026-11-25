@@ -116,7 +116,7 @@ symbolon import backup.symbolon
 symbolon diff laptop backup
 ```
 
-An imported location compares like any other but cannot be scanned there. Importing again updates it if the file holds a newer scan. When an import is ambiguous, for example a location with that label already exists for another device, `import` stops with exit code 4 and says which choice resolves it: `--as <label>` to import under a new label, `--replace` to replace the existing location's data, `--into <label>` to update the location that is the same device, or `--force` to accept an older scan. [ADR-0005](adr/0005-export-format-and-import-conflicts.md) has the full rules.
+An imported location compares like any other but cannot be scanned there. Importing again updates it if the file holds a newer scan. When an import is ambiguous, `import` stops with exit code 4 and says which choice resolves it. That happens, for example, when the label belongs to a location scanned on this computer or to another device. The choices are `--as <label>` to import under a new label, `--replace` to replace the existing location's data, `--into <label>` to update the location that is the same device, or `--force` to accept an older scan. Replacing or updating a location scanned on this computer turns it into an imported location, which is no longer scanned there. [ADR-0005](adr/0005-export-format-and-import-conflicts.md) and [ADR-0014](adr/0014-imports-and-local-locations.md) have the full rules.
 
 ## Output for scripts
 
