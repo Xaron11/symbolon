@@ -99,13 +99,17 @@ bench:
 android-probe dir="/sdcard/DCIM" serial="": android-scanner
     #!/usr/bin/env bash
     set -euo pipefail
+    dir={{ quote(dir) }}
+    serial={{ quote(serial) }}
     adb_args=()
-    [[ -n "{{ serial }}" ]] && adb_args=(-s "{{ serial }}")
+    [[ -n "$serial" ]] && adb_args=(-s "$serial")
     remote=/data/local/tmp/symbolon-agent
+    # Remove the binary however the recipe ends, including a failed push or chmod.
+    trap 'adb "${adb_args[@]}" shell rm -f "$remote"' EXIT
     adb "${adb_args[@]}" push target/{{ agent_target }}/release-agent/symbolon-agent "$remote" >&2
     adb "${adb_args[@]}" shell chmod 755 "$remote"
-    trap 'adb "${adb_args[@]}" shell rm -f "$remote"' EXIT
-    adb "${adb_args[@]}" exec-out "$remote" "{{ dir }}"
+    # adb joins its arguments into one device shell command line, so quote the directory.
+    adb "${adb_args[@]}" exec-out "$remote" "'${dir//\'/\'\\\'\'}'"
 
 # --- documentation -----------------------------------------------------------
 
