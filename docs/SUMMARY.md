@@ -30,6 +30,7 @@
   - [0014 Imports and local locations](adr/0014-imports-and-local-locations.md)
   - [0015 Opening files beneath the root](adr/0015-opening-files-beneath-the-root.md)
   - [0016 Device fingerprints](adr/0016-device-fingerprints.md)
+  - [0017 Android over ADB](adr/0017-android-over-adb.md)
 
 # Development
 
