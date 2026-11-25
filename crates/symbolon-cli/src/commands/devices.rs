@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use symbolon_core::catalog::{Catalog, Whereabouts};
+use symbolon_core::catalog::{Catalog, LocationRoot, Whereabouts};
 
 use crate::output;
 use crate::prompt;
@@ -117,6 +117,9 @@ fn follow(
     Ok(())
 }
 
+/// A path as `location list` shows roots: without Windows' `\\?\` prefix, control
+/// characters escaped.
 fn shown(path: &Path) -> String {
-    output::printable(&path.display().to_string()).into_owned()
+    let display = LocationRoot::Local(path.to_path_buf()).display();
+    output::printable(&display).into_owned()
 }
