@@ -5,6 +5,8 @@ mod dupes;
 mod generate;
 mod location;
 mod scan;
+#[cfg(debug_assertions)]
+mod test_mounts;
 mod transfer;
 
 use std::path::PathBuf;
@@ -45,7 +47,11 @@ fn open_catalog(global: &Global) -> anyhow::Result<Catalog> {
             .create(parent)
             .with_context(|| format!("cannot create {}", parent.display()))?;
     }
-    Catalog::open(&path).with_context(|| format!("cannot open the catalog {}", path.display()))
+    let catalog = Catalog::open(&path)
+        .with_context(|| format!("cannot open the catalog {}", path.display()))?;
+    #[cfg(debug_assertions)]
+    let catalog = test_mounts::apply(catalog);
+    Ok(catalog)
 }
 
 fn default_catalog() -> anyhow::Result<PathBuf> {

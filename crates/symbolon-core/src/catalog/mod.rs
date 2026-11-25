@@ -237,6 +237,53 @@ impl Catalog {
         Ok(())
     }
 
+    /// Gives a location a new label, its identity in every command.
+    ///
+    /// # Errors
+    ///
+    /// [`CatalogError::LocationNotFound`], [`CatalogError::InvalidLabel`],
+    /// [`CatalogError::LabelTaken`], or a database error.
+    pub fn rename(&self, label: &str, new_label: &str) -> Result<Location, CatalogError> {
+        validate_label(new_label)?;
+        let renamed = self.connect()?.execute(
+            "UPDATE locations SET label = ?2 WHERE label = ?1",
+            params![label, new_label],
+        );
+        match renamed {
+            Ok(0) => Err(CatalogError::LocationNotFound(label.to_owned())),
+            Err(rusqlite::Error::SqliteFailure(e, _))
+                if e.code == ErrorCode::ConstraintViolation =>
+            {
+                Err(CatalogError::LabelTaken(new_label.to_owned()))
+            }
+            other => {
+                other?;
+                self.location(new_label)
+            }
+        }
+    }
+
+    /// Changes when a location's files are hashed. Nothing is hashed now; the next scan
+    /// follows the new policy.
+    ///
+    /// # Errors
+    ///
+    /// [`CatalogError::LocationNotFound`], or a database error.
+    pub fn set_hash_policy(
+        &self,
+        label: &str,
+        policy: HashPolicy,
+    ) -> Result<Location, CatalogError> {
+        let updated = self.connect()?.execute(
+            "UPDATE locations SET hash_policy = ?2 WHERE label = ?1",
+            params![label, policy.name()],
+        )?;
+        if updated == 0 {
+            return Err(CatalogError::LocationNotFound(label.to_owned()));
+        }
+        self.location(label)
+    }
+
     /// A read-write connection, configured for this catalog.
     pub(crate) fn connect(&self) -> Result<Connection, CatalogError> {
         let conn = Connection::open_with_flags(
@@ -663,6 +710,43 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let catalog = Catalog::open(dir.path().join("catalog.db")).unwrap();
         (dir, catalog)
+    }
+
+    #[test]
+    fn locations_can_be_renamed_and_change_policy() {
+        let (dir, catalog) = catalog();
+        for label in ["photos", "music"] {
+            catalog
+                .add_location(NewLocation::local(label, dir.path()))
+                .unwrap();
+        }
+        let renamed = catalog.rename("photos", "pictures").unwrap();
+        assert_eq!(renamed.label, "pictures");
+        assert!(matches!(
+            catalog.location("photos"),
+            Err(CatalogError::LocationNotFound(_))
+        ));
+        assert!(matches!(
+            catalog.rename("pictures", "music"),
+            Err(CatalogError::LabelTaken(label)) if label == "music"
+        ));
+        assert!(matches!(
+            catalog.rename("pictures", "a:b"),
+            Err(CatalogError::InvalidLabel(_))
+        ));
+        assert!(matches!(
+            catalog.rename("nope", "x"),
+            Err(CatalogError::LocationNotFound(_))
+        ));
+
+        let eager = catalog
+            .set_hash_policy("pictures", HashPolicy::Eager)
+            .unwrap();
+        assert_eq!(eager.hash_policy, HashPolicy::Eager);
+        assert!(matches!(
+            catalog.set_hash_policy("nope", HashPolicy::Lazy),
+            Err(CatalogError::LocationNotFound(_))
+        ));
     }
 
     #[test]

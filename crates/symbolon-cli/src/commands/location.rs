@@ -1,4 +1,4 @@
-//! `symbolon location add|list|remove`.
+//! `symbolon location add|list|set|remove`.
 
 use std::io::{self, BufRead as _, IsTerminal as _, Write as _};
 
@@ -7,7 +7,7 @@ use symbolon_core::catalog::{Location, LocationRoot, NewLocation};
 use symbolon_core::query::{Page, Query};
 
 use super::open_catalog;
-use crate::cli::{AddArgs, Global, LocationCommand};
+use crate::cli::{AddArgs, Global, LocationCommand, SetArgs};
 use crate::exit::{Exit, Refused};
 use crate::output::{self, Format, Record};
 
@@ -15,6 +15,7 @@ pub(super) fn run(global: &Global, command: &LocationCommand) -> anyhow::Result<
     match command {
         LocationCommand::Add(args) => add(global, args),
         LocationCommand::List => list(global),
+        LocationCommand::Set(args) => set(global, args),
         LocationCommand::Remove { label, yes } => remove(global, label, *yes),
     }
 }
@@ -36,6 +37,9 @@ struct LocationRecord {
     hashed_files: u64,
     last_scan_status: Option<String>,
     last_scan_started_at: Option<String>,
+    /// Best-effort device fingerprint (`fs:<filesystem UUID>:<path inside it>`), used to find
+    /// the location again when its device is mounted elsewhere.
+    fingerprint: Option<String>,
 }
 
 impl Record for LocationRecord {
@@ -51,6 +55,7 @@ impl Record for LocationRecord {
         "hashed_files",
         "last_scan_status",
         "last_scan_started_at",
+        "fingerprint",
     ];
     const HEADERS: &'static [&'static str] = &[
         "LABEL",
@@ -61,6 +66,7 @@ impl Record for LocationRecord {
         "SIZE",
         "HASHED",
         "LAST SCAN",
+        "DEVICE",
     ];
 
     fn cells(&self) -> Vec<String> {
@@ -82,6 +88,7 @@ impl Record for LocationRecord {
             output::size(self.bytes),
             self.hashed_files.to_string(),
             last_scan,
+            self.fingerprint.clone().unwrap_or_else(|| "-".to_owned()),
         ]
     }
 }
@@ -109,6 +116,7 @@ fn record(query: &Query, location: &Location) -> anyhow::Result<LocationRecord> 
         hashed_files: stats.verified_files,
         last_scan_status: last.as_ref().map(|scan| scan.status.to_string()),
         last_scan_started_at: last.map(|scan| output::time(scan.started_at)),
+        fingerprint: location.fingerprint.clone(),
     })
 }
 
@@ -122,6 +130,23 @@ fn add(global: &Global, args: &AddArgs) -> anyhow::Result<Exit> {
         new = new.hash_algo(algo.into());
     }
     let location = catalog.add_location(new)?;
+    let query = Query::open(&catalog)?;
+    output::list(global.format(), "locations", &[record(&query, &location)?])?;
+    Ok(Exit::Success)
+}
+
+fn set(global: &Global, args: &SetArgs) -> anyhow::Result<Exit> {
+    let catalog = open_catalog(global)?;
+    let mut location = catalog.location(&args.label)?;
+    if let Some(root) = &args.root {
+        location = catalog.relocate(&location.label, root)?;
+    }
+    if let Some(policy) = args.policy {
+        location = catalog.set_hash_policy(&location.label, policy.into())?;
+    }
+    if let Some(new_label) = &args.new_label {
+        location = catalog.rename(&location.label, new_label)?;
+    }
     let query = Query::open(&catalog)?;
     output::list(global.format(), "locations", &[record(&query, &location)?])?;
     Ok(Exit::Success)
@@ -211,6 +236,7 @@ mod tests {
             hashed_files: 0,
             last_scan_status: None,
             last_scan_started_at: None,
+            fingerprint: None,
         });
         output::assert_fields(&Removed {
             label: String::new(),
