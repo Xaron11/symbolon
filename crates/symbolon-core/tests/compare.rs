@@ -534,6 +534,154 @@ fn rows_carry_kinds_and_targets_and_filter_by_kind() {
     );
 }
 
+/// `key -> (category, presence)`, ignoring `assumed`.
+fn categories(comparison: &Comparison) -> BTreeMap<String, (Category, Vec<usize>)> {
+    classes(comparison)
+        .into_iter()
+        .map(|(key, (category, presence, _))| (key, (category, presence)))
+        .collect()
+}
+
+fn class(category: Category, presence: &[usize]) -> (Category, Vec<usize>) {
+    (category, presence.to_vec())
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinks_compare_by_target() {
+    let fx = Fixture::new();
+    fx.links("a", &[("same", "x"), ("moved", "x"), ("extra", "x")]);
+    fx.links("b", &[("same", "x"), ("moved", "y")]);
+    fx.eager("a", &[]);
+    fx.eager("b", &[]);
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+    assert_eq!(
+        categories(&cmp),
+        BTreeMap::from([
+            ("extra".to_owned(), class(Category::OnlyIn, &[0])),
+            ("moved".to_owned(), class(Category::Different, &[0, 1])),
+            ("same".to_owned(), class(Category::Identical, &[0, 1])),
+        ])
+    );
+    assert_eq!(cmp.summary().unwrap().get(Category::Identical).bytes, 0);
+    assert!(
+        all_rows(&cmp).iter().all(|r| r.size.is_none()),
+        "links have no content size"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn unknown_link_targets_are_unverified_unless_alone() {
+    let fx = Fixture::new();
+    fx.links("a", &[("same", "x"), ("alone", "x")]);
+    fx.links("b", &[("same", "x")]);
+    fx.eager("a", &[]);
+    fx.eager("b", &[]);
+    rusqlite::Connection::open(fx.catalog.path())
+        .unwrap()
+        .execute_batch(
+            "UPDATE entries SET link_target = NULL
+             WHERE path_key = 'alone'
+                OR (path_key = 'same' AND location_id = (SELECT id FROM locations WHERE label = 'b'))",
+        )
+        .unwrap();
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+    assert_eq!(
+        categories(&cmp),
+        BTreeMap::from([
+            ("alone".to_owned(), class(Category::OnlyIn, &[0])),
+            ("same".to_owned(), class(Category::Unverified, &[0, 1])),
+        ])
+    );
+    let fast = CompareOptions::default().assume_equal_within(Duration::from_secs(3600));
+    assert_eq!(
+        categories(&fx.compare(&["a", "b"], fast))["same"],
+        class(Category::Unverified, &[0, 1]),
+        "fast mode does not apply to symlinks"
+    );
+    assert!(
+        cmp.hash_needs().unwrap().is_empty(),
+        "links are never hashed"
+    );
+}
+
+#[test]
+fn only_uncovered_directories_are_reported() {
+    let fx = Fixture::new();
+    for dir in ["empty", "deep/x", "shared"] {
+        fs::create_dir_all(fx.root("a").join(dir)).unwrap();
+    }
+    fs::create_dir_all(fx.root("b").join("shared")).unwrap();
+    fx.eager("a", &[("full/f.txt", "f")]);
+    fx.eager("b", &[]);
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+    assert_eq!(
+        categories(&cmp),
+        BTreeMap::from([
+            ("deep/x".to_owned(), class(Category::OnlyIn, &[0])),
+            ("empty".to_owned(), class(Category::OnlyIn, &[0])),
+            ("full/f.txt".to_owned(), class(Category::OnlyIn, &[0])),
+        ])
+    );
+    let empty = all_rows(&cmp)
+        .into_iter()
+        .find(|r| r.key == "empty")
+        .unwrap();
+    assert_eq!(empty.cells[0].kind, EntryKind::Dir);
+    assert_eq!(cmp.summary().unwrap().entries(), 3);
+}
+
+#[test]
+fn a_kind_clash_is_different() {
+    let fx = Fixture::new();
+    fx.eager("a", &[("notes", "a file")]);
+    fx.eager("b", &[("notes/n.txt", "n")]);
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+    assert_eq!(
+        categories(&cmp),
+        BTreeMap::from([
+            ("notes".to_owned(), class(Category::Different, &[0, 1])),
+            ("notes/n.txt".to_owned(), class(Category::OnlyIn, &[1])),
+        ])
+    );
+    let notes = all_rows(&cmp)
+        .into_iter()
+        .find(|r| r.key == "notes")
+        .unwrap();
+    assert_eq!(
+        notes.cells.iter().map(|c| c.kind).collect::<Vec<_>>(),
+        [EntryKind::File, EntryKind::Dir]
+    );
+    assert_eq!(notes.size, None);
+}
+
+/// Case-insensitive filesystems (Windows, macOS) cannot hold `Photos` next to `photos`.
+#[cfg(target_os = "linux")]
+#[test]
+fn directory_only_collisions_are_not_reported() {
+    let fx = Fixture::new();
+    fx.eager("a", &[("Photos/p.jpg", "p"), ("photos/q.jpg", "q")]);
+    fx.eager("b", &[("photos/p.jpg", "p"), ("photos/q.jpg", "q")]);
+    let ci = CompareOptions::default().keys(KeyOptions {
+        case_insensitive: true,
+        ..KeyOptions::default()
+    });
+    assert_eq!(
+        categories(&fx.compare(&["a", "b"], ci)),
+        BTreeMap::from([
+            (
+                "photos/p.jpg".to_owned(),
+                class(Category::Identical, &[0, 1])
+            ),
+            (
+                "photos/q.jpg".to_owned(),
+                class(Category::Identical, &[0, 1])
+            ),
+        ])
+    );
+}
+
 #[test]
 fn same_content_at_another_path_is_moved_or_renamed() {
     let fx = Fixture::new();

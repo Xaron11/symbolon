@@ -15,8 +15,9 @@ use symbolon_core::query::Page;
 const FILES: u64 = 200_000;
 const PER_DIR: u64 = 100;
 
-/// Writes `FILES` entries per location straight into the catalog: on b, every 50th file has
-/// different content, every 100th exists only on one side, and every 200th was moved.
+/// Writes `FILES` file entries per location straight into the catalog, plus their directories:
+/// on b, every 50th file has different content, every 100th exists only on one side, and every
+/// 200th was moved.
 fn populate(dir: &std::path::Path) -> Catalog {
     let catalog = Catalog::open(dir.join("catalog.db")).expect("open");
     let mut conn = Connection::open(catalog.path()).expect("connect");
@@ -27,6 +28,7 @@ fn populate(dir: &std::path::Path) -> Catalog {
             .add_location(NewLocation::local(label, &root))
             .expect("location");
         let tx = conn.transaction().expect("tx");
+        let mut dirs = std::collections::BTreeSet::new();
         {
             let mut insert = tx
                 .prepare(
@@ -51,6 +53,7 @@ fn populate(dir: &std::path::Path) -> Catalog {
                 }
                 let rel = RelPath::from_path(path.as_ref()).expect("path");
                 let key = rel.key();
+                dirs.insert(key.parent().to_owned());
                 let digest = hash_bytes(HashAlgo::Blake3, content.as_bytes());
                 insert
                     .execute(params![
@@ -62,6 +65,17 @@ fn populate(dir: &std::path::Path) -> Catalog {
                         digest.as_bytes()
                     ])
                     .expect("insert");
+            }
+            let mut insert_dir = tx
+                .prepare(
+                    "INSERT INTO entries (location_id, rel_path_raw, path_key, parent_key, kind, size, mtime_ns, seen_scan_id)
+                     VALUES (?1, CAST(?2 AS BLOB), ?2, '', 'dir', 0, 0, 1)",
+                )
+                .expect("prepare");
+            for dir in &dirs {
+                insert_dir
+                    .execute(params![location.id.get(), dir])
+                    .expect("insert dir");
             }
         }
         tx.commit().expect("commit");

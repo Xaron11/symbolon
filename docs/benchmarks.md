@@ -55,10 +55,12 @@ Entries are read from the catalog only; no file is touched. Generated data: ever
 
 The first 200k × 2 measurement was 4.2 s. Profiling showed index maintenance during the bulk load, a per-file row-assignment pass, and per-file name computation; building indexes after loading, finding path rows by key instead of assigning every file, computing names only for move candidates, and building lookup indexes only when hashing or listing duplicates brought it to 1.6 s.
 
+Since directories and symlinks are compared too ([ADR-0019](adr/0019-directories-and-symlinks-in-comparisons.md), 2026-11-26), the 200k × 2 test also holds each side's 2,000 directories, and the comparison takes 2.0 s; the same data with files only took 1.7 s on the same machine. Deriving the kinds of a row with `max()` instead of `DISTINCT` aggregates took it from 2.1 s to 2.0 s.
+
 ### Against the targets in the specification (§11)
 
 - **Walk 200k files in seconds on SSD:** met. Walking alone runs at about 540k entries/s, so 200k files take under half a second; a full eager first scan of 200k small files is about 6–7 s.
-- **Diff of two 200k-entry locations in well under a few seconds:** met, 1.6 s (release build; the acceptance test fails above 3 s).
+- **Diff of two 200k-entry locations in well under a few seconds:** met, 2.0 s with their directories (release build; the acceptance test fails above 3 s).
 - **GUI responsive during scans:** measured in M6.
 
 On phones and USB sticks, storage throughput dominates instead; see the next section.

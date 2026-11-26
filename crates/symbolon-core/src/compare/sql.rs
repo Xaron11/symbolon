@@ -117,8 +117,8 @@ const DROP_ROW_INDEXES: &str = "
     DROP INDEX IF EXISTS temp.cmp_rows_order;
     DROP INDEX IF EXISTS temp.cmp_rows_digest;";
 
-/// Copies every side's files and symlinks into `cmp_files` within one read transaction (one
-/// snapshot).
+/// Copies every side's files, symlinks and directories into `cmp_files` within one read
+/// transaction (one snapshot).
 pub(super) fn load(
     conn: &mut Connection,
     sides: &[SideInfo],
@@ -140,7 +140,7 @@ pub(super) fn load(
                             CASE WHEN :prefix = '' THEN path_key
                                  ELSE substr(path_key, length(:prefix) + 2) END AS rel
                      FROM main.entries
-                     WHERE location_id = :location AND kind IN ('file', 'symlink')
+                     WHERE location_id = :location AND kind IN ('file', 'symlink', 'dir')
                        AND (:prefix = '' OR (path_key > :prefix || '/' AND path_key < :prefix || '0'))
              )",
         )?;
@@ -158,8 +158,9 @@ pub(super) fn load(
     tx.commit()
 }
 
-/// Classifies path rows (ADR-0010, in order: collision, different, identical, only-in,
-/// unverified or assumed) and assigns every file to its row.
+/// Classifies path rows and assigns every entry to its row: files as in ADR-0010, symlinks by
+/// target, directories only when nothing compared lies beneath them, and kind clashes as
+/// different (ADR-0019).
 pub(super) fn classify(
     conn: &Connection,
     sides: usize,
@@ -175,16 +176,28 @@ pub(super) fn classify(
              (sort_key, category, presence, assumed, size, max_size, ext, digest, kinds, entries,
               bytes)
          SELECT norm, category, presence,
-                category IN ('identical', 'only_in') AND sides >= 2 AND fulls < n,
-                CASE WHEN sizes = 1 THEN size_max END,
-                size_max,
-                sym_ext(sym_name(norm)),
-                CASE WHEN fulls = n AND distinct_full = 1 THEN any_full END,
+                only_files AND category IN ('identical', 'only_in') AND sides >= 2 AND fulls < n,
+                CASE WHEN only_files AND sizes = 1 THEN size_max END,
+                coalesce(size_max, 0),
+                CASE WHEN files > 0 THEN sym_ext(sym_name(norm)) ELSE '' END,
+                CASE WHEN only_files AND fulls = n AND distinct_full = 1 THEN any_full END,
                 kinds, n, bytes
          FROM (
              SELECT *,
                  CASE
+                     WHEN kinds = 2 THEN
+                         CASE WHEN presence != :all AND NOT EXISTS (
+                                  SELECT 1 FROM temp.cmp_files c
+                                  WHERE c.norm > g.norm || '/' AND c.norm < g.norm || '0'
+                                    AND (g.presence >> c.side) & 1 = 1)
+                              THEN 'only_in' END
                      WHEN n > sides THEN 'collision'
+                     WHEN kinds NOT IN (1, 2, 4) THEN 'different'
+                     WHEN kinds = 4 THEN
+                         CASE WHEN sides >= 2 AND min_target < max_target THEN 'different'
+                              WHEN targets = n AND presence = :all THEN 'identical'
+                              WHEN targets = n OR sides = 1 THEN 'only_in'
+                              ELSE 'unverified' END
                      WHEN sides >= 2 AND (sizes > 1 OR distinct_full > 1 OR distinct_partial > 1)
                          THEN 'different'
                      WHEN fulls = n AND presence = :all THEN 'identical'
@@ -192,27 +205,33 @@ pub(super) fn classify(
                      WHEN :fast AND mtimes = n AND mtime_spread <= :tolerance
                          THEN CASE WHEN presence = :all THEN 'identical' ELSE 'only_in' END
                      ELSE 'unverified'
-                 END AS category
+                 END AS category,
+                 kinds = 1 AS only_files
              FROM (
                  SELECT norm,
                         count(*) AS n,
                         count(DISTINCT side) AS sides,
                         sum(DISTINCT 1 << side) AS presence,
-                        count(DISTINCT size) AS sizes,
-                        max(size) AS size_max,
-                        sum(CASE WHEN kind = 'file' THEN size ELSE 0 END) AS bytes,
-                        sum(DISTINCT CASE kind WHEN 'file' THEN 1 WHEN 'dir' THEN 2 ELSE 4 END)
+                        max(kind = 'file') | (max(kind = 'dir') << 1) | (max(kind = 'symlink') << 2)
                             AS kinds,
+                        count(CASE WHEN kind = 'file' THEN 1 END) AS files,
+                        count(DISTINCT CASE WHEN kind = 'file' THEN size END) AS sizes,
+                        max(CASE WHEN kind = 'file' THEN size END) AS size_max,
+                        sum(CASE WHEN kind = 'file' THEN size ELSE 0 END) AS bytes,
                         count(full) AS fulls,
                         count(DISTINCT full) AS distinct_full,
                         max(full) AS any_full,
                         count(DISTINCT partial) AS distinct_partial,
                         count(mtime_ns) AS mtimes,
-                        max(mtime_ns) - min(mtime_ns) AS mtime_spread
+                        max(mtime_ns) - min(mtime_ns) AS mtime_spread,
+                        count(target) AS targets,
+                        min(target) AS min_target,
+                        max(target) AS max_target
                  FROM temp.cmp_files
                  GROUP BY norm
-             )
+             ) AS g
          )
+         WHERE category IS NOT NULL
          ORDER BY norm",
         named_params! { ":all": all, ":fast": fast, ":tolerance": tolerance },
     )?;
