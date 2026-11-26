@@ -96,7 +96,7 @@ fn compares_two_200k_entry_locations_quickly() {
         .expect("rows");
     let read = started.elapsed();
 
-    assert_eq!(summary.files(), 2 * FILES);
+    assert_eq!(summary.entries(), 2 * FILES);
     assert_eq!(summary.get(Category::Moved).rows, FILES / 200);
     assert_eq!(
         summary.get(Category::OnlyIn).rows,

@@ -294,25 +294,25 @@ impl Comparison {
             "WITH candidates AS (
                  SELECT f.side, f.entry_id, f.raw, f.size, f.mtime_ns, f.partial
                  FROM temp.cmp_files f JOIN temp.cmp_rows r ON r.sort_key = f.norm AND f.row_id IS NULL
-                 WHERE r.category = 'unverified' AND f.full IS NULL
+                 WHERE r.category = 'unverified' AND f.kind = 'file' AND f.full IS NULL
                  UNION
                  SELECT f.side, f.entry_id, f.raw, f.size, f.mtime_ns, f.partial
                  FROM temp.cmp_files f JOIN temp.cmp_rows r ON r.sort_key = f.norm AND f.row_id IS NULL
-                 WHERE r.category = 'only_in' AND f.full IS NULL
+                 WHERE r.category = 'only_in' AND f.kind = 'file' AND f.full IS NULL
                    AND EXISTS (
                        SELECT 1 FROM temp.cmp_files g
                        JOIN temp.cmp_rows o ON o.sort_key = g.norm AND g.row_id IS NULL
-                       WHERE g.size = f.size AND o.category = 'only_in'
+                       WHERE g.kind = 'file' AND g.size = f.size AND o.category = 'only_in'
                          AND (o.presence & r.presence) = 0
                          AND (f.partial IS NULL OR g.partial IS NULL OR g.partial = f.partial)
                    )
                  UNION
                  SELECT f.side, f.entry_id, f.raw, f.size, f.mtime_ns, f.partial
                  FROM temp.cmp_files f
-                 WHERE :duplicates AND f.full IS NULL AND f.size > 0
+                 WHERE :duplicates AND f.kind = 'file' AND f.full IS NULL AND f.size > 0
                    AND EXISTS (
                        SELECT 1 FROM temp.cmp_files g
-                       WHERE g.side = f.side AND g.size = f.size AND g.id != f.id
+                       WHERE g.kind = 'file' AND g.side = f.side AND g.size = f.size AND g.id != f.id
                          AND (f.partial IS NULL OR g.partial IS NULL OR g.partial = f.partial)
                    )
              )

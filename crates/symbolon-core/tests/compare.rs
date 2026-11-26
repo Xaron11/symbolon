@@ -16,6 +16,7 @@ use symbolon_core::hash::HashAlgo;
 use symbolon_core::pathkey::KeyOptions;
 use symbolon_core::query::Page;
 use symbolon_core::scan::{ScanOptions, Scanner};
+use symbolon_core::source::EntryKind;
 
 struct Fixture {
     dir: tempfile::TempDir,
@@ -70,6 +71,16 @@ impl Fixture {
     fn eager(&self, label: &str, files: &[(&str, &str)]) {
         let files: Vec<_> = files.iter().map(|(p, c)| (*p, *c, 1_000)).collect();
         self.location(label, HashPolicy::Eager, HashAlgo::Blake3, &files);
+    }
+
+    /// Creates symlinks (path, target) in `label`'s root; call before the location is scanned.
+    #[cfg(unix)]
+    fn links(&self, label: &str, links: &[(&str, &str)]) {
+        for (path, target) in links {
+            let path = self.root(label).join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::os::unix::fs::symlink(target, path).unwrap();
+        }
     }
 
     fn compare(&self, sides: &[&str], options: CompareOptions) -> Comparison {
@@ -152,11 +163,11 @@ fn two_sides_identical_different_and_only_in() {
     assert_eq!(classes(&cmp), expected);
 
     let summary = cmp.summary().unwrap();
-    assert_eq!(summary.files(), 10);
+    assert_eq!(summary.entries(), 10);
     assert_eq!(
         (
             summary.get(Category::Identical).rows,
-            summary.get(Category::Identical).files
+            summary.get(Category::Identical).entries
         ),
         (2, 4)
     );
@@ -377,7 +388,7 @@ fn subpaths_compare_relative_keys_without_leaking_siblings() {
 
     // One location against itself, through two subpaths.
     let same = fx.compare(&["disk:photos", "disk:photos2"], CompareOptions::default());
-    assert_eq!(same.summary().unwrap().files(), 3);
+    assert_eq!(same.summary().unwrap().entries(), 3);
 }
 
 #[test]
@@ -478,6 +489,51 @@ fn rows_filter_by_category_and_page_stably() {
     assert_eq!(both.items[0].presence, SideSet::from_bits(0b11));
 }
 
+#[cfg(unix)]
+#[test]
+fn rows_carry_kinds_and_targets_and_filter_by_kind() {
+    let fx = Fixture::new();
+    fx.links("a", &[("l", "f.txt")]);
+    fx.eager("a", &[("f.txt", "x")]);
+    fx.eager("b", &[("f.txt", "x")]);
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+
+    let rows = all_rows(&cmp);
+    let link = rows.iter().find(|r| r.key == "l").unwrap();
+    assert_eq!(link.cells.len(), 1);
+    assert_eq!(link.cells[0].kind, EntryKind::Symlink);
+    assert_eq!(link.cells[0].link_target.as_deref(), Some(&b"f.txt"[..]));
+    let file = rows.iter().find(|r| r.key == "f.txt").unwrap();
+    assert!(
+        file.cells
+            .iter()
+            .all(|c| c.kind == EntryKind::File && c.link_target.is_none())
+    );
+
+    let links = cmp
+        .rows(
+            &RowFilter::default().kinds([EntryKind::Symlink]),
+            &Page::first(10),
+        )
+        .unwrap();
+    assert_eq!(
+        links
+            .items
+            .iter()
+            .map(|r| r.key.as_str())
+            .collect::<Vec<_>>(),
+        ["l"]
+    );
+    let summary = cmp.summary().unwrap();
+    assert_eq!(summary.entries(), 3);
+    assert_eq!(
+        cmp.filtered_summary(&RowFilter::default().kinds([EntryKind::Symlink]))
+            .unwrap()
+            .entries(),
+        1
+    );
+}
+
 #[test]
 fn same_content_at_another_path_is_moved_or_renamed() {
     let fx = Fixture::new();
@@ -554,7 +610,7 @@ fn same_content_at_another_path_is_moved_or_renamed() {
     assert!(rows.iter().all(|r| r.presence == SideSet::from_bits(0b11)));
     let cmp = fx.compare(&["a", "b"], CompareOptions::default());
     assert_eq!(
-        cmp.summary().unwrap().files(),
+        cmp.summary().unwrap().entries(),
         8,
         "every file in exactly one row"
     );
@@ -996,9 +1052,9 @@ mod filters_and_duplicates {
         let summary = cmp
             .filtered_summary(&RowFilter::default().extension("jpg"))
             .unwrap();
-        assert_eq!(summary.files(), 2 + 3 + 3);
+        assert_eq!(summary.entries(), 2 + 3 + 3);
         assert_eq!(summary.get(Category::Identical).rows, 1);
-        assert_eq!(cmp.summary().unwrap().files(), 9);
+        assert_eq!(cmp.summary().unwrap().entries(), 9);
     }
 
     #[test]

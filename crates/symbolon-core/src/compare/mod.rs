@@ -24,6 +24,7 @@ use crate::catalog::{Catalog, CatalogError};
 use crate::hash::{Digest, HashAlgo, PartialDigest};
 use crate::pathkey::{KeyOptions, PathEncoding, PathKey, RelPath};
 use crate::query::{Cursor, HashState, Page, PageOf};
+use crate::source::EntryKind;
 
 pub use self::resolve::{HashNeed, ResolveEvent, ResolveSummary};
 
@@ -257,7 +258,7 @@ pub struct SideInfo {
     pub(crate) location_id: i64,
 }
 
-/// One compared file within a [`Row`].
+/// One compared entry (file, directory or symlink) within a [`Row`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Cell {
@@ -267,6 +268,11 @@ pub struct Cell {
     pub path: RelPath,
     /// Path key relative to the side's subpath, before normalization.
     pub key: PathKey,
+    /// File, directory or symlink.
+    pub kind: EntryKind,
+    /// A symlink's target as raw bytes in the side's path encoding; `None` for other kinds
+    /// or when unknown (ADR-0019).
+    pub link_target: Option<Vec<u8>>,
     /// Size in bytes.
     pub size: u64,
     /// Modification time in nanoseconds since the Unix epoch.
@@ -279,7 +285,7 @@ pub struct Cell {
     pub partial: Option<PartialDigest>,
 }
 
-/// A classified group of files.
+/// A classified group of entries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Row {
@@ -287,13 +293,13 @@ pub struct Row {
     pub category: Category,
     /// Normalized path relative to the sides' subpaths; for moves, the first placement's.
     pub key: String,
-    /// Sides holding a file of this row.
+    /// Sides holding an entry of this row.
     pub presence: SideSet,
     /// Equality assumed from size and modification time (fast mode), not verified.
     pub assumed: bool,
     /// Common size, when all files have the same size.
     pub size: Option<u64>,
-    /// The files, ordered by side, then path.
+    /// The entries, ordered by side, then path.
     pub cells: Vec<Cell>,
 }
 
@@ -303,9 +309,9 @@ pub struct Row {
 pub struct Totals {
     /// Rows.
     pub rows: u64,
-    /// Files in those rows.
-    pub files: u64,
-    /// Bytes of those files.
+    /// Entries (files, directories and symlinks) in those rows.
+    pub entries: u64,
+    /// Bytes of the files in those rows.
     pub bytes: u64,
     /// Rows whose equality is assumed (fast mode).
     pub assumed_rows: u64,
@@ -325,9 +331,9 @@ impl Summary {
         self.categories.get(&category).copied().unwrap_or_default()
     }
 
-    /// Files compared in total.
-    pub fn files(&self) -> u64 {
-        self.categories.values().map(|t| t.files).sum()
+    /// Entries compared in total.
+    pub fn entries(&self) -> u64 {
+        self.categories.values().map(|t| t.entries).sum()
     }
 }
 
@@ -348,6 +354,9 @@ pub struct RowFilter {
     pub prefix: Option<String>,
     /// Only rows present on exactly these sides.
     pub presence: Option<SideSet>,
+    /// Only rows with an entry of one of these kinds; empty means all. [`EntryKind::Other`]
+    /// entries are never compared.
+    pub kinds: Vec<EntryKind>,
 }
 
 impl RowFilter {
@@ -385,6 +394,13 @@ impl RowFilter {
     #[must_use]
     pub fn presence(mut self, sides: SideSet) -> Self {
         self.presence = Some(sides);
+        self
+    }
+
+    /// Restricts to rows holding an entry of one of `kinds`.
+    #[must_use]
+    pub fn kinds(mut self, kinds: impl IntoIterator<Item = EntryKind>) -> Self {
+        self.kinds = kinds.into_iter().collect();
         self
     }
 }

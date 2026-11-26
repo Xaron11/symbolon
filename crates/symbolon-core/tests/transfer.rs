@@ -153,7 +153,7 @@ fn export_and_import_round_trip() {
     .unwrap();
     let summary = cmp.summary().unwrap();
     assert_eq!(summary.get(Category::Identical).rows, 2);
-    assert_eq!(summary.files(), 4);
+    assert_eq!(summary.entries(), 4);
 }
 
 #[test]
