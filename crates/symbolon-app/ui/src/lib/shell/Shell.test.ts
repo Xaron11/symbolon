@@ -5,6 +5,7 @@ import { expectNoAxeViolations } from '../../test/axe';
 import { text } from '../../test/snippet';
 import { theme } from '../design/theme.svelte';
 import ShellWithTable from '../../test/ShellWithTable.svelte';
+import type { ScanState } from '../scans/scans.svelte';
 import Shell from './Shell.svelte';
 
 afterEach(() => {
@@ -85,5 +86,22 @@ describe('Shell', () => {
 		expect(grid.querySelector('[aria-selected="true"]')).not.toBeNull();
 		await user.keyboard('?');
 		expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy();
+	});
+});
+
+describe('Shell scan status', () => {
+	it('shows running scans in the status bar, linking to Scans', () => {
+		const navigate = vi.fn();
+		const scanState = {
+			running: [{ type: 'Started' as const, label: 'Photos', scanId: 1 }]
+		} as unknown as ScanState;
+		render(Shell, { pathname: '/locations', navigate, children: text('x'), scans: scanState });
+		const link = screen.getByRole('link', { name: 'Scanning Photos' });
+		expect(link.getAttribute('href')).toBe('/scans');
+	});
+
+	it('says no scans run without a scan state', () => {
+		shell();
+		expect(screen.getByRole('link', { name: 'No scans running' })).toBeTruthy();
 	});
 });
