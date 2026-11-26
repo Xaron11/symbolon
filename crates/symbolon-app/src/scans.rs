@@ -20,6 +20,17 @@ use crate::state::AppState;
 
 /// Least time between two progress updates of one scan; others are dropped.
 pub(crate) const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
+/// Least time between two "results changed" notices to browsers of a scanned location.
+pub(crate) const BROWSE_INTERVAL: Duration = Duration::from_secs(1);
+
+/// A location's catalog changed under a browser: re-read what is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+pub(crate) enum BrowseChange {
+    /// The running scan committed more entries.
+    Changed,
+    /// The scan ended; nothing more will change.
+    Finished,
+}
 
 /// What a scan is doing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
@@ -157,10 +168,14 @@ impl RunningScan {
     }
 }
 
+type BrowseSink = Box<dyn Sink<BrowseChange>>;
+
 /// Scans started from the UI, by location label.
 #[derive(Default)]
 pub(crate) struct ScanRegistry {
     running: Mutex<HashMap<String, Arc<RunningScan>>>,
+    /// Browsers of each location, notified while its scans write; kept until they are gone.
+    browsers: Mutex<HashMap<String, Vec<BrowseSink>>>,
 }
 
 impl ScanRegistry {
@@ -207,7 +222,14 @@ impl ScanRegistry {
         std::thread::spawn(move || {
             let started = Instant::now();
             let mut throttle = Throttle::new(PROGRESS_INTERVAL);
+            let mut last_change: Option<Instant> = None;
             for event in &events {
+                if matches!(event, ScanEvent::Progress(_))
+                    && last_change.is_none_or(|at| at.elapsed() >= BROWSE_INTERVAL)
+                {
+                    last_change = Some(Instant::now());
+                    registry.notify_browsers(&label, BrowseChange::Changed);
+                }
                 match event {
                     ScanEvent::Started { scan_id, .. } => scan.publish(ScanUpdate::Started {
                         label: label.clone(),
@@ -231,10 +253,13 @@ impl ScanRegistry {
                     error: error.into(),
                 });
             }
-            let mut running = lock(&registry.running);
-            if running.get(&label).is_some_and(|s| Arc::ptr_eq(s, &scan)) {
-                running.remove(&label);
+            {
+                let mut running = lock(&registry.running);
+                if running.get(&label).is_some_and(|s| Arc::ptr_eq(s, &scan)) {
+                    running.remove(&label);
+                }
             }
+            registry.notify_browsers(&label, BrowseChange::Finished);
         });
         Ok(())
     }
@@ -246,6 +271,24 @@ impl ScanRegistry {
                 format!("no scan of {label:?} is running"),
             )
         })
+    }
+
+    /// Notifies `sink` whenever a scan of `label` writes, from now on.
+    pub(crate) fn subscribe_browse(&self, label: &str, sink: Box<dyn Sink<BrowseChange>>) {
+        lock(&self.browsers)
+            .entry(label.to_owned())
+            .or_default()
+            .push(sink);
+    }
+
+    fn notify_browsers(&self, label: &str, change: BrowseChange) {
+        let mut browsers = lock(&self.browsers);
+        if let Some(sinks) = browsers.get_mut(label) {
+            sinks.retain(|sink| sink.send(change));
+            if sinks.is_empty() {
+                browsers.remove(label);
+            }
+        }
     }
 
     /// Adds `sink` to a running scan and sends it the scan's latest update at once.

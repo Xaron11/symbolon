@@ -1,5 +1,6 @@
 //! `#[tauri::command]` wrappers: each runs one [`AppState`] method on a blocking thread.
 
+pub(crate) mod browse;
 pub(crate) mod compare;
 pub(crate) mod locations;
 pub(crate) mod scans;

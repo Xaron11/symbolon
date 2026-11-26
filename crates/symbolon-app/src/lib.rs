@@ -1,6 +1,7 @@
 //! Tauri backend: thin command wrappers over `symbolon-core` (ADR-0024).
 
 mod bindings;
+mod browse;
 mod commands;
 mod compare;
 mod dto;

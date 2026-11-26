@@ -39,6 +39,9 @@ export const commands = {
 	compareSizeHistogram: (id: number, filter: ApiFilter_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<SizeBucketView_Serialize[]>("compare_size_histogram", { id, filter }, options),
 	compareDuplicates: (id: number, side: number, offset: Num, limit: number, options?: InvokeOptions) => __TAURI_INVOKE<DuplicateSetView_Serialize[]>("compare_duplicates", { id, side, offset, limit }, options),
 	compareDuplicateTotals: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<DuplicateTotalsView[]>("compare_duplicate_totals", { id }, options),
+	browseChildCount: (label: string, parent: string, options?: InvokeOptions) => __TAURI_INVOKE<Num>("browse_child_count", { label, parent }, options),
+	browseChildren: (label: string, parent: string, offset: Num, limit: number, options?: InvokeOptions) => __TAURI_INVOKE<EntryView_Serialize[]>("browse_children", { label, parent, offset, limit }, options),
+	browseSubscribe: (label: string, onChange: Channel<BrowseChange>, options?: InvokeOptions) => __TAURI_INVOKE<void>("browse_subscribe", { label, onChange }, options),
 };
 
 /* Types */
@@ -70,6 +73,13 @@ export type ApiFilter_Serialize = {
 	/**  Exactly these sides (indices into the comparison's sides) hold the row. */
 	presence: number[] | null,
 };
+
+/**  A location's catalog changed under a browser: re-read what is shown. */
+export type BrowseChange = 
+/**  The running scan committed more entries. */
+"Changed" | 
+/**  The scan ended; nothing more will change. */
+"Finished";
 
 /**  A comparison category, named as core names it. */
 export type CategoryName = "identical" | "different" | "only_in" | "moved" | "renamed" | "collision" | "unverified";
@@ -226,6 +236,35 @@ export type DuplicateTotalsView = {
 	groups: number,
 	files: number,
 	redundantBytes: number,
+};
+
+/**  An entry of a location as the browse tree shows it. */
+export type EntryView = EntryView_Serialize | EntryView_Deserialize;
+
+/**  An entry of a location as the browse tree shows it. */
+export type EntryView_Deserialize = {
+	/**  The path key: identifies the entry, and opens it when it is a folder. */
+	key: string,
+	/**  The last part of the path, for display (lossy). */
+	name: string,
+	kind: KindView,
+	folder: boolean,
+	size: number,
+	mtimeMs?: number | null,
+	hashState: HashStateView,
+};
+
+/**  An entry of a location as the browse tree shows it. */
+export type EntryView_Serialize = {
+	/**  The path key: identifies the entry, and opens it when it is a folder. */
+	key: string,
+	/**  The last part of the path, for display (lossy). */
+	name: string,
+	kind: KindView,
+	folder: boolean,
+	size: number,
+	mtimeMs: number | null,
+	hashState: HashStateView,
 };
 
 /**  What went wrong, for screens to react to; the message says it in words. */

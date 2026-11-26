@@ -2,7 +2,7 @@
 
 use tauri_specta::{Builder, collect_commands};
 
-use crate::commands::{compare, locations, scans};
+use crate::commands::{browse, compare, locations, scans};
 
 /// Every command the frontend can call.
 pub(crate) fn builder() -> Builder<tauri::Wry> {
@@ -40,6 +40,9 @@ pub(crate) fn builder() -> Builder<tauri::Wry> {
         compare::compare_size_histogram,
         compare::compare_duplicates,
         compare::compare_duplicate_totals,
+        browse::browse_child_count,
+        browse::browse_children,
+        browse::browse_subscribe,
     ])
 }
 
