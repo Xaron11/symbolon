@@ -72,7 +72,7 @@
 		background: var(--sy-color-surface-hover);
 	}
 
-	/* Pressed: fill and border change, since the dark theme's pressed fill equals its hover. */
+	/* Pressed: fill and border change, since the pressed fill equals the hover fill. */
 	.sy-button:active:not(:disabled) {
 		background: var(--sy-color-surface-active);
 		border-color: var(--sy-color-text-muted);
