@@ -264,6 +264,9 @@
 						active = index;
 						grid?.focus();
 					}}
+					ondblclick={() => {
+						if (row !== undefined) onopen?.(row, index);
+					}}
 				>
 					{#each columns as column, c (column.id)}
 						{@const text = row === undefined ? '' : column.cell(row)}

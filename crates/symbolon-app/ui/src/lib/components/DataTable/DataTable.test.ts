@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../../../test/axe';
@@ -156,5 +156,16 @@ describe('DataTable live updates', () => {
 		expect(source.subscribers).toBe(1);
 		unmount();
 		expect(source.subscribers).toBe(0);
+	});
+});
+
+describe('DataTable opening rows', () => {
+	it('opens a row on double-click', async () => {
+		const user = userEvent.setup();
+		const onopen = vi.fn();
+		const { grid } = await table(files(5), { onopen });
+		const cell = await within(grid).findByText('file2.jpg');
+		await user.dblClick(cell);
+		expect(onopen).toHaveBeenCalledWith({ name: 'file2.jpg', size: 20 }, 2);
 	});
 });

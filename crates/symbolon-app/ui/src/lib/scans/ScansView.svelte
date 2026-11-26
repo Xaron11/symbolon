@@ -2,6 +2,7 @@
 <script lang="ts">
 	import { ScanSearch } from '@lucide/svelte';
 	import { backend, recentScans, toApiError, type RecentScanView } from '../api/index.ts';
+	import Alert from '../components/Alert/Alert.svelte';
 	import DataTable, { type Column } from '../components/DataTable/DataTable.svelte';
 	import EmptyState from '../components/EmptyState/EmptyState.svelte';
 	import { toasts } from '../feedback/toasts.svelte';
@@ -20,12 +21,19 @@
 	const api = backend();
 	const scanState = scans();
 	const count = new Intl.NumberFormat('en-US');
+	const headings = $props.id();
 	let recentTotal = $state<number | undefined>(undefined);
+	let loadError = $state<string | undefined>(undefined);
 	// Bumped when a scan ends, so the history is read again.
 	let generation = $state(0);
 
 	async function loadTotal() {
-		recentTotal = await api.scans.recentCount().catch(() => 0);
+		try {
+			recentTotal = await api.scans.recentCount();
+			loadError = undefined;
+		} catch (e) {
+			loadError = explain(toApiError(e));
+		}
 	}
 
 	void loadTotal();
@@ -79,20 +87,25 @@
 
 <div class="scans">
 	{#if scanState.running.length > 0}
-		<section aria-label="Running scans" class="cards">
-			{#each scanState.running as update (update.label)}
-				<ScanCard
-					{update}
-					paused={scanState.isPaused(update.label)}
-					onpause={() => void control(() => scanState.pause(update.label))}
-					onresume={() => void control(() => scanState.resume(update.label))}
-					oncancel={() => void control(() => scanState.cancel(update.label))}
-				/>
-			{/each}
+		<section aria-labelledby="{headings}-running" class="running">
+			<h2 id="{headings}-running">Running</h2>
+			<div class="cards">
+				{#each scanState.running as update (update.label)}
+					<ScanCard
+						{update}
+						paused={scanState.isPaused(update.label)}
+						onpause={() => void control(() => scanState.pause(update.label))}
+						onresume={() => void control(() => scanState.resume(update.label))}
+						oncancel={() => void control(() => scanState.cancel(update.label))}
+					/>
+				{/each}
+			</div>
 		</section>
 	{/if}
 
-	{#if recentTotal === 0 && scanState.running.length === 0}
+	{#if loadError}
+		<Alert tone="error" title="Could not read the scan history">{loadError}</Alert>
+	{:else if recentTotal === 0 && scanState.running.length === 0}
 		<EmptyState
 			title="No scans yet"
 			description="Start one from Locations; it shows here while it runs and afterwards."
@@ -101,7 +114,8 @@
 			{#snippet actions()}<a href="/locations">Go to Locations</a>{/snippet}
 		</EmptyState>
 	{:else if recentTotal !== undefined && recentTotal > 0}
-		<section class="recent" aria-label="History">
+		<section class="recent" aria-labelledby="{headings}-recent">
+			<h2 id="{headings}-recent">Recent scans</h2>
 			{#key generation}
 				<DataTable
 					source={recentScans(api)}
@@ -131,8 +145,21 @@
 		gap: var(--sy-space-12);
 	}
 
+	.running,
+	.recent {
+		display: flex;
+		flex-direction: column;
+		gap: var(--sy-space-8);
+	}
+
 	.recent {
 		height: var(--sy-pane-height);
 		min-height: 0;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: var(--sy-font-size-body);
+		font-weight: var(--sy-font-weight-medium);
 	}
 </style>

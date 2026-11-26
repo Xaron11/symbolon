@@ -1,7 +1,8 @@
 import { screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { RecentScanView, ScanUpdate } from '../api/index.ts';
+import { ApiError, type RecentScanView, type ScanUpdate } from '../api/index.ts';
+import { toasts } from '../feedback/toasts.svelte';
 import { expectNoAxeViolations } from '../../test/axe';
 import { location, renderWithBackend } from '../../test/backend';
 import ScansView from './ScansView.svelte';
@@ -119,5 +120,90 @@ describe('ScansView', () => {
 			).toBeTruthy();
 		});
 		expect(screen.queryByRole('article')).toBeNull();
+	});
+});
+
+describe('ScansView details', () => {
+	it('names a card after a label with spaces and keeps focus on Pause/Resume', async () => {
+		const user = userEvent.setup();
+		const { backend, scans } = view({ locations: [location('My Photos')] });
+		await scans.start('My Photos');
+		backend.emitScan('My Photos', { ...hashing, label: 'My Photos' });
+		const card = await screen.findByRole('article', { name: 'My Photos' });
+		const pause = within(card).getByRole('button', { name: 'Pause' });
+		pause.focus();
+		await user.keyboard('{Enter}');
+		await waitFor(() => {
+			expect(within(card).getByRole('button', { name: 'Resume' })).toBe(document.activeElement);
+		});
+		expect(within(card).getByText('Paused')).toBeTruthy();
+		expect(within(card).queryByText('8 s left')).toBeNull();
+		await user.keyboard('{Enter}');
+		expect(backend.calls.map((c) => c.method)).toContain('scans.resume');
+	});
+
+	it('shows a failure to read the history instead of claiming there is none', async () => {
+		renderWithBackend(
+			ScansView,
+			{ navigate: vi.fn() },
+			{ locations: [location('Photos')] },
+			(b) => {
+				b.scans.recentCount = () => Promise.reject(new ApiError('Io', 'database is locked'));
+			}
+		);
+		expect(await screen.findByText('database is locked')).toBeTruthy();
+		expect(screen.queryByText('No scans yet')).toBeNull();
+	});
+
+	it('gives the page section headings', async () => {
+		const { backend, scans } = view({ recentScans: [recent('Photos', 'Completed')] });
+		await scans.start('Photos');
+		backend.emitScan('Photos', hashing);
+		expect(await screen.findByRole('heading', { level: 2, name: 'Running' })).toBeTruthy();
+		expect(screen.getByRole('heading', { level: 2, name: 'Recent scans' })).toBeTruthy();
+	});
+
+	it('opens the location of a recent scan from the keyboard', async () => {
+		const user = userEvent.setup();
+		const { navigate } = view({ recentScans: [recent('My Photos', 'Completed')] });
+		const table = await screen.findByRole('grid', { name: 'Recent scans' });
+		await waitFor(() => {
+			expect(within(table).getByText('My Photos')).toBeTruthy();
+		});
+		table.focus();
+		await user.keyboard('{Enter}');
+		expect(navigate).toHaveBeenCalledWith('/locations/My%20Photos');
+	});
+
+	it('shows the history once the first scan ends', async () => {
+		const { backend, scans } = view();
+		expect(await screen.findByText('No scans yet')).toBeTruthy();
+		await scans.start('Photos');
+		backend.seed.recentScans = [recent('Photos', 'Completed')];
+		backend.emitScan('Photos', {
+			type: 'Finished',
+			label: 'Photos',
+			scanId: 1,
+			status: 'Completed',
+			files: 1,
+			bytes: 1,
+			hashedFiles: 0,
+			warnings: 0,
+			elapsedMs: 1
+		});
+		expect(await screen.findByRole('grid', { name: 'Recent scans' })).toBeTruthy();
+	});
+
+	it('says why a control failed', async () => {
+		const user = userEvent.setup();
+		const { backend, scans } = view();
+		await scans.start('Photos');
+		backend.emitScan('Photos', hashing);
+		backend.scans.cancel = () =>
+			Promise.reject(new ApiError('NotFound', 'no scan of "Photos" is running'));
+		await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+		await waitFor(() => {
+			expect(toasts.items.at(-1)?.message).toBe('no scan of "Photos" is running');
+		});
 	});
 });

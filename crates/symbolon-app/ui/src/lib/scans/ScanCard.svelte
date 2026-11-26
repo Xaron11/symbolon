@@ -17,11 +17,13 @@
 	let { update, paused, onpause, onresume, oncancel }: Props = $props();
 	const count = new Intl.NumberFormat('en-US');
 	const progress = $derived(progressOf(update));
+	// Ids from a label would break on spaces; the heading names the card.
+	const headingId = $props.id();
 </script>
 
-<article class="sy-scan-card" aria-labelledby="scan-{update.label}">
+<article class="sy-scan-card" aria-labelledby={headingId}>
 	<header class="head">
-		<h3 id="scan-{update.label}">
+		<h3 id={headingId}>
 			<a href="/locations/{encodeURIComponent(update.label)}">{update.label}</a>
 		</h3>
 		<span class="phase">{paused ? 'Paused' : progress.label}</span>
@@ -43,11 +45,10 @@
 		</p>
 	{/if}
 	<div class="actions">
-		{#if paused}
-			<Button size="sm" variant="secondary" onclick={onresume}>Resume</Button>
-		{:else}
-			<Button size="sm" variant="secondary" onclick={onpause}>Pause</Button>
-		{/if}
+		<!-- One button that changes, so focus stays on it. -->
+		<Button size="sm" variant="secondary" onclick={paused ? onresume : onpause}>
+			{paused ? 'Resume' : 'Pause'}
+		</Button>
 		<Button size="sm" variant="ghost" onclick={oncancel}>Cancel</Button>
 	</div>
 </article>
