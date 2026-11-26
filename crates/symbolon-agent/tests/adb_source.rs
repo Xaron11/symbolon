@@ -286,13 +286,15 @@ fn a_link_name_the_fallback_cannot_pass_leaves_only_that_target_unknown() {
         .join(std::ffi::OsStr::from_bytes(b"Camera/odd\xff"));
     std::os::unix::fs::symlink("a.jpg", odd).unwrap();
     let [remote, _] = scan_links_both(&phone, phone.source(None), HashAlgo::Sha256);
+    // How GNU tools standing in for the phone print the odd name depends on the host (CI
+    // reads it back as U+FFFD), so only its unknown target is checked.
+    assert_eq!(remote.len(), 2, "{remote:?}");
     assert_eq!(
-        remote,
-        [
-            ("Camera/latest".to_owned(), Some(b"a.jpg".to_vec())),
-            ("Camera/odd%FF".to_owned(), None),
-        ]
+        remote[0],
+        ("Camera/latest".to_owned(), Some(b"a.jpg".to_vec()))
     );
+    assert!(remote[1].0.starts_with("Camera/odd"), "{remote:?}");
+    assert_eq!(remote[1].1, None);
 }
 
 #[test]
