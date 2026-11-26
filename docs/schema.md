@@ -89,5 +89,6 @@ An export comes from another catalog, so `Catalog::import` does not trust it. It
 - `rel_path_raw` must be a valid relative path in its encoding. For `wtf8`, this also means no `\` or `:`, which on Windows would be a separator, a drive or a stream.
 - `path_key` and `parent_key` must be the keys derived from it.
 - Each digest must have its algorithm's length.
+- `link_target` may be set only on `symlink` entries, holds at most 4,096 bytes and no NUL, and must be valid in its encoding. Exports from schema v3 have no `link_target` and import with unknown targets.
 
 A file that fails a check is refused with `TransferError::InvalidEntry`.
