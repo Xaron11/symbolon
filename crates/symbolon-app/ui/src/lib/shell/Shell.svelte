@@ -12,6 +12,7 @@
 	import Toolbar from '../components/Toolbar/Toolbar.svelte';
 	import { theme } from '../design/theme.svelte';
 	import { createDispatcher } from '../keyboard/dispatcher';
+	import { provideGlobalActions } from '../keyboard/global';
 	import { KEYMAP, type Action } from '../keyboard/keymap';
 	import { browserStorage } from '../storage';
 	import { SECTIONS, sectionOf } from './sections';
@@ -77,6 +78,7 @@
 		else if (action === 'sidebar.toggle') sidebarState.toggle();
 	}
 
+	provideGlobalActions(onAction);
 	const dispatch = createDispatcher(KEYMAP, () => ['global'], onAction);
 </script>
 

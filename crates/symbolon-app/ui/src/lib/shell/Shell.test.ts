@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../../test/axe';
 import { text } from '../../test/snippet';
 import { theme } from '../design/theme.svelte';
+import ShellWithTable from '../../test/ShellWithTable.svelte';
 import Shell from './Shell.svelte';
 
 afterEach(() => {
@@ -64,6 +65,24 @@ describe('Shell', () => {
 	it('opens the shortcut help with ?', async () => {
 		const user = userEvent.setup();
 		shell();
+		await user.keyboard('?');
+		expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy();
+	});
+
+	it('keeps section shortcuts working while a table has focus', async () => {
+		const user = userEvent.setup();
+		const navigate = vi.fn();
+		render(ShellWithTable, { navigate });
+		const grid = screen.getByRole('grid', { name: 'Files' });
+		grid.focus();
+		await user.keyboard(' ');
+		await user.keyboard('gs');
+		await user.keyboard('gl');
+		expect(navigate.mock.calls).toEqual([['/scans'], ['/locations']]);
+		expect(screen.getByRole('columnheader', { name: 'Name' }).getAttribute('aria-sort')).toBe(
+			'none'
+		);
+		expect(grid.querySelector('[aria-selected="true"]')).not.toBeNull();
 		await user.keyboard('?');
 		expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy();
 	});

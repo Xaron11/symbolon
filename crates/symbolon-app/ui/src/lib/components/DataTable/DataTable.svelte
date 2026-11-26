@@ -20,6 +20,7 @@
 	import type { DataSource, SortSpec } from '../../data/source';
 	import { createRowWindow, revealScroll } from '../../data/window.svelte';
 	import { createDispatcher } from '../../keyboard/dispatcher';
+	import { globalActions } from '../../keyboard/global';
 	import { KEYMAP, type Action } from '../../keyboard/keymap';
 
 	interface Props {
@@ -143,12 +144,17 @@
 			case 'nav.scans':
 			case 'nav.compare':
 			case 'sidebar.toggle':
-				// Global actions; only list bindings are active here.
+				forwardGlobal?.(action);
 				break;
 		}
 	}
 
-	const dispatch = createDispatcher(KEYMAP, () => ['list'], onAction);
+	const forwardGlobal = globalActions();
+	const dispatch = createDispatcher(
+		KEYMAP,
+		() => (forwardGlobal ? ['global', 'list'] : ['list']),
+		onAction
+	);
 
 	function toggleSort(column: string) {
 		const current = rows.sort;
