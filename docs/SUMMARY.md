@@ -12,6 +12,8 @@
 - [Specification](start.md)
 - [Architecture](architecture.md)
 - [Catalog schema](schema.md)
+- [Design system](design/index.md)
+  - [Design tokens](design/tokens.md)
 - [Decision records](adr/index.md)
   - [Template](adr/0000-template.md)
   - [0001 Stack and layout](adr/0001-stack-and-layout.md)
@@ -34,6 +36,8 @@
   - [0018 Four hashing threads on phones](adr/0018-phone-hashing-threads.md)
   - [0019 Directories and symlinks in comparisons](adr/0019-directories-and-symlinks-in-comparisons.md)
   - [0020 MIT OR Apache-2.0](adr/0020-mit-or-apache-license.md)
+  - [0021 GUI clients](adr/0021-gui-clients.md)
+  - [0022 Design system](adr/0022-design-system.md)
 
 # Development
 

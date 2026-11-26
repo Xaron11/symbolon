@@ -1,0 +1,189 @@
+{
+  "space": {
+    "$type": "dimension",
+    "0": {
+      "$value": "0px",
+      "$description": "Spacing step"
+    },
+    "2": {
+      "$value": "2px",
+      "$description": "Spacing step"
+    },
+    "4": {
+      "$value": "4px",
+      "$description": "Spacing step"
+    },
+    "8": {
+      "$value": "8px",
+      "$description": "Spacing step"
+    },
+    "12": {
+      "$value": "12px",
+      "$description": "Spacing step"
+    },
+    "16": {
+      "$value": "16px",
+      "$description": "Spacing step"
+    },
+    "20": {
+      "$value": "20px",
+      "$description": "Spacing step"
+    },
+    "24": {
+      "$value": "24px",
+      "$description": "Spacing step"
+    },
+    "32": {
+      "$value": "32px",
+      "$description": "Spacing step"
+    },
+    "40": {
+      "$value": "40px",
+      "$description": "Spacing step"
+    },
+    "48": {
+      "$value": "48px",
+      "$description": "Spacing step"
+    }
+  },
+  "radius": {
+    "$type": "dimension",
+    "xs": {
+      "$value": "2px",
+      "$description": "Corner radius"
+    },
+    "sm": {
+      "$value": "4px",
+      "$description": "Corner radius"
+    },
+    "md": {
+      "$value": "6px",
+      "$description": "Corner radius"
+    },
+    "lg": {
+      "$value": "8px",
+      "$description": "Corner radius"
+    },
+    "full": {
+      "$value": "9999px",
+      "$description": "Corner radius"
+    }
+  },
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "ui": {
+        "$value": ["IBM Plex Sans Variable", "IBM Plex Sans", "system-ui", "sans-serif"],
+        "$description": "Interface text"
+      },
+      "mono": {
+        "$value": ["JetBrains Mono Variable", "JetBrains Mono", "ui-monospace", "monospace"],
+        "$description": "Paths, hashes, sizes and counts"
+      }
+    },
+    "size": {
+      "$type": "dimension",
+      "small": {
+        "$value": "12px",
+        "$description": "Font size"
+      },
+      "body": {
+        "$value": "13px",
+        "$description": "Font size"
+      },
+      "ui": {
+        "$value": "14px",
+        "$description": "Font size"
+      },
+      "title": {
+        "$value": "16px",
+        "$description": "Font size"
+      },
+      "heading": {
+        "$value": "20px",
+        "$description": "Font size"
+      },
+      "display": {
+        "$value": "24px",
+        "$description": "Font size"
+      }
+    },
+    "line": {
+      "$type": "dimension",
+      "small": {
+        "$value": "16px",
+        "$description": "Line height"
+      },
+      "body": {
+        "$value": "18px",
+        "$description": "Line height"
+      },
+      "ui": {
+        "$value": "20px",
+        "$description": "Line height"
+      },
+      "title": {
+        "$value": "22px",
+        "$description": "Line height"
+      },
+      "heading": {
+        "$value": "28px",
+        "$description": "Line height"
+      },
+      "display": {
+        "$value": "32px",
+        "$description": "Line height"
+      }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "regular": {
+        "$value": 400,
+        "$description": "Font weight"
+      },
+      "medium": {
+        "$value": 500,
+        "$description": "Font weight"
+      },
+      "semibold": {
+        "$value": 600,
+        "$description": "Font weight"
+      }
+    }
+  },
+  "motion": {
+    "duration": {
+      "$type": "duration",
+      "state": {
+        "$value": "100ms",
+        "$description": "State changes: hover, press, toggle"
+      },
+      "enter": {
+        "$value": "160ms",
+        "$description": "Overlays appearing"
+      },
+      "exit": {
+        "$value": "100ms",
+        "$description": "Overlays leaving; faster than entering"
+      }
+    },
+    "easing": {
+      "$type": "cubicBezier",
+      "enter": {
+        "$value": [0.2, 0, 0, 1],
+        "$description": "Overlays appearing"
+      },
+      "exit": {
+        "$value": [0.4, 0, 1, 1],
+        "$description": "Overlays leaving"
+      }
+    }
+  },
+  "opacity": {
+    "$type": "number",
+    "disabled": {
+      "$value": 0.5,
+      "$description": "Disabled controls"
+    }
+  }
+}

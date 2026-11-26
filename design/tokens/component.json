@@ -1,0 +1,98 @@
+{
+  "control": {
+    "height": {
+      "sm": {
+        "$value": "28px",
+        "$type": "dimension",
+        "$description": "Compact controls, table toolbars"
+      },
+      "md": {
+        "$value": "32px",
+        "$type": "dimension",
+        "$description": "Default controls"
+      },
+      "touch": {
+        "$value": "44px",
+        "$type": "dimension",
+        "$description": "Controls under a coarse pointer"
+      }
+    },
+    "radius": {
+      "$value": "4px",
+      "$type": "dimension",
+      "$description": "Buttons, inputs, chips"
+    }
+  },
+  "panel": {
+    "radius": {
+      "$value": "6px",
+      "$type": "dimension",
+      "$description": "Panels, dialogs, menus"
+    }
+  },
+  "table": {
+    "row": {
+      "height": {
+        "$value": "28px",
+        "$type": "dimension",
+        "$description": "Table and tree rows"
+      }
+    },
+    "header": {
+      "height": {
+        "$value": "32px",
+        "$type": "dimension",
+        "$description": "Table header"
+      }
+    }
+  },
+  "tree": {
+    "indent": {
+      "$value": "16px",
+      "$type": "dimension",
+      "$description": "Indent per tree level"
+    }
+  },
+  "sidebar": {
+    "width": {
+      "expanded": {
+        "$value": "200px",
+        "$type": "dimension",
+        "$description": "Sidebar with labels"
+      },
+      "collapsed": {
+        "$value": "48px",
+        "$type": "dimension",
+        "$description": "Sidebar with icons only"
+      }
+    }
+  },
+  "toolbar": {
+    "height": {
+      "$value": "44px",
+      "$type": "dimension",
+      "$description": "Top toolbar"
+    }
+  },
+  "statusbar": {
+    "height": {
+      "$value": "24px",
+      "$type": "dimension",
+      "$description": "Bottom status bar"
+    }
+  },
+  "focus": {
+    "ring": {
+      "width": {
+        "$value": "2px",
+        "$type": "dimension",
+        "$description": "Focus ring thickness"
+      },
+      "offset": {
+        "$value": "2px",
+        "$type": "dimension",
+        "$description": "Gap between control and focus ring"
+      }
+    }
+  }
+}

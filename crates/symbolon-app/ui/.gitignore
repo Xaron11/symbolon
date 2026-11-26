@@ -21,3 +21,6 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Built from design/tokens/ by `pnpm tokens`
+/src/lib/design/generated/
