@@ -8,7 +8,7 @@ A tree reads its nodes level by level through a tree source: `rootCount()`, `roo
 
 ## Live updates
 
-A source whose nodes can change (a location being scanned) offers `subscribe(onChange)`. On a change the tree re-reads its roots and every open folder, keeping open the folders that still exist; the active row stays on the list. The tree unsubscribes when it is removed.
+A source whose nodes can change (a location being scanned) offers `subscribe(onChange)`. On a change the tree reads its roots and every open folder again beside the tree shown, then swaps the new tree in at once, so it never shows a half-read tree; folders that still exist stay open and the active row stays on the same node. Changes that arrive while it reads cause one more refresh, not one each. The tree unsubscribes when it is removed.
 
 ## Anatomy
 

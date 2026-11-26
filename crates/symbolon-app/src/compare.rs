@@ -455,7 +455,7 @@ struct OpenComparison {
     /// The comparison reads are served from; refreshed after each hashing round.
     reading: Mutex<Comparison>,
     sink: Mutex<Box<dyn Sink<VerifyUpdate>>>,
-    verifying: AtomicBool,
+    verifying: Mutex<Verifying>,
     cancel: AtomicBool,
     closed: AtomicBool,
 }
@@ -571,17 +571,44 @@ impl OpenComparison {
 }
 
 /// Starts verification of `open` on its own thread unless it is already running.
+/// Whether a verification thread runs, and whether it should run again when it ends.
+#[derive(Debug, Default)]
+struct Verifying {
+    running: bool,
+    restart: bool,
+}
+
+/// Starts verification of `open` on its own thread. While a cancelled run is still winding
+/// down, the request is remembered and that thread runs again instead of reporting the cancel.
 fn spawn_verify(open: &Arc<OpenComparison>) {
-    if open.verifying.swap(true, Ordering::AcqRel) {
-        return;
+    {
+        let mut verifying = lock(&open.verifying);
+        if verifying.running {
+            if open.cancel.load(Ordering::Relaxed) {
+                verifying.restart = true;
+            }
+            return;
+        }
+        verifying.running = true;
     }
     open.cancel.store(false, Ordering::Relaxed);
     let open = Arc::clone(open);
     std::thread::spawn(move || {
-        let outcome = open.verify();
-        open.verifying.store(false, Ordering::Release);
-        if !open.closed.load(Ordering::Relaxed) {
-            open.send(outcome);
+        loop {
+            let outcome = open.verify();
+            let mut verifying = lock(&open.verifying);
+            if verifying.restart && !open.closed.load(Ordering::Relaxed) {
+                verifying.restart = false;
+                open.cancel.store(false, Ordering::Relaxed);
+                continue;
+            }
+            // The outcome goes out before the run counts as over, so a new run's updates
+            // always follow it.
+            if !open.closed.load(Ordering::Relaxed) {
+                open.send(outcome);
+            }
+            verifying.running = false;
+            break;
         }
     });
 }
@@ -629,7 +656,7 @@ impl CompareRegistry {
             options,
             reading: Mutex::new(reading),
             sink: Mutex::new(sink),
-            verifying: AtomicBool::new(false),
+            verifying: Mutex::new(Verifying::default()),
             cancel: AtomicBool::new(false),
             closed: AtomicBool::new(false),
         });
@@ -665,7 +692,9 @@ impl CompareRegistry {
     }
 
     pub(crate) fn cancel_verify(&self, id: u32) -> Result<(), ApiError> {
-        self.get(id)?.cancel.store(true, Ordering::Relaxed);
+        let open = self.get(id)?;
+        lock(&open.verifying).restart = false;
+        open.cancel.store(true, Ordering::Relaxed);
         Ok(())
     }
 
@@ -956,6 +985,49 @@ mod tests {
         assert_eq!(sink.all().last(), Some(&VerifyUpdate::Done));
         let summary = f.registry.summary(opened.id, ApiFilter::default()).unwrap();
         assert_eq!(rows_of(&summary, CategoryName::Unverified), 0);
+    }
+
+    #[test]
+    fn verify_right_after_cancel_restarts() {
+        let f = fixture(400);
+        let sink = Collect::default();
+        let opened = f
+            .registry
+            .open(
+                &f.catalog,
+                request(&["left", "right"]),
+                Box::new(sink.clone()),
+            )
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        f.registry.cancel_verify(opened.id).unwrap();
+        f.registry.verify(opened.id).unwrap();
+        wait_for(&sink, |u| *u == VerifyUpdate::Done);
+        let summary = f.registry.summary(opened.id, ApiFilter::default()).unwrap();
+        assert_eq!(rows_of(&summary, CategoryName::Unverified), 0);
+        // A restart that took over the cancelled run reports no end of its own before Done.
+        let ends: Vec<_> = sink.all().into_iter().filter(is_end).collect();
+        assert_eq!(ends.last(), Some(&VerifyUpdate::Done));
+    }
+
+    #[test]
+    fn close_all_closes_every_comparison() {
+        let f = fixture(0);
+        let a = f
+            .registry
+            .open(&f.catalog, request(&["left", "right"]), Box::new(Gone))
+            .unwrap();
+        let b = f
+            .registry
+            .open(&f.catalog, request(&["right", "left"]), Box::new(Gone))
+            .unwrap();
+        f.registry.close_all();
+        for id in [a.id, b.id] {
+            assert_eq!(
+                f.registry.count(id, ApiFilter::default()).unwrap_err().kind,
+                ErrorKind::NotFound
+            );
+        }
     }
 
     #[test]

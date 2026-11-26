@@ -99,3 +99,25 @@ describe('TreeView', () => {
 		expect(screen.getAllByRole('treeitem').length).toBeLessThan(100);
 	});
 });
+
+describe('TreeView live updates', () => {
+	it('keeps the active row by key when nodes arrive above it', async () => {
+		const user = userEvent.setup();
+		const src = source();
+		const { view } = await tree({}, src);
+		view.focus();
+		await user.keyboard('j');
+		expect(active(view)?.textContent).toContain('notes.txt');
+		src.replace([
+			{ key: 'archive', label: 'archive' },
+			{ key: 'photos', label: 'photos', children: [] },
+			{ key: 'notes.txt', label: 'notes.txt' }
+		]);
+		await waitFor(() => {
+			expect(screen.getAllByRole('treeitem')).toHaveLength(3);
+		});
+		await waitFor(() => {
+			expect(active(view)?.textContent).toContain('notes.txt');
+		});
+	});
+});

@@ -54,24 +54,27 @@ export function createTauriBackend(): Backend {
 			children: (label, parent, offset, limit) =>
 				call(commands.browseChildren(label, parent, offset, limit)),
 			subscribe(label, onChange) {
-				// The backend keeps the channel until a send fails; stopping just ignores it.
 				let active = true;
-				void commands
-					.browseSubscribe(
+				const registered = call(
+					commands.browseSubscribe(
 						label,
 						channel((change) => {
 							if (active) onChange(change);
 						})
 					)
-					.catch(() => undefined);
+				);
 				return () => {
+					if (!active) return;
 					active = false;
+					// Releasing the subscription drops its channel on both sides.
+					void registered.then((id) => commands.browseUnsubscribe(id)).catch(() => undefined);
 				};
 			}
 		},
 		compare: {
 			open: (request, onUpdate) => call(commands.compareOpen(request, channel(onUpdate))),
 			close: (id) => done(commands.compareClose(id)),
+			closeAll: () => done(commands.compareCloseAll()),
 			verify: (id) => done(commands.compareVerify(id)),
 			cancelVerify: (id) => done(commands.compareCancelVerify(id)),
 			summary: (id, filter) => call(commands.compareSummary(id, filter)),

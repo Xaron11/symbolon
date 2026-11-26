@@ -1,8 +1,4 @@
 //! Scans: start, follow, control, and their history.
-#![expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri passes command arguments by value"
-)]
 
 use std::sync::Arc;
 
@@ -28,36 +24,36 @@ pub(crate) async fn scan_start(
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn scan_attach(
+pub(crate) async fn scan_attach(
     state: State<'_>,
     label: String,
     on_update: Channel<ScanUpdate>,
 ) -> Result<(), ApiError> {
-    state.scans.attach(&label, Box::new(on_update))
+    blocking(&state, move |s| s.scans.attach(&label, Box::new(on_update))).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn scans_running(state: State<'_>) -> Vec<ScanUpdate> {
-    state.scans.running()
+pub(crate) async fn scans_running(state: State<'_>) -> Result<Vec<ScanUpdate>, ApiError> {
+    blocking(&state, |s| Ok(s.scans.running())).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn scan_pause(state: State<'_>, label: String) -> Result<(), ApiError> {
-    state.scans.pause(&label)
+pub(crate) async fn scan_pause(state: State<'_>, label: String) -> Result<(), ApiError> {
+    blocking(&state, move |s| s.scans.pause(&label)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn scan_resume(state: State<'_>, label: String) -> Result<(), ApiError> {
-    state.scans.resume(&label)
+pub(crate) async fn scan_resume(state: State<'_>, label: String) -> Result<(), ApiError> {
+    blocking(&state, move |s| s.scans.resume(&label)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn scan_cancel(state: State<'_>, label: String) -> Result<(), ApiError> {
-    state.scans.cancel(&label)
+pub(crate) async fn scan_cancel(state: State<'_>, label: String) -> Result<(), ApiError> {
+    blocking(&state, move |s| s.scans.cancel(&label)).await
 }
 
 #[tauri::command]

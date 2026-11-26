@@ -1,8 +1,4 @@
 //! Browsing a location's catalog.
-#![expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri passes command arguments by value"
-)]
 
 use tauri::ipc::Channel;
 
@@ -42,6 +38,23 @@ pub(crate) async fn browse_children(
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn browse_subscribe(state: State<'_>, label: String, on_change: Channel<BrowseChange>) {
-    state.scans.subscribe_browse(&label, Box::new(on_change));
+pub(crate) async fn browse_subscribe(
+    state: State<'_>,
+    label: String,
+    on_change: Channel<BrowseChange>,
+) -> Result<Num<u64>, ApiError> {
+    blocking(&state, move |s| {
+        Ok(Num(s.scans.subscribe_browse(&label, Box::new(on_change))))
+    })
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn browse_unsubscribe(state: State<'_>, id: Num<u64>) -> Result<(), ApiError> {
+    blocking(&state, move |s| {
+        s.scans.unsubscribe_browse(id.0);
+        Ok(())
+    })
+    .await
 }

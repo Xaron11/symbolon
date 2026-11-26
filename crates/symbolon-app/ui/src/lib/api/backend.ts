@@ -67,6 +67,8 @@ export interface Backend {
 	readonly compare: {
 		open(request: CompareRequest, onUpdate: (update: VerifyUpdate) => void): Promise<CompareOpened>;
 		close(id: number): Promise<void>;
+		/** Closes every open comparison; a window that starts again calls it for those it lost. */
+		closeAll(): Promise<void>;
 		verify(id: number): Promise<void>;
 		cancelVerify(id: number): Promise<void>;
 		summary(id: number, filter: ApiFilter): Promise<SummaryView>;

@@ -1,8 +1,4 @@
 //! Comparisons: open, verify, read, close.
-#![expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri passes command arguments by value"
-)]
 
 use tauri::ipc::Channel;
 
@@ -30,20 +26,31 @@ pub(crate) async fn compare_open(
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn compare_close(state: State<'_>, id: u32) -> Result<(), ApiError> {
-    state.comparisons.close(id)
+pub(crate) async fn compare_close(state: State<'_>, id: u32) -> Result<(), ApiError> {
+    blocking(&state, move |s| s.comparisons.close(id)).await
+}
+
+/// Closes every open comparison: a window that starts again has lost the ids of its old ones.
+#[tauri::command]
+#[specta::specta]
+pub(crate) async fn compare_close_all(state: State<'_>) -> Result<(), ApiError> {
+    blocking(&state, |s| {
+        s.comparisons.close_all();
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn compare_verify(state: State<'_>, id: u32) -> Result<(), ApiError> {
-    state.comparisons.verify(id)
+pub(crate) async fn compare_verify(state: State<'_>, id: u32) -> Result<(), ApiError> {
+    blocking(&state, move |s| s.comparisons.verify(id)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) fn compare_cancel_verify(state: State<'_>, id: u32) -> Result<(), ApiError> {
-    state.comparisons.cancel_verify(id)
+pub(crate) async fn compare_cancel_verify(state: State<'_>, id: u32) -> Result<(), ApiError> {
+    blocking(&state, move |s| s.comparisons.cancel_verify(id)).await
 }
 
 #[tauri::command]

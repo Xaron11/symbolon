@@ -13,6 +13,8 @@
 	let { children }: LayoutProps = $props();
 	const backend = createTauriBackend();
 	provideBackend(backend);
+	// Comparisons opened before a reload lost their ids with the page; close them.
+	void backend.compare.closeAll().catch(() => undefined);
 	const scans = createScanState(backend);
 	provideScans(scans);
 	// Scans keep running in the backend when the window reloads; follow them again.
