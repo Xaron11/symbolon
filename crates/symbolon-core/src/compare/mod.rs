@@ -1,13 +1,18 @@
-//! Comparing two or more locations (ADR-0010).
+//! Comparing two or more locations (ADR-0010, ADR-0019).
 //!
-//! A [`Comparison`] copies the compared files of every [`Side`] into temporary tables on its
-//! own connection (one consistent snapshot of the catalog), classifies them with SQL, and serves
-//! the results as a [`Summary`] and as pages of [`Row`]s. Results stay in SQLite, so comparing
-//! large locations never loads every row into memory.
+//! A [`Comparison`] copies the compared files, symlinks and directories of every [`Side`] into
+//! temporary tables on its own connection (one consistent snapshot of the catalog), classifies
+//! them with SQL, and serves the results as a [`Summary`] and as pages of [`Row`]s. Results stay
+//! in SQLite, so comparing large locations never loads every row into memory.
 //!
-//! Every compared file belongs to exactly one row. Path rows group files by normalized path
-//! (see [`crate::pathkey::KeyOptions`]) and are classified in this order: [`Category::Collision`],
-//! [`Category::Different`], [`Category::Identical`], [`Category::OnlyIn`], [`Category::Unverified`].
+//! Every compared file and symlink belongs to exactly one row; a directory belongs to at most
+//! one. Path rows group entries by normalized path (see [`crate::pathkey::KeyOptions`]). A
+//! group of directories only is a row only when it is [`Category::OnlyIn`] with nothing
+//! compared beneath it. Other groups are classified in this order: [`Category::Collision`],
+//! [`Category::Different`] (including a file, directory or symlink clashing with another kind),
+//! then by kind: files by content, symlinks by target, as [`Category::Identical`],
+//! [`Category::OnlyIn`] or [`Category::Unverified`]. Moves, renames and duplicates are files
+//! only.
 
 mod resolve;
 mod sql;
@@ -147,22 +152,26 @@ impl CompareOptions {
     }
 }
 
-/// What a row says about the files it groups.
+/// What a row says about the entries it groups.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Category {
-    /// Same path and the same full digest on every side.
+    /// Same path and the same full digest (files) or target (symlinks) on every side.
     Identical,
-    /// Same path on two or more sides with different size or content.
+    /// Same path on two or more sides with different size, content or target, or of
+    /// different kinds.
     Different,
-    /// Present on some sides only, with equal content where present.
+    /// Present on some sides only, with equal content or target where present; for a
+    /// directory, with nothing compared beneath it.
     OnlyIn,
     /// Same content at different directories with the same file name.
     Moved,
     /// Same content under a different file name.
     Renamed,
-    /// Several files of one side share the normalized path.
+    /// Several entries of one side share the normalized path (directories alone merge
+    /// instead).
     Collision,
-    /// Same path and size on two or more sides, but not hashed, so equality is unknown.
+    /// Same path on two or more sides, but equality is unknown: files of the same size not
+    /// hashed yet, or symlinks with an unknown target.
     Unverified,
 }
 
@@ -273,7 +282,7 @@ pub struct Cell {
     /// A symlink's target as raw bytes in the side's path encoding; `None` for other kinds
     /// or when unknown (ADR-0019).
     pub link_target: Option<Vec<u8>>,
-    /// Size in bytes.
+    /// Size in bytes as recorded by the scan; only meaningful for files.
     pub size: u64,
     /// Modification time in nanoseconds since the Unix epoch.
     pub mtime_ns: Option<i64>,
@@ -297,7 +306,7 @@ pub struct Row {
     pub presence: SideSet,
     /// Equality assumed from size and modification time (fast mode), not verified.
     pub assumed: bool,
-    /// Common size, when all files have the same size.
+    /// Common size, when the row holds only files and they all have the same size.
     pub size: Option<u64>,
     /// The entries, ordered by side, then path.
     pub cells: Vec<Cell>,
@@ -375,7 +384,8 @@ impl RowFilter {
         self
     }
 
-    /// Restricts to rows whose largest file is within `min..=max` bytes.
+    /// Restricts to rows whose largest file is within `min..=max` bytes. Rows without files
+    /// (directories, symlinks) never match a size.
     #[must_use]
     pub fn size_range(mut self, min: Option<u64>, max: Option<u64>) -> Self {
         self.min_size = min;
@@ -513,7 +523,7 @@ impl Comparison {
         Ok(())
     }
 
-    /// Row, file and byte totals per category.
+    /// Row, entry and byte totals per category.
     ///
     /// # Errors
     ///

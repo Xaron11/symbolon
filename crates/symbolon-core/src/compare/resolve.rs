@@ -97,9 +97,10 @@ struct Plan {
 }
 
 impl Comparison {
-    /// What would have to be hashed for the comparison to decide more rows: unverified rows
-    /// and only-in files that may be moves. Files whose size matches no candidate are never
-    /// listed.
+    /// What would have to be hashed for the comparison to decide more rows: files of
+    /// unverified rows and only-in files that may be moves. Files whose size matches no
+    /// candidate are never listed. Symlinks are never hashed: an unverified symlink row needs a
+    /// rescan that reads its targets.
     ///
     /// # Errors
     ///

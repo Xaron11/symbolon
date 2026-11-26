@@ -86,7 +86,7 @@ pub(super) fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             presence INTEGER NOT NULL,
             assumed INTEGER NOT NULL,
             size INTEGER,
-            max_size INTEGER NOT NULL,
+            max_size INTEGER,
             ext TEXT NOT NULL,
             digest BLOB,
             kinds INTEGER NOT NULL,
@@ -178,7 +178,7 @@ pub(super) fn classify(
          SELECT norm, category, presence,
                 only_files AND category IN ('identical', 'only_in') AND sides >= 2 AND fulls < n,
                 CASE WHEN only_files AND sizes = 1 THEN size_max END,
-                coalesce(size_max, 0),
+                size_max,
                 CASE WHEN files > 0 THEN sym_ext(sym_name(norm)) ELSE '' END,
                 CASE WHEN only_files AND fulls = n AND distinct_full = 1 THEN any_full END,
                 kinds, n, bytes
@@ -287,7 +287,7 @@ pub(super) struct FilterParams {
     max_size: Option<u64>,
     prefix: Option<String>,
     presence: Option<i64>,
-    kinds: i64,
+    kinds: Option<i64>,
 }
 
 impl FilterParams {
@@ -310,10 +310,12 @@ impl FilterParams {
             max_size: filter.max_size,
             prefix: prefix.filter(|p| !p.is_empty()),
             presence: filter.presence.map(|set| set.bits().cast_signed()),
-            kinds: filter
-                .kinds
-                .iter()
-                .fold(0, |bits, kind| bits | kind_bit(*kind)),
+            kinds: (!filter.kinds.is_empty()).then(|| {
+                filter
+                    .kinds
+                    .iter()
+                    .fold(0, |bits, kind| bits | kind_bit(*kind))
+            }),
         }
     }
 }
@@ -327,7 +329,7 @@ const FILTER: &str = "
     AND (:prefix IS NULL OR sort_key = :prefix
          OR (sort_key > :prefix || '/' AND sort_key < :prefix || '0'))
     AND (:presence IS NULL OR presence = :presence)
-    AND (:kinds = 0 OR kinds & :kinds != 0)";
+    AND (:kinds IS NULL OR kinds & :kinds != 0)";
 
 pub(super) fn summary(conn: &Connection, filter: &FilterParams) -> Result<Summary, CompareError> {
     let mut stmt = conn.prepare_cached(&format!(

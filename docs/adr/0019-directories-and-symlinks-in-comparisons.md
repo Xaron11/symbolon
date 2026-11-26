@@ -51,7 +51,7 @@ Moves, renames and duplicates stay limited to files. `Comparison::hash_needs` re
 
 - Every compared file and symlink is in exactly one row; a directory is in at most one.
 - Identical symlink rows are present on every side with one known target.
-- A directory row is Only in P, or Different because of a kind clash.
+- A directory row is Only in P, or Different because of a kind clash. A directory sharing its key with a file or symlink of the same side is part of a Collision (rule 1 applies per side: only a collision of directories alone merges).
 - The file invariants of ADR-0010 hold unchanged.
 
 ## Consequences

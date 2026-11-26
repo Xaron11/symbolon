@@ -532,6 +532,31 @@ fn rows_carry_kinds_and_targets_and_filter_by_kind() {
             .entries(),
         1
     );
+    assert!(
+        cmp.rows(
+            &RowFilter::default().kinds([EntryKind::Other]),
+            &Page::first(10)
+        )
+        .unwrap()
+        .items
+        .is_empty(),
+        "other entries are never compared"
+    );
+    let small = cmp
+        .rows(
+            &RowFilter::default().size_range(None, Some(10)),
+            &Page::first(10),
+        )
+        .unwrap();
+    assert_eq!(
+        small
+            .items
+            .iter()
+            .map(|r| r.key.as_str())
+            .collect::<Vec<_>>(),
+        ["f.txt"],
+        "rows without files have no size to filter by"
+    );
 }
 
 /// `key -> (category, presence)`, ignoring `assumed`.
