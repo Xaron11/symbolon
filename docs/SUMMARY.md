@@ -39,6 +39,7 @@
     - [Toast](design/components/toast.md)
     - [CommandPalette](design/components/command-palette.md)
     - [ShortcutHelp](design/components/shortcut-help.md)
+    - [DataTable](design/components/data-table.md)
 - [Decision records](adr/index.md)
   - [Template](adr/0000-template.md)
   - [0001 Stack and layout](adr/0001-stack-and-layout.md)
