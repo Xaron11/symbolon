@@ -20,7 +20,7 @@ use super::{
 use crate::agent::{Line, PROTOCOL, Request};
 use crate::hash::{Digest, HashAlgo};
 use crate::pathkey::{PathEncoding, RelPath, valid_link_target};
-use crate::transport::android::{AndroidTransport, shell_quote};
+use crate::transport::android::{AndroidTransport, ShellOutput, shell_quote};
 
 /// Files or links one fallback shell command handles, keeping the command line well under
 /// Android's argument limit.
@@ -415,7 +415,7 @@ impl AdbSource {
                     output.stderr.trim()
                 )));
             }
-            let targets = parse_readlink_batch(&output.stdout, batch.len());
+            let targets = parse_readlink_batch(&output, batch.len());
             for ((entry, _), target) in batch.iter_mut().zip(targets) {
                 entry.link_target = target.filter(|t| valid_link_target(PathEncoding::Posix, t));
                 if entry.link_target.is_none() {
@@ -684,12 +684,16 @@ fn fallback_reply(request: &HashRequest, fields: &[&str]) -> HashReply {
 
 /// The targets `readlink` printed for `count` links, each followed by `status|<exit status>`.
 /// A target counts only if it is the single line before a `status|0`: a target with a line
-/// break is unknown. More markers than links means a target held a line break and a fake
-/// marker, so no target of the batch can be matched to its link.
-fn parse_readlink_batch(stdout: &[u8], count: usize) -> Vec<Option<Vec<u8>>> {
+/// break is unknown. A batch that did not run to its end (the loop's last `echo` exits 0) or
+/// has another number of markers than `count` (a target holding a line break and a fake
+/// marker) cannot match targets to links, so all are unknown.
+fn parse_readlink_batch(output: &ShellOutput, count: usize) -> Vec<Option<Vec<u8>>> {
+    if output.status != 0 {
+        return vec![None; count];
+    }
     let mut targets = Vec::with_capacity(count);
     let mut lines: Vec<&[u8]> = Vec::new();
-    for line in stdout.split(|&b| b == b'\n') {
+    for line in output.stdout.split(|&b| b == b'\n') {
         if let Some(status) = line.strip_prefix(b"status|") {
             let target = match lines.as_slice() {
                 [target] if status == b"0" => Some(target.to_vec()),
@@ -701,10 +705,9 @@ fn parse_readlink_batch(stdout: &[u8], count: usize) -> Vec<Option<Vec<u8>>> {
             lines.push(line);
         }
     }
-    if targets.len() > count {
-        targets.clear();
+    if targets.len() != count {
+        return vec![None; count];
     }
-    targets.resize(count, None);
     targets
 }
 
@@ -766,17 +769,32 @@ mod tests {
         assert!(parse_stat_line(b"regular file|x|1|./a").is_none());
     }
 
+    fn readlink_batch(stdout: &[u8], status: i32, count: usize) -> Vec<Option<Vec<u8>>> {
+        let output = ShellOutput {
+            status,
+            stdout: stdout.to_vec(),
+            stderr: String::new(),
+        };
+        parse_readlink_batch(&output, count)
+    }
+
     #[test]
     fn readlink_replies_need_one_line_and_status_zero() {
         assert_eq!(
-            parse_readlink_batch(b"a.jpg\nstatus|0\nstatus|1\nx\ny\nstatus|0\n", 4),
-            [Some(b"a.jpg".to_vec()), None, None, None]
+            readlink_batch(b"a.jpg\nstatus|0\nstatus|1\nx\ny\nstatus|0\n", 0, 3),
+            [Some(b"a.jpg".to_vec()), None, None]
         );
-        assert_eq!(parse_readlink_batch(b"", 1), [None]);
+        assert_eq!(readlink_batch(b"", 0, 1), [None]);
+        assert_eq!(readlink_batch(b"a\nstatus|0\n", 0, 2), [None, None]);
         // The target `a\nstatus|0` ends in a fake marker: `a` must not become its target.
         assert_eq!(
-            parse_readlink_batch(b"a\nstatus|0\nstatus|0\nb\nstatus|0\n", 2),
+            readlink_batch(b"a\nstatus|0\nstatus|0\nb\nstatus|0\n", 0, 2),
             [None, None]
+        );
+        // The same, cut short after the second link: the markers add up, the status does not.
+        assert_eq!(
+            readlink_batch(b"a\nstatus|0\nstatus|0\nb\nstatus|0\n", 255, 3),
+            [None, None, None]
         );
     }
 

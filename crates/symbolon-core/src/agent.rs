@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::hash::{Digest, HashAlgo, PartialDigest};
 use crate::pathkey::{self, PathEncoding, RelPath};
-use crate::source::{HashReply, HashRequest, SourceEntry, SourceWarning, WarningKind};
+use crate::source::{EntryKind, HashReply, HashRequest, SourceEntry, SourceWarning, WarningKind};
 
 /// The protocol version this build speaks. The host refuses an agent that speaks another.
 pub const PROTOCOL: u32 = 1;
@@ -150,16 +150,17 @@ impl Line {
         else {
             return None;
         };
+        let kind = kind.parse().ok()?;
         let link_target = match target {
-            Some(text) => Some(
+            Some(text) if kind == EntryKind::Symlink => Some(
                 pathkey::raw_from_escaped(text)
                     .filter(|raw| pathkey::valid_link_target(PathEncoding::Posix, raw))?,
             ),
-            None => None,
+            _ => None,
         };
         Some(SourceEntry {
             path: path_from_text(path)?,
-            kind: kind.parse().ok()?,
+            kind,
             size: *size,
             mtime_ns: *mtime_ns,
             link_target,
@@ -330,6 +331,15 @@ mod tests {
         )
         .unwrap();
         assert_eq!(old.to_entry().unwrap().link_target, None);
+        let file: Line = serde_json::from_str(
+            r#"{"event":"entry","path":"f","kind":"file","size":1,"mtime_ns":null,"target":"x"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            file.to_entry().unwrap().link_target,
+            None,
+            "only links have targets"
+        );
         for bad in ["", "a%00b", "a%Z"] {
             let line: Line = serde_json::from_str(&format!(
                 r#"{{"event":"entry","path":"l","kind":"symlink","size":1,"mtime_ns":null,"target":"{bad}"}}"#
