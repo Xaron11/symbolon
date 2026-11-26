@@ -3,27 +3,27 @@
     "$type": "color",
     "surface": {
       "canvas": {
-        "$value": "{primitive.color.slate.950}",
+        "$value": "{primitive.color.neutral.950}",
         "$description": "Window background"
       },
       "base": {
-        "$value": "{primitive.color.slate.900}",
+        "$value": "{primitive.color.neutral.900}",
         "$description": "Panels, sidebar, table body"
       },
       "raised": {
-        "$value": "{primitive.color.slate.800}",
+        "$value": "{primitive.color.neutral.800}",
         "$description": "Menus, dialogs, toasts"
       },
       "sunken": {
-        "$value": "{primitive.color.slate.950}",
+        "$value": "{primitive.color.neutral.950}",
         "$description": "Inputs, table header"
       },
       "hover": {
-        "$value": "{primitive.color.slate.800}",
+        "$value": "{primitive.color.neutral.800}",
         "$description": "Hovered rows and controls"
       },
       "active": {
-        "$value": "{primitive.color.slate.800}",
+        "$value": "{primitive.color.neutral.800}",
         "$description": "Pressed rows and controls"
       },
       "selected": {
@@ -33,29 +33,29 @@
     },
     "border": {
       "default": {
-        "$value": "{primitive.color.slate.700}",
+        "$value": "{primitive.color.neutral.700}",
         "$description": "Dividers and table lines"
       },
       "strong": {
-        "$value": "{primitive.color.slate.500}",
+        "$value": "{primitive.color.neutral.500}",
         "$description": "Control outlines"
       }
     },
     "text": {
       "primary": {
-        "$value": "{primitive.color.slate.50}",
+        "$value": "{primitive.color.neutral.50}",
         "$description": "Body text and values"
       },
       "secondary": {
-        "$value": "{primitive.color.slate.300}",
+        "$value": "{primitive.color.neutral.300}",
         "$description": "Labels and supporting text"
       },
       "muted": {
-        "$value": "{primitive.color.slate.400}",
+        "$value": "{primitive.color.neutral.400}",
         "$description": "Hints, placeholders, disabled text"
       },
       "on-accent": {
-        "$value": "{primitive.color.slate.950}",
+        "$value": "{primitive.color.neutral.950}",
         "$description": "Text on accent fills"
       }
     },
@@ -170,15 +170,15 @@
     },
     "unverified": {
       "fg": {
-        "$value": "{primitive.color.slate.200}",
+        "$value": "{primitive.color.neutral.200}",
         "$description": "Unverified: icon and tint (labels use text colors)"
       },
       "bg": {
-        "$value": "{primitive.color.slate.950}",
+        "$value": "{primitive.color.neutral.950}",
         "$description": "Unverified: chip and row tint"
       },
       "border": {
-        "$value": "{primitive.color.slate.900}",
+        "$value": "{primitive.color.neutral.900}",
         "$description": "Unverified: chip outline"
       }
     }

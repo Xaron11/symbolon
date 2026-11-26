@@ -6,6 +6,7 @@
 	import { createTreeState } from '../../data/tree.svelte';
 	import { revealScroll } from '../../data/window.svelte';
 	import { createDispatcher } from '../../keyboard/dispatcher';
+	import { globalActions } from '../../keyboard/global';
 	import { KEYMAP, type Action } from '../../keyboard/keymap';
 	import type { IconComponent } from '../icon';
 
@@ -112,12 +113,17 @@
 			case 'nav.scans':
 			case 'nav.compare':
 			case 'sidebar.toggle':
-				// Global actions; only list bindings are active here.
+				forwardGlobal?.(action);
 				break;
 		}
 	}
 
-	const dispatch = createDispatcher(KEYMAP, () => ['list'], onAction);
+	const forwardGlobal = globalActions();
+	const dispatch = createDispatcher(
+		KEYMAP,
+		() => (forwardGlobal ? ['global', 'list'] : ['list']),
+		onAction
+	);
 </script>
 
 <div

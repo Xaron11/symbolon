@@ -25,4 +25,8 @@ Tokens live in `design/tokens/` as [DTCG](https://www.designtokens.org/) JSON:
 
 ## Themes
 
-Light and dark are equal themes. By default the app follows the OS (`prefers-color-scheme`); choosing a theme sets `data-theme` on the root element and is remembered.
+Light and dark are equal themes. By default the app follows the OS (`prefers-color-scheme`); choosing a theme sets `data-theme` on the root element and is remembered, and a remembered theme is applied before the first paint ([ThemeSwitch](components/theme-switch.md)).
+
+## Gallery
+
+Development builds show every component in both themes at `/gallery`; see [Working on the UI](../development/ui.md).

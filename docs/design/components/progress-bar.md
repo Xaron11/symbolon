@@ -2,7 +2,7 @@
 
 Shows how far a task is, such as a scan.
 
-**Anatomy:** a thin track (`color.surface.active`) with an accent fill.
+**Anatomy:** a thin track (`color.border.default`) with an accent fill.
 
 **Modes:** determinate (a fraction from 0 to 1, shown in percent) and indeterminate (while the total is unknown: a moving segment, still under reduced motion only by its static position).
 

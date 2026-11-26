@@ -31,7 +31,7 @@
 		overflow: hidden;
 		height: var(--sy-space-4);
 		border-radius: var(--sy-radius-full);
-		background: var(--sy-color-surface-active);
+		background: var(--sy-color-border-default);
 	}
 
 	.fill {

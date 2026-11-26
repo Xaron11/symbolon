@@ -82,6 +82,8 @@ export default defineConfig(
 	{
 		rules: {
 			'svelte/button-has-type': 'error',
+			// The app is always served from the root (Tauri, static build): no base path to resolve.
+			'svelte/no-navigation-without-resolve': 'off',
 			'svelte/no-at-html-tags': 'error',
 			'@typescript-eslint/consistent-type-imports': 'error',
 			'@typescript-eslint/switch-exhaustiveness-check': 'error'

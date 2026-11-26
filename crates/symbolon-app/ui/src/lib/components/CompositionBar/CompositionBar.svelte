@@ -25,7 +25,7 @@
 	let focused = $state(0);
 	// Segments can change; one of them must stay in the Tab order.
 	const current = $derived(Math.min(focused, Math.max(0, shown.length - 1)));
-	const buttons: HTMLButtonElement[] = [];
+	const buttons = $state<HTMLButtonElement[]>([]);
 
 	function onkeydown(event: KeyboardEvent) {
 		const moves: Record<string, number> = {

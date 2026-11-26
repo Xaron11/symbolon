@@ -59,7 +59,7 @@ describe('buildTokens', () => {
 
 	it('never emits primitives', () => {
 		const css = readFileSync(path.join(out, 'tokens.css'), 'utf8');
-		expect(css).not.toMatch(/--sy-(primitive|slate|blue)-/);
+		expect(css).not.toMatch(/--sy-(primitive|neutral|blue)-/);
 	});
 
 	it('keeps docs/design/tokens.md current', () => {

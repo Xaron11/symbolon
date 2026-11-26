@@ -3,6 +3,7 @@ import {
 	differenceCiede2000,
 	filterDeficiencyDeuter,
 	filterDeficiencyProt,
+	oklch,
 	parse,
 	wcagContrast
 } from 'culori';
@@ -64,6 +65,15 @@ describe.each(THEMES)('%s theme', (theme) => {
 			.map(([fg, bg]) => ({ fg, bg, ratio: contrast(theme, fg, bg) }))
 			.filter(({ ratio }) => ratio < 4.5);
 		expect(failing).toEqual([]);
+	});
+
+	// Only the accent and selection carry hue; a tinted gray reads as a color (slate looked navy).
+	it('surfaces, borders and text are pure gray', () => {
+		const neutral = tokenNames.filter(
+			(name) => /^color\.(surface|border|text)\./.test(name) && name !== 'color.surface.selected'
+		);
+		const tinted = neutral.filter((name) => oklch(color(themes[theme][name])).c > 0.002);
+		expect(tinted).toEqual([]);
 	});
 
 	it('on-accent text has 4.5:1 on the accent in every state', () => {
