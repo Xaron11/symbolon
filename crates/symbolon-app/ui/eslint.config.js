@@ -62,6 +62,24 @@ export default defineConfig(
 		}
 	},
 	{
+		// Colors come from design tokens (ADR-0022); only the design module may hold raw values.
+		files: ['src/**/*.ts', 'src/**/*.svelte'],
+		ignores: ['src/lib/design/**', '**/*.test.ts'],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: 'Literal[value=/^(#[0-9a-fA-F]{3,8}|(rgba?|hsla?|oklch)\\()/]',
+					message: 'Use a design token (ADR-0022), not a raw color.'
+				},
+				{
+					selector: 'TemplateElement[value.raw=/(#[0-9a-fA-F]{3,8}\\b|(rgba?|hsla?|oklch)\\()/]',
+					message: 'Use a design token (ADR-0022), not a raw color.'
+				}
+			]
+		}
+	},
+	{
 		rules: {
 			'svelte/button-has-type': 'error',
 			'svelte/no-at-html-tags': 'error',

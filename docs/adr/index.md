@@ -24,6 +24,8 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0018](0018-phone-hashing-threads.md)                   | Four hashing threads on phones                                                     |
 | [0019](0019-directories-and-symlinks-in-comparisons.md) | Link targets, and directories and symlinks in comparisons                          |
 | [0020](0020-mit-or-apache-license.md)                   | MIT OR Apache-2.0 instead of GPL-3.0-or-later                                      |
+| [0021](0021-gui-clients.md)                             | One Svelte codebase for every GUI client                                           |
+| [0022](0022-design-system.md)                           | Design system: tokens, components and keyboard                                     |
 
 ## Writing a new ADR
 

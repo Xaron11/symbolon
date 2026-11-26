@@ -1,0 +1,252 @@
+{
+  "color": {
+    "$type": "color",
+    "surface": {
+      "canvas": {
+        "$value": "{primitive.color.slate.50}",
+        "$description": "Window background"
+      },
+      "base": {
+        "$value": "{primitive.color.white}",
+        "$description": "Panels, sidebar, table body"
+      },
+      "raised": {
+        "$value": "{primitive.color.white}",
+        "$description": "Menus, dialogs, toasts"
+      },
+      "sunken": {
+        "$value": "{primitive.color.slate.100}",
+        "$description": "Inputs, table header"
+      },
+      "hover": {
+        "$value": "{primitive.color.slate.100}",
+        "$description": "Hovered rows and controls"
+      },
+      "active": {
+        "$value": "{primitive.color.slate.200}",
+        "$description": "Pressed rows and controls"
+      },
+      "selected": {
+        "$value": "{primitive.color.blue.50}",
+        "$description": "Selected rows and items"
+      }
+    },
+    "border": {
+      "default": {
+        "$value": "{primitive.color.slate.200}",
+        "$description": "Dividers and table lines"
+      },
+      "strong": {
+        "$value": "{primitive.color.slate.500}",
+        "$description": "Control outlines"
+      }
+    },
+    "text": {
+      "primary": {
+        "$value": "{primitive.color.slate.900}",
+        "$description": "Body text and values"
+      },
+      "secondary": {
+        "$value": "{primitive.color.slate.700}",
+        "$description": "Labels and supporting text"
+      },
+      "muted": {
+        "$value": "{primitive.color.slate.600}",
+        "$description": "Hints, placeholders, disabled text"
+      },
+      "on-accent": {
+        "$value": "{primitive.color.white}",
+        "$description": "Text on accent fills"
+      }
+    },
+    "accent": {
+      "default": {
+        "$value": "{primitive.color.blue.600}",
+        "$description": "Primary actions and selection"
+      },
+      "hover": {
+        "$value": "{primitive.color.blue.700}",
+        "$description": "Hovered primary actions"
+      },
+      "active": {
+        "$value": "{primitive.color.blue.800}",
+        "$description": "Pressed primary actions"
+      }
+    },
+    "focus": {
+      "$value": "{primitive.color.blue.600}",
+      "$description": "Focus ring"
+    },
+    "scrim": {
+      "$value": "rgb(15 23 42 / 0.4)",
+      "$description": "Backdrop behind modal dialogs and sheets"
+    }
+  },
+  "category": {
+    "$type": "color",
+    "identical": {
+      "fg": {
+        "$value": "{primitive.color.emerald.600}",
+        "$description": "Identical: icon and tint (labels use text colors)"
+      },
+      "bg": {
+        "$value": "{primitive.color.emerald.50}",
+        "$description": "Identical: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.emerald.100}",
+        "$description": "Identical: chip outline"
+      }
+    },
+    "different": {
+      "fg": {
+        "$value": "{primitive.color.red.500}",
+        "$description": "Different: icon and tint (labels use text colors)"
+      },
+      "bg": {
+        "$value": "{primitive.color.red.50}",
+        "$description": "Different: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.red.100}",
+        "$description": "Different: chip outline"
+      }
+    },
+    "only-in": {
+      "fg": {
+        "$value": "{primitive.color.amber.800}",
+        "$description": "Only in: icon and tint (labels use text colors)"
+      },
+      "bg": {
+        "$value": "{primitive.color.amber.50}",
+        "$description": "Only in: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.amber.100}",
+        "$description": "Only in: chip outline"
+      }
+    },
+    "moved": {
+      "fg": {
+        "$value": "{primitive.color.violet.900}",
+        "$description": "Moved: icon and tint (labels use text colors)"
+      },
+      "bg": {
+        "$value": "{primitive.color.violet.50}",
+        "$description": "Moved: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.violet.100}",
+        "$description": "Moved: chip outline"
+      }
+    },
+    "renamed": {
+      "fg": {
+        "$value": "{primitive.color.violet.900}",
+        "$description": "Renamed: icon and tint (labels use text colors)"
+      },
+      "bg": {
+        "$value": "{primitive.color.violet.50}",
+        "$description": "Renamed: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.violet.100}",
+        "$description": "Renamed: chip outline"
+      }
+    },
+    "collision": {
+      "fg": {
+        "$value": "{primitive.color.pink.800}",
+        "$description": "Collision: icon and tint (labels use text colors)"
+      },
+      "bg": {
+        "$value": "{primitive.color.pink.50}",
+        "$description": "Collision: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.pink.100}",
+        "$description": "Collision: chip outline"
+      }
+    },
+    "unverified": {
+      "fg": {
+        "$value": "{primitive.color.slate.500}",
+        "$description": "Unverified: icon and tint (labels use text colors)"
+      },
+      "bg": {
+        "$value": "{primitive.color.slate.50}",
+        "$description": "Unverified: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.slate.100}",
+        "$description": "Unverified: chip outline"
+      }
+    }
+  },
+  "status": {
+    "$type": "color",
+    "error": {
+      "fg": {
+        "$value": "{primitive.color.red.800}",
+        "$description": "Error: icon and text"
+      },
+      "bg": {
+        "$value": "{primitive.color.red.50}",
+        "$description": "Error: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.red.100}",
+        "$description": "Error: chip outline"
+      }
+    },
+    "warning": {
+      "fg": {
+        "$value": "{primitive.color.amber.800}",
+        "$description": "Warning: icon and text"
+      },
+      "bg": {
+        "$value": "{primitive.color.amber.50}",
+        "$description": "Warning: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.amber.100}",
+        "$description": "Warning: chip outline"
+      }
+    },
+    "success": {
+      "fg": {
+        "$value": "{primitive.color.green.800}",
+        "$description": "Success: icon and text"
+      },
+      "bg": {
+        "$value": "{primitive.color.green.50}",
+        "$description": "Success: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.green.100}",
+        "$description": "Success: chip outline"
+      }
+    },
+    "info": {
+      "fg": {
+        "$value": "{primitive.color.blue.800}",
+        "$description": "Info: icon and text"
+      },
+      "bg": {
+        "$value": "{primitive.color.blue.50}",
+        "$description": "Info: chip and row tint"
+      },
+      "border": {
+        "$value": "{primitive.color.blue.100}",
+        "$description": "Info: chip outline"
+      }
+    }
+  },
+  "shadow": {
+    "overlay": {
+      "$value": "0 8px 24px rgb(15 23 42 / 0.12), 0 1px 3px rgb(15 23 42 / 0.08)",
+      "$type": "shadow",
+      "$description": "Floating layers only: menus, dialogs, toasts"
+    }
+  }
+}

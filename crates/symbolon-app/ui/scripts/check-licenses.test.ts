@@ -7,6 +7,7 @@ describe('isAllowed', () => {
 		['Apache-2.0 OR MIT', true],
 		['(MIT OR GPL-2.0-only)', true],
 		['MIT AND Zlib', true],
+		['OFL-1.1', true],
 		['MIT AND GPL-2.0-only', false],
 		['GPL-2.0-only', false],
 		['UNLICENSED', false],
