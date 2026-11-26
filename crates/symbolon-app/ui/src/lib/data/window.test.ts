@@ -143,3 +143,35 @@ describe('revealScroll', () => {
 		).toBe(0);
 	});
 });
+
+describe('createRowWindow refresh', () => {
+	it('refresh keeps scroll and re-reads visible rows', async () => {
+		const source = memorySource(numbers(1000));
+		const win = createRowWindow(source, { rowHeight: 28, overscan: 2, settleMs: 0 });
+		await settle();
+		win.setViewport(400 * 28, 280);
+		await settle();
+		const start = win.start;
+		source.replace(numbers(1000).map((r) => ({ ...r, name: `new${String(r.id)}` })));
+		win.refresh();
+		await settle();
+		await settle();
+		expect(win.start).toBe(start);
+		expect(win.rows[2]).toEqual({ id: 400, name: 'new400' });
+	});
+
+	it('shrinking list clamps active row and shows no stale rows', async () => {
+		const source = memorySource(numbers(500));
+		const win = createRowWindow(source, { rowHeight: 28, overscan: 2, settleMs: 0 });
+		await settle();
+		win.setViewport(400 * 28, 280);
+		await settle();
+		source.replace(numbers(120));
+		win.refresh();
+		await settle();
+		await settle();
+		expect(win.count).toBe(120);
+		expect(win.start).toBeLessThan(120);
+		expect(win.rows.every((r) => r !== undefined && r.id < 120)).toBe(true);
+	});
+});

@@ -23,6 +23,8 @@ export interface TreeState<Node> {
 	expand(key: string): Promise<void>;
 	collapse(key: string): void;
 	toggle(key: string): Promise<void>;
+	/** Re-reads the tree after the source changed, keeping open the folders that still exist. */
+	refresh(): Promise<void>;
 }
 
 const PAGE = 500;
@@ -59,10 +61,12 @@ export function createTreeState<Node>(source: TreeSource<Node>): TreeState<Node>
 		return list;
 	};
 
-	void source
-		.rootCount()
-		.then((count) => readAll(count, (o, l) => source.roots(o, l)))
-		.then((list) => (roots = remember(list)), fail);
+	const readRoots = () =>
+		source
+			.rootCount()
+			.then((count) => readAll(count, (o, l) => source.roots(o, l)))
+			.then((list) => (roots = remember(list)), fail);
+	void readRoots();
 
 	const visible = $derived.by(() => {
 		const out: VisibleNode<Node>[] = [];
@@ -126,6 +130,19 @@ export function createTreeState<Node>(source: TreeSource<Node>): TreeState<Node>
 		async toggle(key) {
 			if (expanded.has(key)) collapse(key);
 			else await expand(key);
+		},
+		async refresh() {
+			// Folders were opened parents first, so re-opening in that order finds each one.
+			const open = [...expanded];
+			expanded.clear();
+			wanted.clear();
+			children.clear();
+			nodes.clear();
+			error = undefined;
+			await readRoots();
+			for (const key of open) {
+				if (nodes.has(key)) await expand(key);
+			}
 		}
 	};
 }

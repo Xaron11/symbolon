@@ -69,3 +69,27 @@ describe('createTreeState', () => {
 		expect(state.visible.map((v) => v.key)).toEqual(['a', 'b.txt']);
 	});
 });
+
+describe('createTreeState refresh', () => {
+	it('tree refresh keeps expanded folders that still exist', async () => {
+		const source = tree();
+		const state = createTreeState(source);
+		await settle();
+		await state.expand('a');
+		await state.expand('a/y');
+		source.replace([
+			{
+				key: 'a',
+				label: 'a',
+				children: [
+					{ key: 'a/w', label: 'w' },
+					{ key: 'a/x', label: 'x' }
+				]
+			},
+			{ key: 'c.txt', label: 'c.txt' }
+		]);
+		await state.refresh();
+		expect(state.visible.map((v) => v.node.key)).toEqual(['a', 'a/w', 'a/x', 'c.txt']);
+		expect(state.visible[0]?.expanded).toBe(true);
+	});
+});

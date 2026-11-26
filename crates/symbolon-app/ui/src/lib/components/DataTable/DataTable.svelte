@@ -68,6 +68,18 @@
 		rows.setViewport(scroller?.scrollTop ?? 0, height);
 	});
 
+	// A source that changes (a comparison being verified) is re-read where it is shown.
+	// Selection is by position, which the new rows give to other rows.
+	$effect(() =>
+		source.subscribe?.(() => {
+			rows.refresh();
+			selection = new SvelteSet();
+		})
+	);
+	$effect(() => {
+		if (total > 0 && active > total - 1) active = total - 1;
+	});
+
 	function moveTo(index: number) {
 		if (total === 0) return;
 		active = Math.min(total - 1, Math.max(0, index));
