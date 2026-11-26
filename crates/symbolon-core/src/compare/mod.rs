@@ -435,8 +435,11 @@ pub enum TreeChild {
     Folder {
         /// The folder's key, to pass as `parent` to [`Comparison::children`].
         key: String,
-        /// The last part of the key.
+        /// The last part of the key, as stored (escaped and normalized like the key).
         name: String,
+        /// The last part of the key for people to read ([`PathKey::display`]); under
+        /// case-insensitive or NFC matching it is the normalized spelling.
+        display: String,
         /// The row at this path when it matches too, such as a file on one side that is a
         /// directory on another.
         row: Option<Row>,
@@ -454,7 +457,7 @@ pub struct ExtensionTotals {
     pub extension: Option<String>,
     /// Rows whose file name has the extension.
     pub rows: u64,
-    /// Bytes of the files in those rows.
+    /// Bytes of the files in those rows, all sides together.
     pub bytes: u64,
 }
 
@@ -477,7 +480,7 @@ pub struct SizeBucket {
     pub max_exclusive: Option<u64>,
     /// Rows in the bucket.
     pub rows: u64,
-    /// Bytes of the files in those rows.
+    /// Bytes of the files in those rows, all sides together.
     pub bytes: u64,
 }
 

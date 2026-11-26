@@ -50,6 +50,10 @@ impl Page {
     }
 
     /// The `limit` items from position `offset`. Offset pages return no [`PageOf::next`].
+    ///
+    /// Taken by `Comparison::rows`, `children` and `duplicates`, and by [`Query::children`],
+    /// [`Query::scans`], [`Query::warnings`] and [`Query::recent_scans`]; [`Query::search`] and
+    /// [`Query::duplicates`] reject it (ADR-0023).
     pub fn at(offset: u64, limit: u32) -> Self {
         Self {
             after: None,
@@ -61,6 +65,14 @@ impl Page {
     /// The offset as an SQL `OFFSET` (0 for cursor pages), or an error for a page with both.
     pub(crate) fn skip(&self) -> Result<i64, CatalogError> {
         Ok(self.checked_offset()?.unwrap_or(0).cast_signed())
+    }
+
+    /// An error for an offset page, in a result that is only read by cursor.
+    pub(crate) fn cursor_only(&self, what: &str) -> Result<(), CatalogError> {
+        match self.offset {
+            Some(_) => Err(CatalogError::Corrupt(format!("{what} are read by cursor"))),
+            None => Ok(()),
+        }
     }
 
     /// The offset to skip, or an error for a page that also has a cursor.
@@ -546,6 +558,7 @@ impl Query {
         needle: &str,
         page: &Page,
     ) -> Result<PageOf<EntryInfo>, CatalogError> {
+        page.cursor_only("search results")?;
         let location = self.location(label)?;
         // Keys write `%` as `%25`; then escape LIKE's own wildcards.
         let pattern = format!(
@@ -583,6 +596,7 @@ impl Query {
         label: &str,
         page: &Page,
     ) -> Result<PageOf<DuplicateGroup>, CatalogError> {
+        page.cursor_only("duplicate groups")?;
         let location = self.location(label)?;
         let after = page
             .after

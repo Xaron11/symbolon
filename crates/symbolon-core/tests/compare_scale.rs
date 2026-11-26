@@ -198,3 +198,35 @@ fn last_offset_page_is_fast() {
         }
     }
 }
+
+#[test]
+#[ignore = "builds two 200k-entry locations; run with `just test-acceptance`"]
+fn cursor_walk_is_linear() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let catalog = populate(dir.path());
+    let cmp = Comparison::new(
+        &catalog,
+        &[Side::location("a"), Side::location("b")],
+        CompareOptions::default(),
+    )
+    .expect("compare");
+    // What `symbolon diff` does: every row, a page of 1000 after another.
+    let started = Instant::now();
+    let (mut rows, mut page) = (0, Page::first(1000));
+    loop {
+        let result = cmp
+            .rows(&RowFilter::default(), RowOrder::default(), &page)
+            .expect("rows");
+        rows += result.items.len();
+        match result.next {
+            Some(cursor) => page = Page::after(cursor, 1000),
+            None => break,
+        }
+    }
+    let took = started.elapsed();
+    assert_eq!(rows, 221_000);
+    eprintln!("cursor walk over {rows} rows: {took:.2?}");
+    if !cfg!(debug_assertions) {
+        assert!(took.as_secs_f64() < 1.5, "cursor walk took {took:?}");
+    }
+}
