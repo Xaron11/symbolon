@@ -5,10 +5,12 @@
 	import '#lib/design/base.css';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { createTauriBackend, provideBackend } from '#lib/api/index.ts';
 	import Shell from '#lib/shell/Shell.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
+	provideBackend(createTauriBackend());
 </script>
 
 <svelte:head>

@@ -64,6 +64,24 @@ export default defineConfig(
 		}
 	},
 	{
+		// Screens reach the backend through the API layer only (ADR-0021 §2).
+		files: ['src/**/*.ts', 'src/**/*.svelte'],
+		ignores: ['src/lib/api/**'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['@tauri-apps/*', '#lib/api/bindings*', '**/api/bindings*'],
+							message: 'Use the API layer (#lib/api), not Tauri or the generated bindings.'
+						}
+					]
+				}
+			]
+		}
+	},
+	{
 		// Colors come from design tokens (ADR-0022); only the design module may hold raw values.
 		files: ['src/**/*.ts', 'src/**/*.svelte'],
 		ignores: ['src/lib/design/**', '**/*.test.ts'],
