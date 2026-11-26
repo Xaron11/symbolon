@@ -6,7 +6,7 @@ Symbolon's interface is built from one platform-neutral design system: design to
 
 - **Dense and calm.** The interface is for people comparing large file sets: compact rows, monospace numbers, borders instead of shadows, color only where it carries meaning.
 - **Tokens only.** Every color, size, radius, font and duration comes from a [design token](tokens.md). A component never contains a raw hex value or pixel length; changing the look means changing tokens.
-- **Color is never the only signal.** Each comparison category has a color, an icon and a label. Contrast is at least 4.5:1 for text and 3:1 for borders and focus, in both themes, and category colors stay apart under simulated color blindness. Tests check all of this.
+- **Color is never the only signal.** Each comparison category has a color, an icon and a label. Category colors mark icons and tints; labels always use the text colors. Contrast is at least 4.5:1 for text and 3:1 for borders, focus and category graphics, in both themes, and category colors stay apart under simulated color blindness. Tests check all of this.
 - **Keyboard-first.** Everything works without a pointer, focus is always visible, and the same keys work everywhere, including vi-style navigation in lists.
 - **Large data stays smooth.** Lists and trees render only what is visible and load rows on demand.
 - **Respect the system.** The theme follows the OS unless the user picks one; reduced motion turns animations off.

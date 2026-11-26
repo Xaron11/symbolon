@@ -37,7 +37,7 @@
         "$description": "Dividers and table lines"
       },
       "strong": {
-        "$value": "{primitive.color.slate.700}",
+        "$value": "{primitive.color.slate.500}",
         "$description": "Control outlines"
       }
     },
@@ -55,21 +55,21 @@
         "$description": "Hints, placeholders, disabled text"
       },
       "on-accent": {
-        "$value": "{primitive.color.white}",
+        "$value": "{primitive.color.slate.950}",
         "$description": "Text on accent fills"
       }
     },
     "accent": {
       "default": {
-        "$value": "{primitive.color.blue.500}",
+        "$value": "{primitive.color.blue.400}",
         "$description": "Primary actions and selection"
       },
       "hover": {
-        "$value": "{primitive.color.blue.400}",
+        "$value": "{primitive.color.blue.300}",
         "$description": "Hovered primary actions"
       },
       "active": {
-        "$value": "{primitive.color.blue.600}",
+        "$value": "{primitive.color.blue.500}",
         "$description": "Pressed primary actions"
       }
     },
@@ -82,22 +82,22 @@
     "$type": "color",
     "identical": {
       "fg": {
-        "$value": "{primitive.color.green.400}",
-        "$description": "Identical: icon and text"
+        "$value": "{primitive.color.emerald.400}",
+        "$description": "Identical: icon and tint (labels use text colors)"
       },
       "bg": {
-        "$value": "{primitive.color.green.950}",
+        "$value": "{primitive.color.emerald.950}",
         "$description": "Identical: chip and row tint"
       },
       "border": {
-        "$value": "{primitive.color.green.900}",
+        "$value": "{primitive.color.emerald.900}",
         "$description": "Identical: chip outline"
       }
     },
     "different": {
       "fg": {
-        "$value": "{primitive.color.red.400}",
-        "$description": "Different: icon and text"
+        "$value": "{primitive.color.red.600}",
+        "$description": "Different: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.red.950}",
@@ -110,8 +110,8 @@
     },
     "only-in": {
       "fg": {
-        "$value": "{primitive.color.amber.400}",
-        "$description": "Only in: icon and text"
+        "$value": "{primitive.color.amber.200}",
+        "$description": "Only in: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.amber.950}",
@@ -125,7 +125,7 @@
     "moved": {
       "fg": {
         "$value": "{primitive.color.violet.400}",
-        "$description": "Moved: icon and text"
+        "$description": "Moved: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.violet.950}",
@@ -139,7 +139,7 @@
     "renamed": {
       "fg": {
         "$value": "{primitive.color.violet.400}",
-        "$description": "Renamed: icon and text"
+        "$description": "Renamed: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.violet.950}",
@@ -152,22 +152,22 @@
     },
     "collision": {
       "fg": {
-        "$value": "{primitive.color.orange.400}",
-        "$description": "Collision: icon and text"
+        "$value": "{primitive.color.pink.500}",
+        "$description": "Collision: icon and tint (labels use text colors)"
       },
       "bg": {
-        "$value": "{primitive.color.orange.950}",
+        "$value": "{primitive.color.pink.950}",
         "$description": "Collision: chip and row tint"
       },
       "border": {
-        "$value": "{primitive.color.orange.900}",
+        "$value": "{primitive.color.pink.900}",
         "$description": "Collision: chip outline"
       }
     },
     "unverified": {
       "fg": {
-        "$value": "{primitive.color.slate.400}",
-        "$description": "Unverified: icon and text"
+        "$value": "{primitive.color.slate.200}",
+        "$description": "Unverified: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.slate.950}",

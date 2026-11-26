@@ -37,7 +37,7 @@
         "$description": "Dividers and table lines"
       },
       "strong": {
-        "$value": "{primitive.color.slate.300}",
+        "$value": "{primitive.color.slate.500}",
         "$description": "Control outlines"
       }
     },
@@ -82,22 +82,22 @@
     "$type": "color",
     "identical": {
       "fg": {
-        "$value": "{primitive.color.green.700}",
-        "$description": "Identical: icon and text"
+        "$value": "{primitive.color.emerald.600}",
+        "$description": "Identical: icon and tint (labels use text colors)"
       },
       "bg": {
-        "$value": "{primitive.color.green.50}",
+        "$value": "{primitive.color.emerald.50}",
         "$description": "Identical: chip and row tint"
       },
       "border": {
-        "$value": "{primitive.color.green.100}",
+        "$value": "{primitive.color.emerald.100}",
         "$description": "Identical: chip outline"
       }
     },
     "different": {
       "fg": {
         "$value": "{primitive.color.red.700}",
-        "$description": "Different: icon and text"
+        "$description": "Different: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.red.50}",
@@ -110,8 +110,8 @@
     },
     "only-in": {
       "fg": {
-        "$value": "{primitive.color.amber.700}",
-        "$description": "Only in: icon and text"
+        "$value": "{primitive.color.amber.600}",
+        "$description": "Only in: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.amber.50}",
@@ -124,8 +124,8 @@
     },
     "moved": {
       "fg": {
-        "$value": "{primitive.color.violet.700}",
-        "$description": "Moved: icon and text"
+        "$value": "{primitive.color.violet.500}",
+        "$description": "Moved: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.violet.50}",
@@ -138,8 +138,8 @@
     },
     "renamed": {
       "fg": {
-        "$value": "{primitive.color.violet.700}",
-        "$description": "Renamed: icon and text"
+        "$value": "{primitive.color.violet.500}",
+        "$description": "Renamed: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.violet.50}",
@@ -152,22 +152,22 @@
     },
     "collision": {
       "fg": {
-        "$value": "{primitive.color.orange.700}",
-        "$description": "Collision: icon and text"
+        "$value": "{primitive.color.pink.500}",
+        "$description": "Collision: icon and tint (labels use text colors)"
       },
       "bg": {
-        "$value": "{primitive.color.orange.50}",
+        "$value": "{primitive.color.pink.50}",
         "$description": "Collision: chip and row tint"
       },
       "border": {
-        "$value": "{primitive.color.orange.100}",
+        "$value": "{primitive.color.pink.100}",
         "$description": "Collision: chip outline"
       }
     },
     "unverified": {
       "fg": {
-        "$value": "{primitive.color.slate.600}",
-        "$description": "Unverified: icon and text"
+        "$value": "{primitive.color.slate.700}",
+        "$description": "Unverified: icon and tint (labels use text colors)"
       },
       "bg": {
         "$value": "{primitive.color.slate.50}",
