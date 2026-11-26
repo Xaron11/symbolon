@@ -1,6 +1,6 @@
 # Catalog schema
 
-The catalog is one SQLite database. Its schema is a public contract: the CLI, the app, `.symbolon` exports and third-party tools read it. This page describes the current version (**v3**) and the rules for changing it. The DDL lives in `crates/symbolon-core/src/catalog/schema.rs`.
+The catalog is one SQLite database. Its schema is a public contract: the CLI, the app, `.symbolon` exports and third-party tools read it. This page describes the current version (**v4**) and the rules for changing it. The DDL lives in `crates/symbolon-core/src/catalog/schema.rs`.
 
 ## Versioning policy
 
@@ -19,7 +19,7 @@ The catalog is one SQLite database. Its schema is a public contract: the CLI, th
 - Digests are raw bytes. The algorithm is a property of the location, not of each digest: every digest of a location uses `locations.hash_algo`.
 - Enumerations are lowercase text with a `CHECK` constraint.
 
-## Tables (v3)
+## Tables (v4)
 
 ### `meta`
 
@@ -56,20 +56,21 @@ One row per scan of a location. `status` is `running`, `completed`, `cancelled`,
 
 One row per file, directory, symlink or other object of a location.
 
-| Column         | Type    | Notes                                                                     |
-| -------------- | ------- | ------------------------------------------------------------------------- |
-| `id`           | INTEGER | Primary key.                                                              |
-| `location_id`  | INTEGER | References `locations`; cascades on delete.                               |
-| `rel_path_raw` | BLOB    | Raw relative path; unique per location.                                   |
-| `path_key`     | TEXT    | Matching key of `rel_path_raw`.                                           |
-| `parent_key`   | TEXT    | `path_key` of the parent directory (`''` at the root), for tree browsing. |
-| `kind`         | TEXT    | `file`, `dir`, `symlink` or `other`.                                      |
-| `size`         | INTEGER | Bytes; 0 for directories.                                                 |
-| `mtime_ns`     | INTEGER | Modification time; nullable when unavailable.                             |
-| `hash_partial` | BLOB    | Partial digest (size + first and last 64 KiB); nullable. Pruning only.    |
-| `hash_full`    | BLOB    | Full-content digest; nullable.                                            |
-| `seen_scan_id` | INTEGER | Last scan that saw the entry.                                             |
-| `flags`        | INTEGER | Reserved, 0.                                                              |
+| Column         | Type    | Notes                                                                                                                                                                                                  |
+| -------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`           | INTEGER | Primary key.                                                                                                                                                                                           |
+| `location_id`  | INTEGER | References `locations`; cascades on delete.                                                                                                                                                            |
+| `rel_path_raw` | BLOB    | Raw relative path; unique per location.                                                                                                                                                                |
+| `path_key`     | TEXT    | Matching key of `rel_path_raw`.                                                                                                                                                                        |
+| `parent_key`   | TEXT    | `path_key` of the parent directory (`''` at the root), for tree browsing.                                                                                                                              |
+| `kind`         | TEXT    | `file`, `dir`, `symlink` or `other`.                                                                                                                                                                   |
+| `size`         | INTEGER | Bytes; 0 for directories.                                                                                                                                                                              |
+| `mtime_ns`     | INTEGER | Modification time; nullable when unavailable.                                                                                                                                                          |
+| `hash_partial` | BLOB    | Partial digest (size + first and last 64 KiB); nullable. Pruning only.                                                                                                                                 |
+| `hash_full`    | BLOB    | Full-content digest; nullable.                                                                                                                                                                         |
+| `seen_scan_id` | INTEGER | Last scan that saw the entry.                                                                                                                                                                          |
+| `flags`        | INTEGER | Reserved, 0.                                                                                                                                                                                           |
+| `link_target`  | BLOB    | Symlink target as raw bytes in `path_encoding`, exactly as `readlink` returns it ([ADR-0019](adr/0019-directories-and-symlinks-in-comparisons.md)); NULL for other kinds or when unknown. Added in v4. |
 
 The hash state shown to users is derived: `verified` when `hash_full` is set, `partial` when only `hash_partial` is, `unhashed` otherwise. Hashes are cleared whenever `size` or `mtime_ns` change. Entries not seen by a completed scan are deleted at its end.
 

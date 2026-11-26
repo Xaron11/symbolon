@@ -54,12 +54,23 @@ fn every_fixture_opens_and_keeps_its_data() {
         assert_eq!(user_version, SCHEMA_VERSION, "v{version} was not migrated");
         let (entries, hashed): (i64, i64) = conn
             .query_row(
-                "SELECT count(*), count(hash_full) FROM entries WHERE location_id = ?1",
+                "SELECT count(*), count(hash_full) FROM entries
+                 WHERE location_id = ?1 AND kind != 'symlink'",
                 [location.id.get()],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap();
         assert_eq!((entries, hashed), (3, 1), "v{version} lost entries");
+        if version >= 4 {
+            let target: Vec<u8> = conn
+                .query_row(
+                    "SELECT link_target FROM entries WHERE rel_path_raw = x'6c6174657374'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(target, b"a.jpg", "v{version} lost a link target");
+        }
 
         let backup = dir.path().join(format!("catalog.db.v{version}.bak"));
         assert_eq!(
@@ -82,14 +93,16 @@ fn write_fixture() {
     conn.execute_batch(
         "INSERT INTO locations (id, label, root_kind, root_raw, path_encoding, hash_algo, hash_policy, ignore_patterns, created_at)
              VALUES (1, 'fixture', 'local', CAST('/fixture/photos' AS BLOB), 'posix', 'blake3', 'eager', '*.tmp', 1795000000000);
-         INSERT INTO scans (id, location_id, started_at, finished_at, status, files, dirs, bytes, hashed_files, hashed_bytes)
-             VALUES (1, 1, 1795000000000, 1795000001000, 'completed', 2, 1, 2048, 1, 1024);
+         INSERT INTO scans (id, location_id, started_at, finished_at, status, files, dirs, symlinks, bytes, hashed_files, hashed_bytes)
+             VALUES (1, 1, 1795000000000, 1795000001000, 'completed', 2, 1, 1, 2048, 1, 1024);
          INSERT INTO entries (location_id, rel_path_raw, path_key, parent_key, kind, size, mtime_ns, hash_partial, hash_full, seen_scan_id)
              VALUES
              (1, CAST('2024' AS BLOB), '2024', '', 'dir', 0, 1795000000000000000, NULL, NULL, 1),
              (1, CAST('2024/a.jpg' AS BLOB), '2024/a.jpg', '2024', 'file', 1024, 1795000000000000000,
                  zeroblob(32), x'6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85', 1),
              (1, x'322f62ff2e6a7067', '2/b%FF.jpg', '2', 'file', 1024, 1795000000000000000, NULL, NULL, 1);
+         INSERT INTO entries (location_id, rel_path_raw, path_key, parent_key, kind, size, mtime_ns, seen_scan_id, link_target)
+             VALUES (1, CAST('latest' AS BLOB), 'latest', '', 'symlink', 5, 1795000000000000000, 1, CAST('a.jpg' AS BLOB));
          INSERT INTO scan_warnings (scan_id, rel_path_raw, kind, message)
              VALUES (1, CAST('2024/locked' AS BLOB), 'permission', 'Permission denied (os error 13)');
          PRAGMA journal_mode = DELETE;
