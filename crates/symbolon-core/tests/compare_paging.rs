@@ -7,7 +7,8 @@ use std::fs;
 
 use symbolon_core::catalog::{Catalog, CatalogError, HashPolicy, NewLocation};
 use symbolon_core::compare::{
-    Category, CompareError, CompareOptions, Comparison, Direction, Row, RowFilter, RowOrder, Side,
+    Category, CompareError, CompareOptions, Comparison, Direction, DuplicateSet, ExtensionTotals,
+    Row, RowFilter, RowOrder, SIZE_BUCKETS, Side,
 };
 use symbolon_core::query::Page;
 use symbolon_core::scan::{ScanOptions, Scanner};
@@ -197,4 +198,167 @@ fn page_with_cursor_and_offset_is_rejected() {
         matches!(err, CompareError::Catalog(CatalogError::Corrupt(_))),
         "{err:?}"
     );
+}
+
+/// Two identical locations holding `files` (path, size in bytes), plus `left_only` on the left.
+fn sized(files: &[(&str, usize)], left_only: &[(&str, usize)]) -> Fixture {
+    let dir = tempfile::tempdir().unwrap();
+    let catalog = Catalog::open(dir.path().join("catalog.db")).unwrap();
+    for label in ["left", "right"] {
+        let root = dir.path().join(label);
+        let extra = if label == "left" { left_only } else { &[] };
+        for (i, (path, size)) in files.iter().chain(extra).enumerate() {
+            let path = root.join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            // Distinct contents, so no two files are duplicates by accident.
+            let mut contents = format!("{i:08}").into_bytes();
+            contents.resize(*size, b'.');
+            fs::write(path, contents).unwrap();
+        }
+        catalog
+            .add_location(NewLocation::local(label, &root).hash_policy(HashPolicy::Eager))
+            .unwrap();
+        Scanner::start(&catalog, label, ScanOptions::default())
+            .unwrap()
+            .wait()
+            .unwrap();
+    }
+    Fixture { _dir: dir, catalog }
+}
+
+fn extensions(totals: &[ExtensionTotals]) -> Vec<(Option<&str>, u64, u64)> {
+    totals
+        .iter()
+        .map(|t| (t.extension.as_deref(), t.rows, t.bytes))
+        .collect()
+}
+
+#[test]
+fn by_extension_ranks_by_bytes_and_folds_rest() {
+    let f = sized(
+        &[
+            ("a.jpg", 500),
+            ("b.png", 400),
+            ("c.txt", 150),
+            ("d.txt", 150),
+            ("e.md", 200),
+            ("f.rs", 100),
+            ("noext", 50),
+        ],
+        &[],
+    );
+    let cmp = compare(&f);
+    let totals = cmp.by_extension(&RowFilter::default(), 3).unwrap();
+    // Bytes count both sides.
+    assert_eq!(
+        extensions(&totals),
+        [
+            (Some("jpg"), 1, 1000),
+            (Some("png"), 1, 800),
+            (Some("txt"), 2, 600),
+            (None, 3, 700),
+        ]
+    );
+    let all = cmp.by_extension(&RowFilter::default(), 10).unwrap();
+    assert!(
+        all.iter().all(|t| t.extension.is_some()),
+        "nothing left to fold"
+    );
+    assert!(extensions(&all).contains(&(Some(""), 1, 100)));
+}
+
+#[test]
+fn by_extension_respects_filter() {
+    let f = sized(&[("a.jpg", 500)], &[("b.png", 400), ("c.png", 10)]);
+    let cmp = compare(&f);
+    let totals = cmp
+        .by_extension(&RowFilter::categories([Category::OnlyIn]), 10)
+        .unwrap();
+    assert_eq!(extensions(&totals), [(Some("png"), 2, 410)]);
+}
+
+#[test]
+fn size_histogram_has_six_buckets_with_edges() {
+    let f = sized(
+        &[
+            ("a", 1023),
+            ("b", 1024),
+            ("c", (1 << 20) - 1),
+            ("d", 1 << 20),
+        ],
+        &[],
+    );
+    let cmp = compare(&f);
+    let buckets = cmp.size_histogram(&RowFilter::default()).unwrap();
+    assert_eq!(
+        buckets.iter().map(|b| b.max_exclusive).collect::<Vec<_>>(),
+        SIZE_BUCKETS
+    );
+    assert_eq!(
+        buckets.iter().map(|b| b.rows).collect::<Vec<_>>(),
+        [1, 2, 1, 0, 0, 0]
+    );
+    assert_eq!(buckets[0].bytes, 2 * 1023);
+}
+
+#[test]
+fn size_histogram_skips_directories() {
+    let f = fixture();
+    let cmp = compare(&f);
+    let rows: u64 = cmp
+        .size_histogram(&RowFilter::default())
+        .unwrap()
+        .iter()
+        .map(|b| b.rows)
+        .sum();
+    // Every row but the empty folder.
+    assert_eq!(rows, cmp.count(&RowFilter::default()).unwrap() - 1);
+}
+
+#[test]
+fn duplicates_offset_pages_match_cursor_pages() {
+    let files: Vec<(String, usize)> = (0..5)
+        .flat_map(|g| (0..3).map(move |i| (format!("g{g}/copy{i}.bin"), 100 + g)))
+        .collect();
+    let dir = tempfile::tempdir().unwrap();
+    let catalog = Catalog::open(dir.path().join("catalog.db")).unwrap();
+    let root = dir.path().join("only");
+    for (path, size) in &files {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, vec![b'x'; *size]).unwrap();
+    }
+    catalog
+        .add_location(NewLocation::local("only", &root).hash_policy(HashPolicy::Eager))
+        .unwrap();
+    Scanner::start(&catalog, "only", ScanOptions::default())
+        .unwrap()
+        .wait()
+        .unwrap();
+    let cmp = Comparison::new(
+        &catalog,
+        &[Side::location("only")],
+        CompareOptions::default().duplicates(true),
+    )
+    .unwrap();
+    let digests =
+        |items: Vec<DuplicateSet>| items.into_iter().map(|d| d.digest).collect::<Vec<_>>();
+    let mut by_cursor = Vec::new();
+    let mut page = Page::first(2);
+    loop {
+        let got = cmp.duplicates(0, &page).unwrap();
+        by_cursor.extend(digests(got.items));
+        match got.next {
+            Some(cursor) => page = Page::after(cursor, 2),
+            None => break,
+        }
+    }
+    let mut by_offset = Vec::new();
+    for offset in (0..6).step_by(2) {
+        let got = cmp.duplicates(0, &Page::at(offset, 2)).unwrap();
+        assert!(got.next.is_none());
+        by_offset.extend(digests(got.items));
+    }
+    assert_eq!(by_cursor.len(), 5);
+    assert_eq!(by_offset, by_cursor);
 }

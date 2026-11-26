@@ -5,8 +5,8 @@ use rusqlite::{Connection, OptionalExtension as _, ToSql, named_params, params};
 
 use super::{
     Category, Cell, CompareError, CompareOptions, Direction, DuplicateSet, DuplicateTotals,
-    FolderTotals, Row, RowFilter, RowOrder, Side, SideInfo, SideSet, Summary, Totals, TreeChild,
-    parse_row_cursor, row_cursor,
+    ExtensionTotals, FolderTotals, Row, RowFilter, RowOrder, SIZE_BUCKETS, Side, SideInfo, SideSet,
+    SizeBucket, Summary, Totals, TreeChild, parse_row_cursor, row_cursor,
 };
 use crate::catalog::CatalogError;
 use crate::hash::{Digest, PartialDigest};
@@ -609,6 +609,7 @@ pub(super) fn duplicates(
     let info = sides
         .get(side)
         .ok_or_else(|| CatalogError::Corrupt(format!("side {side} out of range")))?;
+    let offset = page.checked_offset()?;
     let after = page
         .after
         .as_ref()
@@ -620,11 +621,12 @@ pub(super) fn duplicates(
         .prepare_cached(
             "SELECT full, max(size) FROM temp.cmp_files
              WHERE side = ?1 AND kind = 'file' AND full IS NOT NULL AND size > 0 AND full > ?2
-             GROUP BY full HAVING count(*) > 1 ORDER BY full LIMIT ?3",
+             GROUP BY full HAVING count(*) > 1 ORDER BY full LIMIT ?3 OFFSET ?4",
         )?
-        .query_map(params![side, after, limit], |row| {
-            Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, u64>(1)?))
-        })?
+        .query_map(
+            params![side, after, limit, offset.unwrap_or(0).cast_signed()],
+            |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, u64>(1)?)),
+        )?
         .collect::<Result<Vec<_>, _>>()?;
     let mut cells_stmt = conn.prepare_cached(
         "SELECT side, raw, rel, kind, target, size, mtime_ns, partial, full FROM temp.cmp_files
@@ -645,7 +647,7 @@ pub(super) fn duplicates(
             cells,
         });
     }
-    let next = (items.len() == limit as usize)
+    let next = (offset.is_none() && items.len() == limit as usize)
         .then(|| {
             items
                 .last()
@@ -653,6 +655,76 @@ pub(super) fn duplicates(
         })
         .flatten();
     Ok(PageOf { items, next })
+}
+
+pub(super) fn by_extension(
+    conn: &Connection,
+    filter: &FilterParams,
+    limit: u32,
+) -> Result<Vec<ExtensionTotals>, CompareError> {
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT ext, count(*), sum(bytes) FROM temp.cmp_rows
+         WHERE max_size IS NOT NULL AND {FILTER}
+         GROUP BY ext ORDER BY sum(bytes) DESC, ext"
+    ))?;
+    let mut totals = stmt
+        .query_map(filter.named().as_slice(), |row| {
+            Ok(ExtensionTotals {
+                extension: Some(row.get(0)?),
+                rows: row.get(1)?,
+                bytes: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let rest = totals.split_off(totals.len().min(limit as usize));
+    if !rest.is_empty() {
+        totals.push(ExtensionTotals {
+            extension: None,
+            rows: rest.iter().map(|t| t.rows).sum(),
+            bytes: rest.iter().map(|t| t.bytes).sum(),
+        });
+    }
+    Ok(totals)
+}
+
+pub(super) fn size_histogram(
+    conn: &Connection,
+    filter: &FilterParams,
+) -> Result<Vec<SizeBucket>, CompareError> {
+    // Bucket i holds sizes below SIZE_BUCKETS[i] and at or above the bucket before it.
+    let bucket = SIZE_BUCKETS
+        .iter()
+        .enumerate()
+        .filter_map(|(i, max)| max.map(|max| format!("WHEN max_size < {max} THEN {i} ")))
+        .collect::<String>();
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT CASE {bucket}ELSE {} END AS bucket, count(*), sum(bytes) FROM temp.cmp_rows
+         WHERE max_size IS NOT NULL AND {FILTER} GROUP BY bucket",
+        SIZE_BUCKETS.len() - 1
+    ))?;
+    let mut buckets: Vec<SizeBucket> = SIZE_BUCKETS
+        .iter()
+        .map(|&max_exclusive| SizeBucket {
+            max_exclusive,
+            rows: 0,
+            bytes: 0,
+        })
+        .collect();
+    let rows = stmt.query_map(filter.named().as_slice(), |row| {
+        Ok((
+            row.get::<_, usize>(0)?,
+            row.get::<_, u64>(1)?,
+            row.get::<_, u64>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (index, rows, bytes) = row?;
+        if let Some(bucket) = buckets.get_mut(index) {
+            bucket.rows = rows;
+            bucket.bytes = bytes;
+        }
+    }
+    Ok(buckets)
 }
 
 pub(super) fn duplicate_totals(

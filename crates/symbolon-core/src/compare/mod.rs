@@ -445,6 +445,42 @@ pub enum TreeChild {
     },
 }
 
+/// Rows and bytes of one file extension in [`Comparison::by_extension`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ExtensionTotals {
+    /// The extension, lowercase and without the dot (`""` for names without one); `None` for
+    /// the extensions beyond the requested limit, counted together.
+    pub extension: Option<String>,
+    /// Rows whose file name has the extension.
+    pub rows: u64,
+    /// Bytes of the files in those rows.
+    pub bytes: u64,
+}
+
+/// Upper bounds (exclusive) of the [`Comparison::size_histogram`] buckets: below 1 KiB, 1 MiB,
+/// 10 MiB, 100 MiB and 1 GiB, and the rest.
+pub const SIZE_BUCKETS: [Option<u64>; 6] = [
+    Some(1 << 10),
+    Some(1 << 20),
+    Some(10 << 20),
+    Some(100 << 20),
+    Some(1 << 30),
+    None,
+];
+
+/// Rows and bytes in one bucket of [`Comparison::size_histogram`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SizeBucket {
+    /// Rows in the bucket have their largest file below this size; `None` for the last bucket.
+    pub max_exclusive: Option<u64>,
+    /// Rows in the bucket.
+    pub rows: u64,
+    /// Bytes of the files in those rows.
+    pub bytes: u64,
+}
+
 /// The order of [`Comparison::rows`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -600,11 +636,12 @@ impl Comparison {
 
     /// Duplicate groups within side `side` (an index into [`Comparison::sides`]), ordered by
     /// digest. Only files with full digests count; empty files are left out, since they are
-    /// all trivially identical.
+    /// all trivially identical. Pages by cursor or by offset ([`Page::at`]).
     ///
     /// # Errors
     ///
-    /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor.
+    /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor or a page with both a
+    /// cursor and an offset.
     pub fn duplicates(
         &self,
         side: usize,
@@ -620,6 +657,36 @@ impl Comparison {
     /// A database error.
     pub fn duplicate_totals(&self) -> Result<Vec<DuplicateTotals>, CompareError> {
         sql::duplicate_totals(&self.conn, self.sides.len())
+    }
+
+    /// Rows and bytes matching `filter` per file extension: the `limit` extensions with the
+    /// most bytes (ties by name), then one entry without an extension for all others if any
+    /// remain. Rows without files are not counted.
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn by_extension(
+        &self,
+        filter: &RowFilter,
+        limit: u32,
+    ) -> Result<Vec<ExtensionTotals>, CompareError> {
+        sql::by_extension(
+            &self.conn,
+            &sql::FilterParams::new(filter, &self.options),
+            limit,
+        )
+    }
+
+    /// Rows and bytes matching `filter` by the size of their largest file, one entry per
+    /// [`SIZE_BUCKETS`] bound in that order (empty buckets included). Rows without files are not
+    /// counted.
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn size_histogram(&self, filter: &RowFilter) -> Result<Vec<SizeBucket>, CompareError> {
+        sql::size_histogram(&self.conn, &sql::FilterParams::new(filter, &self.options))
     }
 
     /// Number of rows matching `filter`.
