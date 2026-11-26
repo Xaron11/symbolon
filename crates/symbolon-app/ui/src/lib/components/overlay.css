@@ -17,6 +17,7 @@
 	gap: var(--sy-space-8);
 	height: var(--sy-control-height-sm);
 	padding: 0 var(--sy-space-8);
+	border-left: var(--sy-border-width-strong) solid transparent;
 	border-radius: var(--sy-radius-sm);
 	cursor: pointer;
 	user-select: none;
@@ -29,12 +30,19 @@
 	color: var(--sy-color-text-secondary);
 }
 
-.sy-option[data-highlighted] {
-	background: var(--sy-color-surface-hover);
-}
-
+/* The current option is shown by the tint and weight; the highlighted (keyboard or pointer)
+   option by an accent bar, which stays visible where hover and raised fills are equal (dark). */
 .sy-option[data-selected] {
 	background: var(--sy-color-surface-selected);
+	font-weight: var(--sy-font-weight-medium);
+}
+
+.sy-option[data-highlighted] {
+	border-left-color: var(--sy-color-accent-default);
+}
+
+.sy-option[data-highlighted]:not([data-selected]) {
+	background: var(--sy-color-surface-hover);
 }
 
 .sy-option[data-disabled] {
@@ -59,8 +67,28 @@
 	background: var(--sy-color-border-default);
 }
 
+/* The button that opens a menu or popover. */
+.sy-menu-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sy-space-8);
+	height: var(--sy-control-height-md);
+	padding: 0 var(--sy-space-12);
+	border: var(--sy-border-width-default) solid var(--sy-color-border-strong);
+	border-radius: var(--sy-control-radius);
+	background: var(--sy-color-surface-base);
+	color: var(--sy-color-text-primary);
+	font: inherit;
+	cursor: pointer;
+}
+
+.sy-menu-trigger:hover {
+	background: var(--sy-color-surface-hover);
+}
+
 @media (pointer: coarse) {
-	.sy-option {
+	.sy-option,
+	.sy-menu-trigger {
 		min-height: var(--sy-control-height-touch);
 	}
 }

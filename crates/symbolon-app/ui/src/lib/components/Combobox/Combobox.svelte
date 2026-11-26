@@ -26,6 +26,9 @@
 		filter = (option, query) => option.label.toLowerCase().includes(query.toLowerCase())
 	}: Props = $props();
 	const id = $props.id();
+	const labelOf = (v: T | undefined) => options.find((o) => o.value === v)?.label ?? '';
+	// The field shows the chosen option's label, or what is being typed while the list is open.
+	let text = $derived(labelOf(value));
 	let query = $state('');
 	const shown = $derived(query === '' ? options : options.filter((o) => filter(o, query)));
 </script>
@@ -36,15 +39,22 @@
 		type="single"
 		bind:value={() => value ?? '', (v) => (value = v === '' ? undefined : (v as T))}
 		items={shown.map((o) => ({ value: o.value, label: o.label }))}
+		inputValue={text}
 		onOpenChange={(open) => {
-			if (!open) query = '';
+			if (!open) {
+				query = '';
+				text = labelOf(value);
+			}
 		}}
 	>
 		<Combobox.Input
 			{id}
 			class="sy-combobox-input"
 			{placeholder}
-			oninput={(event) => (query = event.currentTarget.value)}
+			oninput={(event) => {
+				query = event.currentTarget.value;
+				text = query;
+			}}
 		/>
 		<Combobox.Portal>
 			<Combobox.Content class="sy-floating" sideOffset={4}>

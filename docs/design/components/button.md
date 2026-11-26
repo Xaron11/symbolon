@@ -8,7 +8,7 @@ A text button for actions.
 
 **Sizes:** `md` uses `control.height.md`, `sm` uses `control.height.sm`; under a coarse pointer the height grows to `control.height.touch`. Corners use `control.radius`, the label uses the medium weight.
 
-**States** (highest priority first): disabled (`opacity.disabled`, not-allowed cursor, no events) · loading (busy indicator, `aria-busy`, inert until done; it stays in place so the layout does not jump) · pressed (`color.surface.active` and a muted border, so it shows in the dark theme too, where pressed and hover fills are equal) · focus (focus ring) · hover (`color.surface.hover`).
+**States** (highest priority first): disabled (`opacity.disabled`, not-allowed cursor, no events) · loading (a busy indicator before the label, `aria-busy`; the button keeps keyboard focus and ignores activation until done) · pressed (`color.surface.active` and a muted border, so it shows in the dark theme too, where pressed and hover fills are equal) · focus (focus ring) · hover (`color.surface.hover`).
 
 **Keyboard:** Tab focuses; Enter or Space activates.
 

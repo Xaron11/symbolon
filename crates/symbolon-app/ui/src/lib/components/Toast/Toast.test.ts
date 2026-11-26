@@ -3,13 +3,15 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { createToasts } from '../../feedback/toasts.svelte';
 import Toast from './Toast.svelte';
+import { expectNoAxeViolations } from '../../../test/axe';
 
 describe('Toast', () => {
 	it('announces toasts politely, errors assertively, and dismisses by button', async () => {
 		const toasts = createToasts();
 		toasts.show('Scan finished', 'success');
 		toasts.show('Scan failed', 'error');
-		render(Toast, { toasts });
+		const { container } = render(Toast, { toasts });
+		await expectNoAxeViolations(container);
 		expect(
 			screen.getByText('Scan finished').closest('[aria-live]')?.getAttribute('aria-live')
 		).toBe('polite');

@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import TooltipHarness from './TooltipHarness.test.svelte';
+import { expectNoAxeViolations } from '../../../test/axe';
 
 describe('Tooltip', () => {
 	it('describes its trigger when focused', async () => {
@@ -13,5 +14,7 @@ describe('Tooltip', () => {
 		const tip = await screen.findByRole('tooltip');
 		expect(tip.textContent).toContain('Rescan all locations');
 		expect(button.getAttribute('aria-describedby')).toBe(tip.id);
+		// The test page has no landmarks; the app shell provides them.
+		await expectNoAxeViolations(document.body, ['region']);
 	});
 });

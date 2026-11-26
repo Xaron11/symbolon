@@ -23,6 +23,11 @@ describe('CategoryChip', () => {
 		expect(screen.queryByText('Only in')).toBeNull();
 	});
 
+	it('keeps the count in the accessible name when compact', () => {
+		render(CategoryChip, { category: 'only_in', count: 1234, compact: true });
+		expect(screen.getByRole('img', { name: 'Only in: 1,234' })).toBeTruthy();
+	});
+
 	it('shows a count in monospace', () => {
 		render(CategoryChip, { category: 'different', count: 1234 });
 		const count = screen.getByText('1,234');

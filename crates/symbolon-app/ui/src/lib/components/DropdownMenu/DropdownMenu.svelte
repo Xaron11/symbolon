@@ -41,29 +41,3 @@
 		</DropdownMenu.Content>
 	</DropdownMenu.Portal>
 </DropdownMenu.Root>
-
-<style>
-	:global(.sy-menu-trigger) {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--sy-space-8);
-		height: var(--sy-control-height-md);
-		padding: 0 var(--sy-space-12);
-		border: var(--sy-border-width-default) solid var(--sy-color-border-strong);
-		border-radius: var(--sy-control-radius);
-		background: var(--sy-color-surface-base);
-		color: var(--sy-color-text-primary);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	:global(.sy-menu-trigger:hover) {
-		background: var(--sy-color-surface-hover);
-	}
-
-	@media (pointer: coarse) {
-		:global(.sy-menu-trigger) {
-			min-height: var(--sy-control-height-touch);
-		}
-	}
-</style>

@@ -10,4 +10,4 @@ A button that shows only an icon, for compact toolbars and rows.
 
 **Keyboard:** Tab focuses; Enter or Space activates.
 
-**Accessibility:** a label is required. It becomes the accessible name and the hover tooltip; the icon is hidden from assistive technology.
+**Accessibility:** a label is required. It becomes the accessible name and the native hover tooltip; the icon is hidden from assistive technology.

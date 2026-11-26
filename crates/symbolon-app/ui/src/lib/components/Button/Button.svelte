@@ -18,6 +18,7 @@
 		loading = false,
 		disabled = false,
 		class: className,
+		onclick,
 		children,
 		...rest
 	}: Props = $props();
@@ -29,8 +30,13 @@
 	class={['sy-button', className]}
 	data-variant={variant}
 	data-size={size}
-	disabled={(disabled ?? false) || loading}
+	disabled={disabled ?? false}
 	aria-busy={loading || undefined}
+	aria-disabled={loading || undefined}
+	onclick={(event) => {
+		// While loading the button keeps focus, so it only ignores activation.
+		if (!loading) onclick?.(event);
+	}}
 >
 	{#if loading}<span class="spinner" aria-hidden="true"></span>{/if}
 	{@render children()}
@@ -108,6 +114,10 @@
 	.sy-button:disabled {
 		opacity: var(--sy-opacity-disabled);
 		cursor: not-allowed;
+	}
+
+	.sy-button[aria-busy='true'] {
+		cursor: progress;
 	}
 
 	.spinner {

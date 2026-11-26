@@ -5,18 +5,20 @@
 	import '../overlay.css';
 
 	interface Props {
+		/** Accessible name of the popover content, e.g. "Scan details". */
+		label: string;
 		open?: boolean;
 		trigger: Snippet;
 		children: Snippet;
 	}
 
-	let { open = $bindable(false), trigger, children }: Props = $props();
+	let { label, open = $bindable(false), trigger, children }: Props = $props();
 </script>
 
 <Popover.Root bind:open>
 	<Popover.Trigger class="sy-menu-trigger">{@render trigger()}</Popover.Trigger>
 	<Popover.Portal>
-		<Popover.Content class="sy-floating sy-popover" sideOffset={4}>
+		<Popover.Content class="sy-floating sy-popover" aria-label={label} sideOffset={4}>
 			{@render children()}
 		</Popover.Content>
 	</Popover.Portal>

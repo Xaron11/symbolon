@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import { text } from '../../../test/snippet';
 import Badge from './Badge.svelte';
+import { expectNoAxeViolations } from '../../../test/axe';
 
 describe('Badge', () => {
 	it.each(['neutral', 'accent', 'error', 'warning', 'success', 'info'] as const)(
@@ -12,8 +13,9 @@ describe('Badge', () => {
 		}
 	);
 
-	it('is not a live region', () => {
+	it('is not a live region', async () => {
 		const { container } = render(Badge, { children: text('3') });
 		expect(container.querySelector('[aria-live]')).toBeNull();
+		await expectNoAxeViolations(container);
 	});
 });

@@ -23,7 +23,11 @@
 	style:--chip-bg="var(--sy-category-{shown.tokenKey}-bg)"
 	style:--chip-border="var(--sy-category-{shown.tokenKey}-border)"
 	role={compact ? 'img' : undefined}
-	aria-label={compact ? shown.label : undefined}
+	aria-label={compact
+		? count === undefined
+			? shown.label
+			: `${shown.label}: ${format.format(count)}`
+		: undefined}
 >
 	<Icon aria-hidden="true" />
 	{#if !compact}<span class="label">{shown.label}</span>{/if}

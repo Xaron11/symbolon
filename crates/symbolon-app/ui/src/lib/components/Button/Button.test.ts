@@ -33,6 +33,15 @@ describe('Button', () => {
 		expect(onclick).toHaveBeenCalledTimes(1);
 	});
 
+	it('keeps keyboard focus when loading starts', async () => {
+		const { rerender } = render(Button, { children: text('Save') });
+		const button = screen.getByRole('button', { name: 'Save' });
+		button.focus();
+		await rerender({ loading: true, children: text('Save') });
+		expect(document.activeElement).toBe(button);
+		expect(button.getAttribute('aria-disabled')).toBe('true');
+	});
+
 	it('is busy and inert while loading', async () => {
 		const onclick = vi.fn();
 		render(Button, { onclick, loading: true, children: text('Save') });
