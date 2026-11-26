@@ -1,0 +1,41 @@
+/* Global base styles. Values come from tokens only (docs/design/index.md). */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background: var(--sy-color-surface-canvas);
+	color: var(--sy-color-text-primary);
+	font-family: var(--sy-font-family-ui);
+	font-size: var(--sy-font-size-body);
+	line-height: var(--sy-font-line-body);
+	-webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+	outline: var(--sy-focus-ring-width) solid var(--sy-color-focus);
+	outline-offset: var(--sy-focus-ring-offset);
+}
+
+/* Paths, hashes, sizes and counts: monospace with figures that line up in columns. */
+.sy-mono {
+	font-family: var(--sy-font-family-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--sy-motion-duration-state: 0ms;
+		--sy-motion-duration-enter: 0ms;
+		--sy-motion-duration-exit: 0ms;
+	}
+}

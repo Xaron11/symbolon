@@ -14,7 +14,9 @@ const ALLOWED = new Set([
 	'MIT',
 	'MPL-2.0',
 	'Unicode-3.0',
-	'Zlib'
+	'Zlib',
+	// Fonts only (ADR-0022).
+	'OFL-1.1'
 ]);
 
 interface PackageLicense {

@@ -17,10 +17,10 @@
 
 <style>
 	main {
-		padding: 2rem;
+		padding: var(--sy-space-32);
 	}
 
 	p {
-		color: var(--muted);
+		color: var(--sy-color-text-muted);
 	}
 </style>

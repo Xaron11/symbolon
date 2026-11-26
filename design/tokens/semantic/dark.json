@@ -76,6 +76,10 @@
     "focus": {
       "$value": "{primitive.color.blue.400}",
       "$description": "Focus ring"
+    },
+    "scrim": {
+      "$value": "rgb(2 6 23 / 0.7)",
+      "$description": "Backdrop behind modal dialogs and sheets"
     }
   },
   "category": {
