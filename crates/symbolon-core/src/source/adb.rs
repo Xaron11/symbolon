@@ -638,6 +638,7 @@ fn parse_stat_line(line: &[u8]) -> Option<SourceEntry> {
         kind,
         size: if kind == EntryKind::Dir { 0 } else { size },
         mtime_ns: secs.checked_mul(1_000_000_000),
+        link_target: None,
     })
 }
 

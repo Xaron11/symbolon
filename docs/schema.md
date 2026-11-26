@@ -72,7 +72,7 @@ One row per file, directory, symlink or other object of a location.
 | `flags`        | INTEGER | Reserved, 0.                                                                                                                                                                                           |
 | `link_target`  | BLOB    | Symlink target as raw bytes in `path_encoding`, exactly as `readlink` returns it ([ADR-0019](adr/0019-directories-and-symlinks-in-comparisons.md)); NULL for other kinds or when unknown. Added in v4. |
 
-The hash state shown to users is derived: `verified` when `hash_full` is set, `partial` when only `hash_partial` is, `unhashed` otherwise. Hashes are cleared whenever `size` or `mtime_ns` change. Entries not seen by a completed scan are deleted at its end.
+The hash state shown to users is derived: `verified` when `hash_full` is set, `partial` when only `hash_partial` is, `unhashed` otherwise. Hashes are cleared whenever `size` or `mtime_ns` change. Every scan rereads each symlink's `link_target`, because retargeting a link need not change its mtime. Entries not seen by a completed scan are deleted at its end.
 
 Indexes: `(location_id, rel_path_raw)` unique, `(location_id, path_key)`, `(location_id, parent_key, path_key)`, `(size)` for files, `(hash_full)` and `(hash_partial)` where not null.
 

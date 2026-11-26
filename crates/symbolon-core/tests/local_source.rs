@@ -217,6 +217,44 @@ mod unix {
         assert_eq!(link.size, "target.txt".len() as u64);
     }
 
+    #[test]
+    fn symlinks_record_their_target_without_following_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(&root.join("a.txt"), b"a");
+        write(&root.join("sub/f"), b"f");
+        symlink("a.txt", root.join("rel")).unwrap();
+        symlink("missing/x", root.join("dangling")).unwrap();
+        symlink("../outside", root.join("up")).unwrap();
+        symlink("sub", root.join("dirlink")).unwrap();
+        symlink(std::ffi::OsStr::from_bytes(b"a\xffb"), root.join("odd")).unwrap();
+
+        let (entries, warnings) = walk(&LocalSource::new(root, &[]).unwrap());
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(
+            !keys(&entries).iter().any(|k| k.starts_with("dirlink/")),
+            "{entries:?}"
+        );
+        let targets: Vec<(String, Option<Vec<u8>>)> = entries
+            .iter()
+            .map(|e| (e.path.key().as_str().to_owned(), e.link_target.clone()))
+            .collect();
+        let target = |t: &[u8]| Some(t.to_vec());
+        assert_eq!(
+            targets,
+            [
+                ("a.txt".to_owned(), None),
+                ("dangling".to_owned(), target(b"missing/x")),
+                ("dirlink".to_owned(), target(b"sub")),
+                ("odd".to_owned(), target(b"a\xffb")),
+                ("rel".to_owned(), target(b"a.txt")),
+                ("sub".to_owned(), None),
+                ("up".to_owned(), target(b"../outside")),
+                ("sub/f".to_owned(), None),
+            ]
+        );
+    }
+
     /// A listed path whose directory, or the file itself, is replaced by a symlink before it is
     /// hashed must not be read through the link (#82).
     #[test]

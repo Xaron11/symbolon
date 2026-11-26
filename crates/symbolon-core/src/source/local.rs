@@ -12,7 +12,7 @@ use super::{
     EntryKind, ReadSeek, Source, SourceEntry, SourceError, SourceWarning, WalkItem, WalkOutcome,
     WarningKind, system_time_to_ns,
 };
-use crate::pathkey::{PathEncoding, RelPath};
+use crate::pathkey::{PathEncoding, RelPath, push_native, valid_link_target};
 
 /// A directory tree on a local or mounted filesystem.
 ///
@@ -148,7 +148,18 @@ impl Source for LocalSource {
                     }
                     continue;
                 }
-                let entry = entry_from_metadata(child_rel.clone(), &meta);
+                let mut entry = entry_from_metadata(child_rel.clone(), &meta);
+                if kind == EntryKind::Symlink {
+                    match read_target(&native) {
+                        Ok(target) => entry.link_target = target,
+                        Err(e) => {
+                            let warning = SourceWarning::io(Some(child_rel.clone()), &e);
+                            if visit(WalkItem::Warning(warning)).is_break() {
+                                return Ok(WalkOutcome::Stopped);
+                            }
+                        }
+                    }
+                }
                 if visit(WalkItem::Entry(entry)).is_break() {
                     return Ok(WalkOutcome::Stopped);
                 }
@@ -173,8 +184,13 @@ impl Source for LocalSource {
     }
 
     fn stat(&self, path: &RelPath) -> io::Result<SourceEntry> {
-        let meta = fs::symlink_metadata(self.native(path)?)?;
-        Ok(entry_from_metadata(path.clone(), &meta))
+        let native = self.native(path)?;
+        let meta = fs::symlink_metadata(&native)?;
+        let mut entry = entry_from_metadata(path.clone(), &meta);
+        if entry.kind == EntryKind::Symlink {
+            entry.link_target = read_target(&native)?;
+        }
+        Ok(entry)
     }
 }
 
@@ -289,7 +305,16 @@ fn entry_from_metadata(path: RelPath, meta: &Metadata) -> SourceEntry {
             meta.len()
         },
         mtime_ns: meta.modified().ok().map(system_time_to_ns),
+        link_target: None,
     }
+}
+
+/// The link's target exactly as `readlink` returns it, or `None` if it cannot be stored
+/// (ADR-0019).
+fn read_target(native: &Path) -> io::Result<Option<Vec<u8>>> {
+    let mut target = Vec::new();
+    push_native(&mut target, fs::read_link(native)?.as_os_str());
+    Ok(valid_link_target(PathEncoding::native(), &target).then_some(target))
 }
 
 #[cfg(unix)]

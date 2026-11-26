@@ -29,17 +29,18 @@ const MAX_BATCH_AGE: Duration = Duration::from_millis(250);
 const MARK_UNCHANGED: &str = "\
 UPDATE entries SET seen_scan_id = ?3
 WHERE location_id = ?1 AND rel_path_raw = ?2 AND kind = ?4 AND size = ?5
-    AND (mtime_ns IS ?6 OR ?6 BETWEEN mtime_ns - ?7 AND mtime_ns + ?7)";
+    AND (mtime_ns IS ?6 OR ?6 BETWEEN mtime_ns - ?7 AND mtime_ns + ?7) AND link_target IS ?8";
 
 /// Inserts a new entry, or replaces a changed one and clears its digests.
 const UPSERT_CHANGED: &str = "\
-INSERT INTO entries (location_id, rel_path_raw, path_key, parent_key, kind, size, mtime_ns, seen_scan_id)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+INSERT INTO entries (location_id, rel_path_raw, path_key, parent_key, kind, size, mtime_ns, seen_scan_id, link_target)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
 ON CONFLICT (location_id, rel_path_raw) DO UPDATE SET
     seen_scan_id = excluded.seen_scan_id,
     kind = excluded.kind,
     size = excluded.size,
     mtime_ns = excluded.mtime_ns,
+    link_target = excluded.link_target,
     hash_partial = NULL,
     hash_full = NULL";
 
@@ -272,6 +273,7 @@ impl Scan<'_> {
                     entry.size,
                     entry.mtime_ns,
                     tolerance,
+                    entry.link_target,
                 ])?;
                 if seen == 0 {
                     let key = entry.path.key();
@@ -284,6 +286,7 @@ impl Scan<'_> {
                         entry.size,
                         entry.mtime_ns,
                         self.id.get(),
+                        entry.link_target,
                     ])?;
                 }
             }
