@@ -51,10 +51,15 @@
 		}
 	}
 
+	// Bumped when a scan of this location ends, so the history table is read again.
+	let historyGeneration = $state(0);
+
 	void load();
 	$effect(() =>
 		scanState.onFinished((update) => {
-			if (update.label === label) void load();
+			if (update.label !== label) return;
+			historyGeneration++;
+			void load();
 		})
 	);
 
@@ -132,7 +137,9 @@
 
 {#snippet scanList()}
 	<div class="pane">
-		<DataTable source={history} columns={scanColumns} label="Scans of {label}" />
+		{#key historyGeneration}
+			<DataTable source={history} columns={scanColumns} label="Scans of {label}" />
+		{/key}
 	</div>
 {/snippet}
 
@@ -171,7 +178,7 @@
 			</div>
 			<Badge tone={status.tone}>{status.label}</Badge>
 			<div class="spacer"></div>
-			{#if running.length > 0}<p class="muted" role="status">{statusText(running)}</p>{/if}
+			{#if running.length > 0}<p class="muted">{statusText(running)}</p>{/if}
 			<Button
 				variant="primary"
 				disabled={running.length > 0 || blocked !== undefined}
