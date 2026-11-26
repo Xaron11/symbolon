@@ -20,7 +20,8 @@ describe('CommandPalette', () => {
 		await waitFor(() => {
 			expect(document.activeElement).toBe(input);
 		});
-		expect(isTextEntry(input)).toBe(true);
+		// Not only the field: the whole panel is a text-entry area.
+		expect(isTextEntry(screen.getByRole('dialog'))).toBe(true);
 		await user.type(input, 'compare');
 		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
 			expect.stringContaining('Go to Compare')

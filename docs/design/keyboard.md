@@ -4,7 +4,7 @@
 
 Everything works from the keyboard. Standard keys and vi-style keys work side by side; there is no separate mode. `Ctrl` also means the Command key on macOS. Sequences such as `g l` are typed one key after the other, within a second.
 
-Single-letter keys and sequences never act while text is being typed (in a field, the command palette, or during IME composition); chords with Ctrl or Alt still do. Press `?` for this list in the app.
+While text is being typed (in a field, or during IME composition), only chords with Ctrl or Alt act; every other key, Escape, arrows, Enter and Space included, belongs to the field. Keys pressed inside dialogs, menus and lists (the command palette among them) belong to those, which handle Escape, arrows and typeahead themselves. On layouts whose letters are not Latin (Cyrillic, Greek, …) shortcuts follow the physical key, so `Ctrl+K` is the key labelled K on a US keyboard; on Latin layouts (Dvorak, AZERTY) they follow the typed letter. Press `?` for this list in the app.
 
 ## Everywhere
 

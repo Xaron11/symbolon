@@ -24,12 +24,31 @@ export function isTextEntry(target: EventTarget | null): boolean {
 	);
 }
 
-/** The key of `event` in keymap notation, or undefined for a lone modifier. */
+/** Widgets that handle their own keys (typeahead, Escape, arrows); shortcuts stay out of them. */
+const OWN_KEYS = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+
+/**
+ * The key `event` names: the typed character on Latin layouts (so Dvorak users keep their
+ * letters), the physical key where the character is not ASCII (Cyrillic, Greek, …), and the
+ * digit of a digit key under Ctrl or Alt (AZERTY types "&" there).
+ */
+function baseKey(event: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey'>) {
+	const physical = /^(?:Key([A-Z])|Digit(\d))$/.exec(event.code);
+	const fromCode = physical ? (physical[1] ?? physical[2] ?? '').toLowerCase() : undefined;
+	if (event.key.length === 1 && !/^[\x20-\x7e]$/.test(event.key) && fromCode) return fromCode;
+	if ((event.ctrlKey || event.metaKey || event.altKey) && physical?.[2]) return physical[2];
+	return event.key === ' ' ? 'space' : event.key.toLowerCase();
+}
+
+/** The key of `event` in keymap notation, or undefined for a lone modifier or no key at all. */
 export function keyOf(
-	event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>
+	event: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>
 ): string | undefined {
-	if (MODIFIER_KEYS.has(event.key)) return undefined;
-	const key = event.key === ' ' ? 'space' : event.key.toLowerCase();
+	// Autofill and some IMEs send keydown events without a key.
+	if (typeof event.key !== 'string' || event.key === '' || MODIFIER_KEYS.has(event.key)) {
+		return undefined;
+	}
+	const key = baseKey(event);
 	const parts: string[] = [];
 	if (event.ctrlKey || event.metaKey) parts.push('ctrl');
 	if (event.altKey) parts.push('alt');
@@ -78,6 +97,11 @@ export function createDispatcher(
 		// keyCode 229 is how some engines still flag IME input without isComposing.
 		// eslint-disable-next-line @typescript-eslint/no-deprecated -- the only signal there
 		if (event.isComposing || event.keyCode === 229) return false;
+		if (event.defaultPrevented) return false;
+		if (event.target instanceof Element && event.target.closest(OWN_KEYS)) {
+			reset();
+			return false;
+		}
 		const key = keyOf(event);
 		if (key === undefined) return false;
 		if (isTextEntry(event.target) && !/^(ctrl|alt)\+/.test(key)) {

@@ -83,8 +83,55 @@ describe('createDispatcher', () => {
 	it('ignores IME composition', () => {
 		contexts = ['global', 'list'];
 		expect(press('j', { isComposing: true }).handled).toBe(false);
-		expect(press('Process', { keyCode: 229 }).handled).toBe(false);
+		expect(press('j', { keyCode: 229 }).handled).toBe(false);
 		expect(fired).toEqual([]);
+	});
+
+	it('leaves events already handled to their handler', () => {
+		contexts = ['global', 'list'];
+		const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+		event.preventDefault();
+		expect(handle(event)).toBe(false);
+		expect(fired).toEqual([]);
+	});
+
+	it.each(['dialog', 'menu', 'listbox'])('leaves keys inside a %s to it', (role) => {
+		contexts = ['global', 'list'];
+		const area = document.createElement('div');
+		area.setAttribute('role', role);
+		const button = document.createElement('button');
+		area.append(button);
+		for (const [key, init] of [
+			['g', {}],
+			['l', {}],
+			['1', { ctrlKey: true }],
+			['k', { ctrlKey: true }],
+			['Escape', {}]
+		] as const) {
+			expect(press(key, init, button).handled, key).toBe(false);
+		}
+		expect(fired).toEqual([]);
+	});
+
+	it('uses the physical key on non-Latin layouts', () => {
+		contexts = ['global', 'list'];
+		press('л', { ctrlKey: true, code: 'KeyK' });
+		press('о', { code: 'KeyJ' });
+		press('&', { ctrlKey: true, code: 'Digit1' });
+		expect(fired).toEqual(['palette.open', 'list.down', 'nav.locations']);
+	});
+
+	it('keeps the typed letter on Latin layouts such as Dvorak', () => {
+		contexts = ['global', 'list'];
+		press('j', { code: 'KeyC' });
+		expect(fired).toEqual(['list.down']);
+	});
+
+	it('ignores events without a key, such as autofill', () => {
+		const event = new KeyboardEvent('keydown');
+		Object.defineProperty(event, 'key', { value: undefined });
+		expect(() => handle(event)).not.toThrow();
+		expect(handle(event)).toBe(false);
 	});
 
 	it('ignores lone modifier keys', () => {
