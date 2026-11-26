@@ -16,6 +16,9 @@ ignore = [
   # Unsound glib::VariantStrIter (fixed in glib 0.20). Tauri pins gtk-rs 0.18, and no crate in
   # our graph calls VariantStrIter or Variant::array_iter_str (checked 2026-11-24).
   { id = "RUSTSEC-2024-0429", reason = "affected API unused in our dependency graph; blocked on tauri moving off gtk 0.18" },
+  # `paste` is unmaintained, with no known vulnerability: a compile-time macro crate that the
+  # pinned tauri-specta 2.0.0-rc.29 uses (ADR-0024). Revisit when tauri-specta drops it.
+  { id = "RUSTSEC-2024-0436", reason = "build-time macro of tauri-specta; unmaintained, no vulnerability" },
 ]
 
 [licenses]
