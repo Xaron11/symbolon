@@ -11,4 +11,4 @@ Read [`AGENTS.md`](AGENTS.md): it is the working agreement for humans and AI age
 
 ## License of contributions
 
-By submitting a contribution you agree that it is licensed under [GPL-3.0-or-later](LICENSE), the license of this project. There is no CLA and no sign-off requirement.
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Symbolon by you, as defined in the Apache-2.0 license, shall be dual licensed under the [Apache License, Version 2.0](LICENSE-APACHE) and the [MIT license](LICENSE-MIT), without any additional terms or conditions. There is no CLA and no sign-off requirement ([ADR-0020](docs/adr/0020-mit-or-apache-license.md)).

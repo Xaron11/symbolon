@@ -1,4 +1,5 @@
-# cargo-deny policy. Every allowed license must be compatible with GPL-3.0-or-later.
+# cargo-deny policy. Every allowed license must let the binaries be distributed under MIT OR
+# Apache-2.0: permissive licenses, or MPL-2.0, whose copyleft stays within its own files.
 
 [graph]
 all-features = true

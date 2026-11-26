@@ -2,7 +2,7 @@
 # Prettier comes from the frontend's lockfile so editors, hooks and CI agree on one version.
 
 excludes = [
-  "LICENSE",
+  "LICENSE-*",
   "*.lock",
   "**/pnpm-lock.yaml",
   "crates/symbolon-app/icons/**",

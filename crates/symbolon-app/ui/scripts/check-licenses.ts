@@ -1,4 +1,5 @@
-// Fails if a production dependency is not under a license compatible with GPL-3.0-or-later.
+// Fails if a production dependency is under a license that would keep the app from being
+// distributed under MIT OR Apache-2.0.
 // Mirrors the allowlist in the repository's deny.toml.
 import { execFileSync } from 'node:child_process';
 
@@ -56,7 +57,7 @@ function main(): void {
 	}
 	if (rejected > 0) {
 		console.error(
-			`${String(rejected)} package(s) with a license not compatible with GPL-3.0-or-later`
+			`${String(rejected)} package(s) with a license not allowed for an MIT OR Apache-2.0 app`
 		);
 		process.exit(1);
 	}

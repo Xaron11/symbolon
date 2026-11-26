@@ -40,4 +40,4 @@ The attestation confirms the archive was built by this repository's release work
 ## After a release
 
 - Close the milestone and move its open issues forward.
-- Check the release page: binaries, checksums, notes and the source-tag link required by the GPL.
+- Check the release page: binaries (each with `LICENSE-MIT` and `LICENSE-APACHE`), checksums, notes and the source-tag link.

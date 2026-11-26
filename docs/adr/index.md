@@ -23,6 +23,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0017](0017-android-over-adb.md)                        | Android transport, agent protocol, hashing on the phone, fallback, phone locations |
 | [0018](0018-phone-hashing-threads.md)                   | Four hashing threads on phones                                                     |
 | [0019](0019-directories-and-symlinks-in-comparisons.md) | Link targets, and directories and symlinks in comparisons                          |
+| [0020](0020-mit-or-apache-license.md)                   | MIT OR Apache-2.0 instead of GPL-3.0-or-later                                      |
 
 ## Writing a new ADR
 

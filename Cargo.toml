@@ -7,7 +7,7 @@ default-members = ["crates/symbolon-core", "crates/symbolon-cli", "crates/symbol
 version = "0.7.0"
 edition = "2024"
 rust-version = "1.100"
-license = "GPL-3.0-or-later"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/Xaron11/symbolon"
 publish = false
 
