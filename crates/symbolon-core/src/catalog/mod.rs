@@ -10,6 +10,7 @@
 
 #[cfg(feature = "android-adb")]
 mod android;
+mod defaults;
 mod locate;
 mod schema;
 mod transfer;
@@ -24,6 +25,9 @@ use rusqlite::{
     Connection, ErrorCode, OpenFlags, OptionalExtension as _, TransactionBehavior, params,
 };
 
+pub use self::defaults::{
+    AGENT_FILE_NAME, agent_candidates, create_catalog_dir, default_catalog_path,
+};
 pub use self::locate::Whereabouts;
 pub use self::schema::SCHEMA_VERSION;
 pub use self::transfer::{
