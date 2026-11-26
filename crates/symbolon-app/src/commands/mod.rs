@@ -1,6 +1,7 @@
 //! `#[tauri::command]` wrappers: each runs one [`AppState`] method on a blocking thread.
 
 pub(crate) mod locations;
+pub(crate) mod scans;
 
 use std::sync::Arc;
 

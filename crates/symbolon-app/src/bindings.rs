@@ -2,7 +2,7 @@
 
 use tauri_specta::{Builder, collect_commands};
 
-use crate::commands::locations;
+use crate::commands::{locations, scans};
 
 /// Every command the frontend can call.
 pub(crate) fn builder() -> Builder<tauri::Wry> {
@@ -15,6 +15,18 @@ pub(crate) fn builder() -> Builder<tauri::Wry> {
         locations::location_follow_move,
         locations::location_stats,
         locations::devices_list,
+        scans::scan_start,
+        scans::scan_attach,
+        scans::scans_running,
+        scans::scan_pause,
+        scans::scan_resume,
+        scans::scan_cancel,
+        scans::scans_recent,
+        scans::scans_recent_count,
+        scans::location_scans,
+        scans::location_scan_count,
+        scans::scan_warnings,
+        scans::scan_warning_count,
     ])
 }
 

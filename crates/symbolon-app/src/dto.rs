@@ -8,6 +8,12 @@ use symbolon_core::query::{LocationStats, ScanInfo};
 use symbolon_core::scan::ScanStatus;
 use symbolon_core::transport::android::{Device, DeviceState};
 
+/// A 64-bit integer crossing the bridge as a JavaScript `number` (exact up to 2^53): counts,
+/// offsets and ids in command arguments and results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(transparent)]
+pub(crate) struct Num<T>(#[specta(type = Number)] pub(crate) T);
+
 /// Milliseconds since the Unix epoch, for timestamps sent to the UI.
 pub(crate) fn epoch_ms(time: std::time::SystemTime) -> i64 {
     time.duration_since(std::time::UNIX_EPOCH)

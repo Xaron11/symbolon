@@ -61,6 +61,12 @@ impl AppState {
     }
 
     pub(crate) fn location_remove(&self, label: &str) -> Result<(), ApiError> {
+        if self.scans.is_running(label) {
+            return Err(ApiError::new(
+                ErrorKind::AlreadyScanning,
+                "Stop the scan first.",
+            ));
+        }
         Ok(self.catalog.remove_location(label)?)
     }
 

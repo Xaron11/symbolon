@@ -8,17 +8,33 @@ use symbolon_core::source::AdbOptions;
 use symbolon_core::transport::android::{AndroidTransport, SystemAdb};
 
 use crate::error::{ApiError, ErrorKind};
+use crate::scans::ScanRegistry;
 
 /// The open catalog and the work running on it; managed by Tauri as `Arc<AppState>`.
 pub(crate) struct AppState {
     pub(crate) catalog: Catalog,
     pub(crate) transport: Arc<dyn AndroidTransport>,
+    pub(crate) scans: Arc<ScanRegistry>,
 }
 
 impl AppState {
     /// State over `catalog`, reaching phones through `transport`.
     pub(crate) fn new(catalog: Catalog, transport: Arc<dyn AndroidTransport>) -> Self {
-        Self { catalog, transport }
+        Self {
+            catalog,
+            transport,
+            scans: Arc::default(),
+        }
+    }
+
+    /// Another state over the same catalog, transport and scans.
+    #[cfg(test)]
+    pub(crate) fn clone_for_test(&self) -> Self {
+        Self {
+            catalog: self.catalog.clone(),
+            transport: Arc::clone(&self.transport),
+            scans: Arc::clone(&self.scans),
+        }
     }
 
     /// Opens the catalog the CLI uses: `SYMBOLON_CATALOG`, else the default path; phones are
