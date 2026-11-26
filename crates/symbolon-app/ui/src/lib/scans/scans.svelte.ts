@@ -1,6 +1,6 @@
 import { getContext, setContext } from 'svelte';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import type { Backend, ScanUpdate } from '../api/index.ts';
+import { toApiError, type Backend, type ScanUpdate } from '../api/index.ts';
 import { toasts } from '../feedback/toasts.svelte';
 
 const count = new Intl.NumberFormat('en-US');
@@ -16,6 +16,18 @@ export function statusText(running: readonly ScanUpdate[]): string {
 		return `Scanning ${scan.label} — ${String(percent)}%`;
 	}
 	return `Scanning ${scan.label} — ${count.format(scan.files)} files`;
+}
+
+/**
+ * The words screen readers hear for the running scans: only when a scan starts, changes phase
+ * or ends, not with every count (updates arrive up to ten times a second).
+ */
+export function announcement(running: readonly ScanUpdate[]): string {
+	if (running.length === 0) return 'No scans running';
+	if (running.length > 1) return `${String(running.length)} scans running`;
+	const [scan] = running;
+	const hashing = scan?.type === 'Progress' && scan.phase === 'Hashing';
+	return `${hashing ? 'Hashing' : 'Scanning'} ${scan?.label ?? ''}`;
 }
 
 /** Scans running in the backend, as the whole app sees them. */
@@ -62,12 +74,17 @@ export function createScanState(backend: Backend): ScanState {
 		},
 		isPaused: (label) => paused.has(label),
 		async start(label) {
-			await backend.scans.start(label, receive);
-			if (!latest.has(label)) latest.set(label, { type: 'Started', label, scanId: 0 });
+			// Updates can arrive before the command returns; a tiny scan may even have ended.
+			const heard = { any: false };
+			await backend.scans.start(label, (update) => {
+				heard.any = true;
+				receive(update);
+			});
+			if (!heard.any) latest.set(label, { type: 'Started', label, scanId: 0 });
 		},
 		async pause(label) {
 			await backend.scans.pause(label);
-			paused.add(label);
+			if (latest.has(label)) paused.add(label);
 		},
 		async resume(label) {
 			await backend.scans.resume(label);
@@ -76,8 +93,16 @@ export function createScanState(backend: Backend): ScanState {
 		cancel: (label) => backend.scans.cancel(label),
 		async init() {
 			for (const update of await backend.scans.running()) {
+				if (update.type === 'Finished' || update.type === 'Failed') continue;
 				latest.set(update.label, update);
-				await backend.scans.attach(update.label, receive);
+				try {
+					await backend.scans.attach(update.label, receive);
+				} catch (e) {
+					// It ended between listing and attaching; anything else is worth saying.
+					latest.delete(update.label);
+					const error = toApiError(e);
+					if (error.kind !== 'NotFound') toasts.show(`${update.label}: ${error.message}`, 'error');
+				}
 			}
 		},
 		onFinished(listener) {

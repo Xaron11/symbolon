@@ -140,3 +140,37 @@ describe('LocationDetail', () => {
 		);
 	});
 });
+
+describe('LocationDetail after a scan', () => {
+	it('reads the history again when a scan of this location ends', async () => {
+		const user = userEvent.setup();
+		const data = seed();
+		const { backend, scans } = detail('Photos', data);
+		await user.click(await screen.findByRole('tab', { name: 'Scans' }));
+		const history = await screen.findByRole('grid', { name: 'Scans of Photos' });
+		await waitFor(() => {
+			expect(history.getAttribute('aria-rowcount')).toBe('2');
+		});
+		await scans.start('Photos');
+		data.recentScans = [
+			{ label: 'Photos', scan: { ...lastScan, scanId: 10 } },
+			...(data.recentScans ?? [])
+		];
+		backend.emitScan('Photos', {
+			type: 'Finished',
+			label: 'Photos',
+			scanId: 10,
+			status: 'Completed',
+			files: 1,
+			bytes: 1,
+			hashedFiles: 0,
+			warnings: 0,
+			elapsedMs: 1
+		});
+		await waitFor(() => {
+			expect(
+				screen.getByRole('grid', { name: 'Scans of Photos' }).getAttribute('aria-rowcount')
+			).toBe('3');
+		});
+	});
+});

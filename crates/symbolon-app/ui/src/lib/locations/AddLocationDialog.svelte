@@ -55,13 +55,18 @@
 		});
 	});
 
+	function loadDevices() {
+		devices = undefined;
+		devicesError = undefined;
+		api.devices.list().then(
+			(list) => (devices = list),
+			(e: unknown) => (devicesError = explain(toApiError(e)))
+		);
+	}
+
+	// Phones come and go: read them each time the dialog opens on the Android tab.
 	$effect(() => {
-		if (open && kind === 'android' && devices === undefined) {
-			api.devices.list().then(
-				(list) => (devices = list),
-				(e: unknown) => (devicesError = explain(toApiError(e)))
-			);
-		}
+		if (open && kind === 'android') untrack(loadDevices);
 	});
 
 	async function choose() {
@@ -95,6 +100,7 @@
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
+		if (busy) return;
 		formError = undefined;
 		const next = request();
 		if (!next) return;
@@ -159,6 +165,9 @@
 			{/each}
 		{/if}
 		{#if errors.device}<p class="error">{errors.device}</p>{/if}
+		<div>
+			<Button size="sm" variant="ghost" onclick={loadDevices}>Look again</Button>
+		</div>
 	</fieldset>
 	<Input
 		label="Path on the phone"

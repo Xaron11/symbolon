@@ -6,9 +6,11 @@
 
 <svelte:head><title>Locations · Symbolon</title></svelte:head>
 
-{#key page.url.search}
-	<LocationsView
-		navigate={(href: string) => void goto(href)}
-		openAdd={page.url.searchParams.has('add')}
-	/>
-{/key}
+<LocationsView
+	navigate={(href: string) => void goto(href)}
+	openAdd={page.url.searchParams.has('add')}
+	onaddopened={() => {
+		// Drop the request so the palette can ask again and Back does not reopen the dialog.
+		void goto('/locations', { replace: true, reset: false });
+	}}
+/>

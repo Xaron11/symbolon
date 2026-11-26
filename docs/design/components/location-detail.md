@@ -12,4 +12,4 @@ Tables and trees sit in panes `pane.height` tall.
 
 **States:** loading (spinner); a location that no longer exists says "This location no longer exists." with a link back to Locations; Scan is disabled with the reason for imported locations. Scan errors behave as on the [Locations screen](location-table.md).
 
-**Accessibility:** the tree is named "Files of Photos", the tables "Scans of Photos" and "Warnings of the last scan"; the scan progress is a status region.
+**Accessibility:** the tree is named "Files of Photos", the tables "Scans of Photos" and "Warnings of the last scan". The scan history is read again when a scan of this location ends. Scan progress is announced by the status bar, not here.
