@@ -72,7 +72,7 @@ One row per file, directory, symlink or other object of a location.
 | `flags`        | INTEGER | Reserved, 0.                                                                                                                                                                                           |
 | `link_target`  | BLOB    | Symlink target as raw bytes in `path_encoding`, exactly as `readlink` returns it ([ADR-0019](adr/0019-directories-and-symlinks-in-comparisons.md)); NULL for other kinds or when unknown. Added in v4. |
 
-The hash state shown to users is derived: `verified` when `hash_full` is set, `partial` when only `hash_partial` is, `unhashed` otherwise. Hashes are cleared whenever `size` or `mtime_ns` change. Every scan rereads each symlink's `link_target`, because retargeting a link need not change its mtime. Entries not seen by a completed scan are deleted at its end.
+The hash state shown to users is derived: `verified` when `hash_full` is set, `partial` when only `hash_partial` is, `unhashed` otherwise. Hashes are cleared whenever `kind`, `size`, `mtime_ns` or `link_target` change. Every scan of a local location rereads each symlink's `link_target`, because retargeting a link need not change its mtime. Phone scans do not read targets yet _(planned, M6: #133)_. Entries not seen by a completed scan are deleted at its end.
 
 Indexes: `(location_id, rel_path_raw)` unique, `(location_id, path_key)`, `(location_id, parent_key, path_key)`, `(size)` for files, `(hash_full)` and `(hash_partial)` where not null.
 
@@ -89,6 +89,6 @@ An export comes from another catalog, so `Catalog::import` does not trust it. It
 - `rel_path_raw` must be a valid relative path in its encoding. For `wtf8`, this also means no `\` or `:`, which on Windows would be a separator, a drive or a stream.
 - `path_key` and `parent_key` must be the keys derived from it.
 - Each digest must have its algorithm's length.
-- `link_target` may be set only on `symlink` entries, holds at most 4,096 bytes and no NUL, and must be valid in its encoding. Exports from schema v3 have no `link_target` and import with unknown targets.
+- `link_target` may be set only on `symlink` entries, is not empty, holds at most 4,096 bytes and no NUL, and must be valid in its encoding. Exports from schema v3 have no `link_target` and import with unknown targets.
 
 A file that fails a check is refused with `TransferError::InvalidEntry`.
