@@ -1,0 +1,66 @@
+/* Shared look of floating layers (menus, list boxes, popovers, tooltips): raised surface, the
+   system's only shadow. Bits UI renders these parts in portals, so the classes are global. */
+.sy-floating {
+	z-index: 50;
+	min-width: calc(var(--sy-control-height-md) * 5);
+	padding: var(--sy-space-4);
+	border: var(--sy-border-width-default) solid var(--sy-color-border-default);
+	border-radius: var(--sy-panel-radius);
+	background: var(--sy-color-surface-raised);
+	color: var(--sy-color-text-primary);
+	box-shadow: var(--sy-shadow-overlay);
+}
+
+.sy-option {
+	display: flex;
+	align-items: center;
+	gap: var(--sy-space-8);
+	height: var(--sy-control-height-sm);
+	padding: 0 var(--sy-space-8);
+	border-radius: var(--sy-radius-sm);
+	cursor: pointer;
+	user-select: none;
+	outline: none;
+}
+
+.sy-option svg {
+	width: var(--sy-icon-size-sm);
+	height: var(--sy-icon-size-sm);
+	color: var(--sy-color-text-secondary);
+}
+
+.sy-option[data-highlighted] {
+	background: var(--sy-color-surface-hover);
+}
+
+.sy-option[data-selected] {
+	background: var(--sy-color-surface-selected);
+}
+
+.sy-option[data-disabled] {
+	opacity: var(--sy-opacity-disabled);
+	cursor: not-allowed;
+}
+
+.sy-option[data-danger] {
+	color: var(--sy-status-error-fg);
+}
+
+.sy-option .shortcut {
+	margin-left: auto;
+	color: var(--sy-color-text-muted);
+	font-family: var(--sy-font-family-mono);
+	font-size: var(--sy-font-size-small);
+}
+
+.sy-separator {
+	height: var(--sy-border-width-default);
+	margin: var(--sy-space-4) 0;
+	background: var(--sy-color-border-default);
+}
+
+@media (pointer: coarse) {
+	.sy-option {
+		min-height: var(--sy-control-height-touch);
+	}
+}
