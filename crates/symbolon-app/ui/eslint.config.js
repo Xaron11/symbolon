@@ -69,7 +69,11 @@ export default defineConfig(
 			'no-restricted-syntax': [
 				'error',
 				{
-					selector: 'Literal[value=/^#[0-9a-fA-F]{3,8}$/]',
+					selector: 'Literal[value=/^(#[0-9a-fA-F]{3,8}|(rgba?|hsla?|oklch)\\()/]',
+					message: 'Use a design token (ADR-0022), not a raw color.'
+				},
+				{
+					selector: 'TemplateElement[value.raw=/(#[0-9a-fA-F]{3,8}\\b|(rgba?|hsla?|oklch)\\()/]',
 					message: 'Use a design token (ADR-0022), not a raw color.'
 				}
 			]

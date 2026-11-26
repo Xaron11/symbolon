@@ -10,7 +10,16 @@ import { describe, expect, it } from 'vitest';
 import { themes, type SemanticToken, type ThemeName } from './generated/tokens';
 
 const THEMES: readonly ThemeName[] = ['light', 'dark'];
-const SURFACES = ['color.surface.canvas', 'color.surface.base', 'color.surface.raised'] as const;
+// Every surface text, icons and borders can sit on, including row and control states.
+const SURFACES = [
+	'color.surface.canvas',
+	'color.surface.base',
+	'color.surface.raised',
+	'color.surface.sunken',
+	'color.surface.hover',
+	'color.surface.active',
+	'color.surface.selected'
+] as const;
 const CATEGORIES = [
 	'identical',
 	'different',
@@ -46,16 +55,25 @@ describe.each(THEMES)('%s theme', (theme) => {
 			for (const s of STATUSES) pairs.push([`status.${s}.fg`, bg]);
 		}
 		for (const s of STATUSES) pairs.push([`status.${s}.fg`, `status.${s}.bg`]);
+		// Chip and row tints carry the label in the normal text colors.
+		for (const c of CATEGORIES) {
+			pairs.push(['color.text.primary', `category.${c}.bg`]);
+			pairs.push(['color.text.secondary', `category.${c}.bg`]);
+		}
 		const failing = pairs
 			.map(([fg, bg]) => ({ fg, bg, ratio: contrast(theme, fg, bg) }))
 			.filter(({ ratio }) => ratio < 4.5);
 		expect(failing).toEqual([]);
 	});
 
-	it('on-accent text has 4.5:1 on the accent', () => {
-		expect(contrast(theme, 'color.text.on-accent', 'color.accent.default')).toBeGreaterThanOrEqual(
-			4.5
-		);
+	it('on-accent text has 4.5:1 on the accent in every state', () => {
+		for (const bg of [
+			'color.accent.default',
+			'color.accent.hover',
+			'color.accent.active'
+		] as const) {
+			expect(contrast(theme, 'color.text.on-accent', bg), bg).toBeGreaterThanOrEqual(4.5);
+		}
 	});
 
 	// Category colors mark icons and tints, never label text, so they need the 3:1 of graphics

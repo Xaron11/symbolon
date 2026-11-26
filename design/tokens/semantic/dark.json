@@ -23,11 +23,11 @@
         "$description": "Hovered rows and controls"
       },
       "active": {
-        "$value": "{primitive.color.slate.700}",
+        "$value": "{primitive.color.slate.800}",
         "$description": "Pressed rows and controls"
       },
       "selected": {
-        "$value": "{primitive.color.blue.900}",
+        "$value": "{primitive.color.blue.950}",
         "$description": "Selected rows and items"
       }
     },
@@ -100,7 +100,7 @@
     },
     "different": {
       "fg": {
-        "$value": "{primitive.color.red.600}",
+        "$value": "{primitive.color.red.500}",
         "$description": "Different: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -128,7 +128,7 @@
     },
     "moved": {
       "fg": {
-        "$value": "{primitive.color.violet.400}",
+        "$value": "{primitive.color.violet.500}",
         "$description": "Moved: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -142,7 +142,7 @@
     },
     "renamed": {
       "fg": {
-        "$value": "{primitive.color.violet.400}",
+        "$value": "{primitive.color.violet.500}",
         "$description": "Renamed: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -156,7 +156,7 @@
     },
     "collision": {
       "fg": {
-        "$value": "{primitive.color.pink.500}",
+        "$value": "{primitive.color.pink.400}",
         "$description": "Collision: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -187,7 +187,7 @@
     "$type": "color",
     "error": {
       "fg": {
-        "$value": "{primitive.color.red.400}",
+        "$value": "{primitive.color.red.300}",
         "$description": "Error: icon and text"
       },
       "bg": {
@@ -201,7 +201,7 @@
     },
     "warning": {
       "fg": {
-        "$value": "{primitive.color.amber.400}",
+        "$value": "{primitive.color.amber.300}",
         "$description": "Warning: icon and text"
       },
       "bg": {
@@ -215,7 +215,7 @@
     },
     "success": {
       "fg": {
-        "$value": "{primitive.color.green.400}",
+        "$value": "{primitive.color.green.300}",
         "$description": "Success: icon and text"
       },
       "bg": {
@@ -229,7 +229,7 @@
     },
     "info": {
       "fg": {
-        "$value": "{primitive.color.blue.400}",
+        "$value": "{primitive.color.blue.300}",
         "$description": "Info: icon and text"
       },
       "bg": {

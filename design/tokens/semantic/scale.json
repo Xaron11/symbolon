@@ -185,5 +185,18 @@
       "$value": 0.5,
       "$description": "Disabled controls"
     }
+  },
+  "border": {
+    "width": {
+      "$type": "dimension",
+      "default": {
+        "$value": "1px",
+        "$description": "Borders, dividers and control outlines"
+      },
+      "strong": {
+        "$value": "2px",
+        "$description": "Emphasized borders, such as the selected tab"
+      }
+    }
   }
 }

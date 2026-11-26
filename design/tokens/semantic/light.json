@@ -51,7 +51,7 @@
         "$description": "Labels and supporting text"
       },
       "muted": {
-        "$value": "{primitive.color.slate.500}",
+        "$value": "{primitive.color.slate.600}",
         "$description": "Hints, placeholders, disabled text"
       },
       "on-accent": {
@@ -100,7 +100,7 @@
     },
     "different": {
       "fg": {
-        "$value": "{primitive.color.red.700}",
+        "$value": "{primitive.color.red.500}",
         "$description": "Different: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -114,7 +114,7 @@
     },
     "only-in": {
       "fg": {
-        "$value": "{primitive.color.amber.600}",
+        "$value": "{primitive.color.amber.800}",
         "$description": "Only in: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -128,7 +128,7 @@
     },
     "moved": {
       "fg": {
-        "$value": "{primitive.color.violet.500}",
+        "$value": "{primitive.color.violet.900}",
         "$description": "Moved: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -142,7 +142,7 @@
     },
     "renamed": {
       "fg": {
-        "$value": "{primitive.color.violet.500}",
+        "$value": "{primitive.color.violet.900}",
         "$description": "Renamed: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -156,7 +156,7 @@
     },
     "collision": {
       "fg": {
-        "$value": "{primitive.color.pink.500}",
+        "$value": "{primitive.color.pink.800}",
         "$description": "Collision: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -170,7 +170,7 @@
     },
     "unverified": {
       "fg": {
-        "$value": "{primitive.color.slate.700}",
+        "$value": "{primitive.color.slate.500}",
         "$description": "Unverified: icon and tint (labels use text colors)"
       },
       "bg": {
@@ -187,7 +187,7 @@
     "$type": "color",
     "error": {
       "fg": {
-        "$value": "{primitive.color.red.700}",
+        "$value": "{primitive.color.red.800}",
         "$description": "Error: icon and text"
       },
       "bg": {
@@ -201,7 +201,7 @@
     },
     "warning": {
       "fg": {
-        "$value": "{primitive.color.amber.700}",
+        "$value": "{primitive.color.amber.800}",
         "$description": "Warning: icon and text"
       },
       "bg": {
@@ -215,7 +215,7 @@
     },
     "success": {
       "fg": {
-        "$value": "{primitive.color.green.700}",
+        "$value": "{primitive.color.green.800}",
         "$description": "Success: icon and text"
       },
       "bg": {
@@ -229,7 +229,7 @@
     },
     "info": {
       "fg": {
-        "$value": "{primitive.color.blue.700}",
+        "$value": "{primitive.color.blue.800}",
         "$description": "Info: icon and text"
       },
       "bg": {

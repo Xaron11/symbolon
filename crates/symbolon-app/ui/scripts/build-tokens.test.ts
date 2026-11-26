@@ -41,8 +41,20 @@ describe('buildTokens', () => {
 			expect(start, selector).toBeGreaterThanOrEqual(0);
 			return css.slice(start, css.indexOf('}', start));
 		};
-		expect(block(":root[data-theme='dark']")).toContain('--sy-color-surface-canvas:');
+		expect(block("[data-theme='dark'] {")).toContain('--sy-color-surface-canvas:');
 		expect(block(":root:not([data-theme='light'])")).toContain('--sy-color-surface-canvas:');
+	});
+
+	it('applies a theme to any element with data-theme, not only the root', () => {
+		const css = readFileSync(path.join(out, 'tokens.css'), 'utf8');
+		const rule = (selector: RegExp) => {
+			const match = selector.exec(css);
+			expect(match, String(selector)).not.toBeNull();
+			const start = match?.index ?? 0;
+			return css.slice(start, css.indexOf('}', start));
+		};
+		expect(rule(/^\[data-theme='dark'\] \{/m)).toContain('--sy-color-surface-canvas:');
+		expect(rule(/^:root,\n\[data-theme='light'\] \{/m)).toContain('--sy-color-surface-canvas:');
 	});
 
 	it('never emits primitives', () => {
