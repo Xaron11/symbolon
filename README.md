@@ -50,4 +50,6 @@ A catalog contains full file paths and content hashes of your data. Treat catalo
 
 ## License
 
-[GPL-3.0-or-later](LICENSE). This includes `symbolon-core` when used as a library.
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT), at your option. Releases up to v0.7.0 were published under GPL-3.0-or-later.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Symbolon by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

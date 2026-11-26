@@ -184,7 +184,10 @@
               '';
               meta = {
                 description = "Compare file locations and report how exactly they differ";
-                license = pkgs.lib.licenses.gpl3Plus;
+                license = with pkgs.lib.licenses; [
+                  mit
+                  asl20
+                ];
                 mainProgram = "symbolon";
               };
             }

@@ -14,6 +14,6 @@ indent_size = 4
 [crates/symbolon-app/ui/**]
 indent_style = tab
 
-[{LICENSE,*.lock}]
+[{LICENSE-*,*.lock}]
 indent_style = unset
 indent_size = unset

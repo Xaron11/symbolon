@@ -100,7 +100,7 @@ jobs:
         run: |
           name="symbolon-${TAG}-${TARGET}"
           mkdir "$name"
-          cp "target/${TARGET}/release/${EXE}" LICENSE README.md "$name/"
+          cp "target/${TARGET}/release/${EXE}" LICENSE-MIT LICENSE-APACHE README.md "$name/"
           # Artifacts lose the executable bit; it matters only on the phone, where it is set.
           cp agent/symbolon-agent "$name/symbolon-agent-aarch64-linux-musl"
           chmod 755 "$name/symbolon-agent-aarch64-linux-musl"
@@ -136,7 +136,7 @@ jobs:
         run: |
           name="symbolon-agent-${TAG}-aarch64-linux-musl"
           mkdir "$name"
-          cp target/aarch64-unknown-linux-musl/release-agent/symbolon-agent LICENSE "$name/"
+          cp target/aarch64-unknown-linux-musl/release-agent/symbolon-agent LICENSE-MIT LICENSE-APACHE "$name/"
           echo "Corresponding source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG}" > "$name/SOURCE.txt"
           tar czf "$name.tar.gz" "$name"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -185,7 +185,7 @@ jobs:
           {
             git cliff --current --strip all
             echo
-            echo "Built from source tag [${TAG}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG}) under GPL-3.0-or-later. Verify downloads with \`sha256sum -c SHA256SUMS\`."
+            echo "Built from source tag [${TAG}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG}) under MIT OR Apache-2.0. Verify downloads with \`sha256sum -c SHA256SUMS\`."
           } > "$RUNNER_TEMP/notes.md"
       - name: Create release
         env:

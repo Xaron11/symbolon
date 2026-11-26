@@ -33,6 +33,7 @@
   - [0017 Android over ADB](adr/0017-android-over-adb.md)
   - [0018 Four hashing threads on phones](adr/0018-phone-hashing-threads.md)
   - [0019 Directories and symlinks in comparisons](adr/0019-directories-and-symlinks-in-comparisons.md)
+  - [0020 MIT OR Apache-2.0](adr/0020-mit-or-apache-license.md)
 
 # Development
 
