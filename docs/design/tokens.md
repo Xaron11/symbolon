@@ -109,23 +109,24 @@ Every value the interface uses, as CSS custom properties. The source is platform
 
 ## Component sizes
 
-| Variable                       | Value   | Purpose                                             |
-| ------------------------------ | ------- | --------------------------------------------------- |
-| `--sy-control-height-sm`       | `28px`  | Compact controls, table toolbars                    |
-| `--sy-control-height-md`       | `32px`  | Default controls                                    |
-| `--sy-control-height-touch`    | `44px`  | Controls under a coarse pointer                     |
-| `--sy-control-radius`          | `4px`   | Buttons, inputs, chips                              |
-| `--sy-panel-radius`            | `6px`   | Panels, dialogs, menus                              |
-| `--sy-table-row-height`        | `28px`  | Table and tree rows                                 |
-| `--sy-table-header-height`     | `32px`  | Table header                                        |
-| `--sy-table-column-min`        | `120px` | Least width of a table column without a fixed width |
-| `--sy-tree-indent`             | `16px`  | Indent per tree level                               |
-| `--sy-sidebar-width-expanded`  | `200px` | Sidebar with labels                                 |
-| `--sy-sidebar-width-collapsed` | `48px`  | Sidebar with icons only                             |
-| `--sy-toolbar-height`          | `44px`  | Top toolbar                                         |
-| `--sy-statusbar-height`        | `24px`  | Bottom status bar                                   |
-| `--sy-focus-ring-width`        | `2px`   | Focus ring thickness                                |
-| `--sy-focus-ring-offset`       | `2px`   | Gap between control and focus ring                  |
-| `--sy-icon-size-sm`            | `14px`  | Icons in compact controls and chips                 |
-| `--sy-icon-size-md`            | `16px`  | Icons in default controls                           |
-| `--sy-pane-height`             | `480px` | Height of a table or tree inside a tab of a view    |
+| Variable                       | Value   | Purpose                                              |
+| ------------------------------ | ------- | ---------------------------------------------------- |
+| `--sy-control-height-sm`       | `28px`  | Compact controls, table toolbars                     |
+| `--sy-control-height-md`       | `32px`  | Default controls                                     |
+| `--sy-control-height-touch`    | `44px`  | Controls under a coarse pointer                      |
+| `--sy-control-radius`          | `4px`   | Buttons, inputs, chips                               |
+| `--sy-panel-radius`            | `6px`   | Panels, dialogs, menus                               |
+| `--sy-table-row-height`        | `28px`  | Table and tree rows                                  |
+| `--sy-table-header-height`     | `32px`  | Table header                                         |
+| `--sy-table-column-min`        | `120px` | Least width of a table column without a fixed width  |
+| `--sy-tree-indent`             | `16px`  | Indent per tree level                                |
+| `--sy-sidebar-width-expanded`  | `200px` | Sidebar with labels                                  |
+| `--sy-sidebar-width-collapsed` | `48px`  | Sidebar with icons only                              |
+| `--sy-toolbar-height`          | `44px`  | Top toolbar                                          |
+| `--sy-statusbar-height`        | `24px`  | Bottom status bar                                    |
+| `--sy-focus-ring-width`        | `2px`   | Focus ring thickness                                 |
+| `--sy-focus-ring-offset`       | `2px`   | Gap between control and focus ring                   |
+| `--sy-icon-size-sm`            | `14px`  | Icons in compact controls and chips                  |
+| `--sy-icon-size-md`            | `16px`  | Icons in default controls                            |
+| `--sy-pane-height`             | `480px` | Height of a table or tree inside a tab of a view     |
+| `--sy-scan-card-min-width`     | `320px` | Narrowest a running scan card gets before cards wrap |

@@ -16,6 +16,7 @@ export {
 	comparisonTree,
 	createChangeHub,
 	locationScans,
+	recentScans,
 	rowOrder,
 	scanWarnings,
 	type ChangeHub

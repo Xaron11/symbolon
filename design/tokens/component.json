@@ -122,5 +122,14 @@
       "$type": "dimension",
       "$description": "Height of a table or tree inside a tab of a view"
     }
+  },
+  "scan": {
+    "card": {
+      "min-width": {
+        "$value": "320px",
+        "$type": "dimension",
+        "$description": "Narrowest a running scan card gets before cards wrap"
+      }
+    }
   }
 }
