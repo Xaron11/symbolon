@@ -1,3 +1,4 @@
+import { browserStorage, type KeyValueStore } from '../storage';
 import type { ThemeName } from './generated/tokens';
 
 /** What the user chose: follow the OS, or a fixed theme. */
@@ -14,7 +15,7 @@ export interface Theme {
 const KEY = 'symbolon.theme';
 const PREFERENCES: readonly ThemePreference[] = ['system', 'dark', 'light'];
 
-type Storage = Pick<globalThis.Storage, 'getItem' | 'setItem'>;
+type Storage = KeyValueStore;
 
 function read(storage: Storage | undefined): ThemePreference {
 	try {
@@ -68,14 +69,6 @@ export function createTheme(storage: Storage | undefined, media: MediaQueryList)
 			media.removeEventListener('change', onChange);
 		}
 	};
-}
-
-function browserStorage(): Storage | undefined {
-	try {
-		return globalThis.localStorage;
-	} catch {
-		return undefined;
-	}
 }
 
 /** The app's theme, following `localStorage` and the OS. Undefined outside a browser. */

@@ -44,6 +44,8 @@
     - [StatTile](design/components/stat-tile.md)
     - [CompositionBar](design/components/composition-bar.md)
     - [ChartFrame](design/components/chart-frame.md)
+    - [AppShell](design/components/app-shell.md)
+    - [ThemeSwitch](design/components/theme-switch.md)
 - [Decision records](adr/index.md)
   - [Template](adr/0000-template.md)
   - [0001 Stack and layout](adr/0001-stack-and-layout.md)
@@ -73,6 +75,7 @@
 
 - [Getting started](development/setup.md)
 - [Editor and LSP setup](development/editor.md)
+- [Working on the UI](development/ui.md)
 - [Testing](testing.md)
 - [Benchmarks](benchmarks.md)
 - [Writing documentation](development/documentation.md)
