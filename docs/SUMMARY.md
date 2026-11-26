@@ -70,6 +70,7 @@
   - [0020 MIT OR Apache-2.0](adr/0020-mit-or-apache-license.md)
   - [0021 GUI clients](adr/0021-gui-clients.md)
   - [0022 Design system](adr/0022-design-system.md)
+  - [0023 Offset reads, sort orders and a tree for results](adr/0023-offset-reads.md)
 
 # Development
 
