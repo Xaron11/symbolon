@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createMemoryBackend } from './memory';
-import { catalogTree, comparisonRows, comparisonTree, createChangeHub, rowOrder } from './sources';
+import {
+	catalogTree,
+	comparisonRows,
+	comparisonTree,
+	createChangeHub,
+	locationScans,
+	rowOrder,
+	scanWarnings
+} from './sources';
 import type { CompareRowView, EntryView, TreeNodeView } from './types';
 
 function row(key: string, category: CompareRowView['category'], size: number): CompareRowView {
@@ -106,5 +114,39 @@ describe('data sources', () => {
 		stop?.();
 		b.emitBrowse('loc', 'Changed');
 		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('history sources', () => {
+	const brief = (scanId: number) => ({
+		scanId,
+		status: 'Completed' as const,
+		startedMs: scanId,
+		finishedMs: scanId,
+		files: 1,
+		bytes: 1,
+		warnings: 0,
+		error: null
+	});
+
+	it('locationScans pages one location history', async () => {
+		const b = createMemoryBackend({
+			recentScans: [
+				{ label: 'Photos', scan: brief(3) },
+				{ label: 'Stick', scan: brief(2) },
+				{ label: 'Photos', scan: brief(1) }
+			]
+		});
+		const source = locationScans(b, 'Photos');
+		await expect(source.count()).resolves.toBe(2);
+		await expect(source.rows(1, 10)).resolves.toEqual([brief(1)]);
+	});
+
+	it('scanWarnings pages one scan warnings', async () => {
+		const warning = { path: 'a.jpg', kind: 'permission', message: 'denied' };
+		const b = createMemoryBackend({ warnings: { 7: [warning] } });
+		const source = scanWarnings(b, 7);
+		await expect(source.count()).resolves.toBe(1);
+		await expect(source.rows(0, 10)).resolves.toEqual([warning]);
 	});
 });

@@ -48,6 +48,7 @@
     - [ThemeSwitch](design/components/theme-switch.md)
     - [Locations screen](design/components/location-table.md)
     - [Add location dialog](design/components/add-location-dialog.md)
+    - [Location page](design/components/location-detail.md)
 - [Decision records](adr/index.md)
   - [Template](adr/0000-template.md)
   - [0001 Stack and layout](adr/0001-stack-and-layout.md)

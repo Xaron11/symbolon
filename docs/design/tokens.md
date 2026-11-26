@@ -128,3 +128,4 @@ Every value the interface uses, as CSS custom properties. The source is platform
 | `--sy-focus-ring-offset`       | `2px`   | Gap between control and focus ring                  |
 | `--sy-icon-size-sm`            | `14px`  | Icons in compact controls and chips                 |
 | `--sy-icon-size-md`            | `16px`  | Icons in default controls                           |
+| `--sy-pane-height`             | `480px` | Height of a table or tree inside a tab of a view    |

@@ -115,5 +115,12 @@
         "$description": "Icons in default controls"
       }
     }
+  },
+  "pane": {
+    "height": {
+      "$value": "480px",
+      "$type": "dimension",
+      "$description": "Height of a table or tree inside a tab of a view"
+    }
   }
 }
