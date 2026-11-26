@@ -1,0 +1,45 @@
+<!-- Spec: docs/design/components/checkbox.md -->
+<script lang="ts">
+	interface Props {
+		label: string;
+		checked?: boolean;
+		disabled?: boolean;
+		class?: string;
+	}
+
+	let { label, checked = $bindable(false), disabled = false, class: className }: Props = $props();
+</script>
+
+<label class={['sy-checkbox', className]} data-disabled={disabled || undefined}>
+	<input type="checkbox" bind:checked {disabled} />
+	<span>{label}</span>
+</label>
+
+<style>
+	.sy-checkbox {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--sy-space-8);
+		min-height: var(--sy-control-height-sm);
+		cursor: pointer;
+	}
+
+	input {
+		width: var(--sy-icon-size-md);
+		height: var(--sy-icon-size-md);
+		margin: 0;
+		accent-color: var(--sy-color-accent-default);
+		cursor: inherit;
+	}
+
+	[data-disabled] {
+		opacity: var(--sy-opacity-disabled);
+		cursor: not-allowed;
+	}
+
+	@media (pointer: coarse) {
+		.sy-checkbox {
+			min-height: var(--sy-control-height-touch);
+		}
+	}
+</style>

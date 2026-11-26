@@ -1,5 +1,6 @@
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { svelteTesting } from '@testing-library/svelte/vite';
 import { defineConfig } from 'vitest/config';
 
 const host = process.env['TAURI_DEV_HOST'];
@@ -17,7 +18,19 @@ export default defineConfig({
 		})
 	],
 	test: {
-		include: ['src/**/*.test.ts', 'scripts/**/*.test.ts']
+		projects: [
+			{ extends: true, test: { name: 'scripts', include: ['scripts/**/*.test.ts'] } },
+			{
+				extends: true,
+				plugins: [svelteTesting()],
+				test: {
+					name: 'ui',
+					include: ['src/**/*.test.ts'],
+					environment: 'jsdom',
+					setupFiles: ['src/test/setup.ts']
+				}
+			}
+		]
 	},
 	clearScreen: false,
 	server: {

@@ -76,6 +76,10 @@ describe.each(THEMES)('%s theme', (theme) => {
 		}
 	});
 
+	it('danger buttons have 4.5:1 text', () => {
+		expect(contrast(theme, 'color.surface.base', 'status.error.fg')).toBeGreaterThanOrEqual(4.5);
+	});
+
 	// Category colors mark icons and tints, never label text, so they need the 3:1 of graphics
 	// (WCAG 1.4.11); labels use the text colors.
 	it('borders, focus, accent and category graphics have 3:1', () => {

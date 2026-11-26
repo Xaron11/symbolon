@@ -33,7 +33,7 @@
     },
     "border": {
       "default": {
-        "$value": "{primitive.color.slate.800}",
+        "$value": "{primitive.color.slate.700}",
         "$description": "Dividers and table lines"
       },
       "strong": {
