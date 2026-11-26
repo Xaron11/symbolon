@@ -79,13 +79,14 @@ struct Phone {
 }
 
 impl Phone {
-    /// A "phone" with `DCIM` holding a few photos, and an empty push directory.
+    /// A "phone" with `DCIM` holding a few photos and a link, and an empty push directory.
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let dcim = dir.path().join("sdcard/DCIM/Camera");
         fs::create_dir_all(&dcim).unwrap();
         fs::write(dcim.join("a.jpg"), "aaaa").unwrap();
         fs::write(dcim.join("b c.jpg"), vec![9_u8; 300_000]).unwrap();
+        std::os::unix::fs::symlink("a.jpg", dcim.join("latest")).unwrap();
         fs::create_dir_all(dir.path().join("data/local/tmp")).unwrap();
         Self {
             dir,
@@ -131,6 +132,45 @@ fn scan_both(
     source: AdbSource,
     algo: HashAlgo,
 ) -> [Vec<(String, Option<Vec<u8>>)>; 2] {
+    let (_dir, catalog) = scan_into_catalog(phone, source, algo);
+    query_both(
+        &catalog,
+        "SELECT path_key, hash_full FROM entries e JOIN locations l ON l.id = e.location_id \
+         WHERE l.label = ?1 AND e.kind = 'file' ORDER BY path_key",
+    )
+}
+
+/// Like [`scan_both`], but `(path, link target)` of each symlink.
+fn scan_links_both(
+    phone: &Phone,
+    source: AdbSource,
+    algo: HashAlgo,
+) -> [Vec<(String, Option<Vec<u8>>)>; 2] {
+    let (_dir, catalog) = scan_into_catalog(phone, source, algo);
+    query_both(
+        &catalog,
+        "SELECT path_key, link_target FROM entries e JOIN locations l ON l.id = e.location_id \
+         WHERE l.label = ?1 AND e.kind = 'symlink' ORDER BY path_key",
+    )
+}
+
+fn query_both(catalog: &Catalog, sql: &str) -> [Vec<(String, Option<Vec<u8>>)>; 2] {
+    let conn = rusqlite::Connection::open(catalog.path()).unwrap();
+    ["phone", "local"].map(|label| {
+        conn.prepare(sql)
+            .unwrap()
+            .query_map([label], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    })
+}
+
+fn scan_into_catalog(
+    phone: &Phone,
+    source: AdbSource,
+    algo: HashAlgo,
+) -> (tempfile::TempDir, Catalog) {
     let dir = tempfile::tempdir().unwrap();
     let catalog = Catalog::open(dir.path().join("c.db")).unwrap();
     for label in ["phone", "local"] {
@@ -155,18 +195,18 @@ fn scan_both(
         .unwrap()
         .wait()
         .unwrap();
-    let conn = rusqlite::Connection::open(catalog.path()).unwrap();
-    ["phone", "local"].map(|label| {
-        conn.prepare(
-            "SELECT path_key, hash_full FROM entries e JOIN locations l ON l.id = e.location_id \
-             WHERE l.label = ?1 AND e.kind = 'file' ORDER BY path_key",
-        )
-        .unwrap()
-        .query_map([label], |r| Ok((r.get(0)?, r.get(1)?)))
-        .unwrap()
-        .map(Result::unwrap)
-        .collect()
-    })
+    (dir, catalog)
+}
+
+#[test]
+fn link_targets_match_a_local_scan_with_the_agent() {
+    let phone = Phone::new();
+    let [remote, local] = scan_links_both(&phone, phone.source(Some(agent())), HashAlgo::Blake3);
+    assert_eq!(remote, local);
+    assert_eq!(
+        remote,
+        [("Camera/latest".to_owned(), Some(b"a.jpg".to_vec()))]
+    );
 }
 
 #[test]

@@ -40,6 +40,9 @@ pub enum Line {
         size: u64,
         /// Modification time in nanoseconds since the Unix epoch.
         mtime_ns: Option<i64>,
+        /// A symlink's target, escaped like a path; absent when unknown (ADR-0019).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<String>,
     },
     /// A problem with one entry or request.
     Warning {
@@ -104,6 +107,7 @@ impl Line {
             kind: entry.kind.name().to_owned(),
             size: entry.size,
             mtime_ns: entry.mtime_ns,
+            target: entry.link_target.as_deref().map(pathkey::escape_raw),
         }
     }
 
@@ -141,16 +145,24 @@ impl Line {
             kind,
             size,
             mtime_ns,
+            target,
         } = self
         else {
             return None;
+        };
+        let link_target = match target {
+            Some(text) => Some(
+                pathkey::raw_from_escaped(text)
+                    .filter(|raw| pathkey::valid_link_target(PathEncoding::Posix, raw))?,
+            ),
+            None => None,
         };
         Some(SourceEntry {
             path: path_from_text(path)?,
             kind: kind.parse().ok()?,
             size: *size,
             mtime_ns: *mtime_ns,
-            link_target: None,
+            link_target,
         })
     }
 
@@ -294,7 +306,37 @@ mod tests {
             "{json}"
         );
         let back: Line = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.to_entry(), Some(entry));
+        assert_eq!(back.to_entry(), Some(entry.clone()));
+
+        let symlink = SourceEntry {
+            path: posix(b"DCIM/latest"),
+            kind: EntryKind::Symlink,
+            size: 9,
+            mtime_ns: Some(1),
+            link_target: Some(b"../a\xff%b".to_vec()),
+        };
+        let json = serde_json::to_string(&Line::entry(&symlink)).unwrap();
+        assert!(json.contains(r#""target":"../a%FF%25b""#), "{json}");
+        let back: Line = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.to_entry(), Some(symlink));
+        assert!(
+            !serde_json::to_string(&Line::entry(&entry))
+                .unwrap()
+                .contains("target"),
+            "no target field without a target"
+        );
+        let old: Line = serde_json::from_str(
+            r#"{"event":"entry","path":"l","kind":"symlink","size":1,"mtime_ns":null}"#,
+        )
+        .unwrap();
+        assert_eq!(old.to_entry().unwrap().link_target, None);
+        for bad in ["", "a%00b", "a%Z"] {
+            let line: Line = serde_json::from_str(&format!(
+                r#"{{"event":"entry","path":"l","kind":"symlink","size":1,"mtime_ns":null,"target":"{bad}"}}"#
+            ))
+            .unwrap();
+            assert_eq!(line.to_entry(), None, "{bad:?}");
+        }
 
         let digest = hash_reader(HashAlgo::Blake3, &b"aaaa"[..], 4).unwrap();
         let line = Line::reply(3, &HashReply::Full(digest));
