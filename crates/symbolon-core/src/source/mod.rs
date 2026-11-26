@@ -84,6 +84,9 @@ pub struct SourceEntry {
     /// Precision depends on the filesystem and platform (for example 100 ns on Windows, 2 s on
     /// FAT).
     pub mtime_ns: Option<i64>,
+    /// The symlink's target as raw bytes in the source's path encoding; `None` for other kinds
+    /// or when it could not be read.
+    pub link_target: Option<Vec<u8>>,
 }
 
 /// Category of a [`SourceWarning`].

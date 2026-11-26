@@ -247,27 +247,16 @@ impl RelPath {
 
     /// The matching key; see [`PathKey`].
     pub fn key(&self) -> PathKey {
+        if self.encoding == PathEncoding::Posix {
+            return PathKey(escape_raw(&self.bytes));
+        }
         let mut key = String::with_capacity(self.bytes.len());
-        match self.encoding {
-            PathEncoding::Posix => {
-                for chunk in self.bytes.utf8_chunks() {
-                    push_escaped_text(&mut key, chunk.valid());
-                    for &byte in chunk.invalid() {
+        for unit in wtf8_units(&self.bytes).unwrap_or_default() {
+            match unit {
+                Wtf8Unit::Char(c) => push_escaped_text(&mut key, c.encode_utf8(&mut [0; 4])),
+                Wtf8Unit::Surrogate(s) => {
+                    for byte in encode_surrogate(s) {
                         push_escaped_byte(&mut key, byte);
-                    }
-                }
-            }
-            PathEncoding::Wtf8 => {
-                for unit in wtf8_units(&self.bytes).unwrap_or_default() {
-                    match unit {
-                        Wtf8Unit::Char(c) => {
-                            push_escaped_text(&mut key, c.encode_utf8(&mut [0; 4]));
-                        }
-                        Wtf8Unit::Surrogate(s) => {
-                            for byte in encode_surrogate(s) {
-                                push_escaped_byte(&mut key, byte);
-                            }
-                        }
                     }
                 }
             }
@@ -410,6 +399,37 @@ fn push_escaped_text(key: &mut String, text: &str) {
             key.push(c);
         }
     }
+}
+
+/// Longest symlink target stored, in bytes (ADR-0019); `PATH_MAX` on Linux.
+pub const MAX_LINK_TARGET: usize = 4096;
+
+/// Whether `bytes` can be stored as a symlink target in `encoding`: not empty, at most
+/// [`MAX_LINK_TARGET`] bytes, no NUL, and well-formed WTF-8 for [`PathEncoding::Wtf8`].
+pub fn valid_link_target(encoding: PathEncoding, bytes: &[u8]) -> bool {
+    !bytes.is_empty()
+        && bytes.len() <= MAX_LINK_TARGET
+        && !bytes.contains(&0)
+        && (encoding == PathEncoding::Posix || wtf8_units(bytes).is_some())
+}
+
+/// Raw bytes as text, escaped like a [`PathEncoding::Posix`] [`PathKey`]: `%` and every byte
+/// that is not part of valid UTF-8 become `%XX`, so the escaping can be undone exactly.
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(symbolon_core::pathkey::escape_raw(b"../a\xff%b"), "../a%FF%25b");
+/// ```
+pub fn escape_raw(bytes: &[u8]) -> String {
+    let mut text = String::with_capacity(bytes.len());
+    for chunk in bytes.utf8_chunks() {
+        push_escaped_text(&mut text, chunk.valid());
+        for &byte in chunk.invalid() {
+            push_escaped_byte(&mut text, byte);
+        }
+    }
+    text
 }
 
 /// The bytes of text escaped like a POSIX path key (`%XX` for `%` and non-UTF-8 bytes);
@@ -811,6 +831,26 @@ mod tests {
             assert_eq!(encoding.name().parse::<PathEncoding>().unwrap(), encoding);
         }
         assert!("utf16".parse::<PathEncoding>().is_err());
+    }
+
+    #[test]
+    fn escaped_raw_bytes_round_trip() {
+        let raw = b"../a\xff%b";
+        assert_eq!(escape_raw(raw), "../a%FF%25b");
+        assert_eq!(raw_from_escaped(&escape_raw(raw)), Some(raw.to_vec()));
+    }
+
+    #[test]
+    fn link_targets_must_be_short_nonempty_and_valid() {
+        for encoding in [PathEncoding::Posix, PathEncoding::Wtf8] {
+            assert!(valid_link_target(encoding, b"../a/b"));
+            assert!(valid_link_target(encoding, &[b'a'; MAX_LINK_TARGET]));
+            assert!(!valid_link_target(encoding, b""));
+            assert!(!valid_link_target(encoding, b"a\0b"));
+            assert!(!valid_link_target(encoding, &[b'a'; MAX_LINK_TARGET + 1]));
+        }
+        assert!(valid_link_target(PathEncoding::Posix, b"a\xffb"));
+        assert!(!valid_link_target(PathEncoding::Wtf8, b"a\xffb"));
     }
 
     fn component() -> impl Strategy<Value = Vec<u8>> {

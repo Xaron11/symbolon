@@ -18,7 +18,7 @@ use super::{
     validate_label,
 };
 use crate::hash::HashAlgo;
-use crate::pathkey::{PathEncoding, RelPath};
+use crate::pathkey::{PathEncoding, RelPath, valid_link_target};
 use crate::scan::ScanError;
 use crate::scan::lock::ScanLock;
 
@@ -214,8 +214,8 @@ struct ScanRow {
 
 const SCAN_COLUMNS: &str = "started_at, finished_at, status, files, dirs, symlinks, bytes, \
                             hashed_files, hashed_bytes, reused_hashes, warnings, error";
-const ENTRY_COLUMNS: &str =
-    "rel_path_raw, path_key, parent_key, kind, size, mtime_ns, hash_partial, hash_full, flags";
+const ENTRY_COLUMNS: &str = "rel_path_raw, path_key, parent_key, kind, size, mtime_ns, hash_partial, \
+                             hash_full, flags, link_target";
 const LOCATION_COPY_COLUMNS: &str = "root_kind, root_raw, path_encoding, fingerprint, hash_algo, \
                                      hash_policy, ignore_patterns";
 
@@ -648,6 +648,18 @@ impl ExportFile {
                 }
             }
         }
+        match row.get(9) {
+            None | Some(Value::Null) => {}
+            Some(Value::Blob(target))
+                if text(row.get(3)) == Some("symlink")
+                    && valid_link_target(self.path_encoding, target) => {}
+            Some(_) => {
+                return Err(invalid(
+                    key.as_str().to_owned(),
+                    "an invalid symlink target",
+                ));
+            }
+        }
         Ok(())
     }
 }
@@ -758,13 +770,13 @@ fn copy_entries(
     ))?;
     let mut write = dst.prepare(&format!(
         "INSERT INTO entries (location_id, seen_scan_id, {ENTRY_COLUMNS}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
     ))?;
     let mut rows = read.query([from])?;
     let mut copied = 0;
     while let Some(row) = rows.next()? {
         let mut values = vec![Value::Integer(to), Value::Integer(scan)];
-        for i in 0..9 {
+        for i in 0..10 {
             values.push(row.get(i)?);
         }
         if let Some(file) = file {

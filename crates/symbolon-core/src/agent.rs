@@ -150,6 +150,7 @@ impl Line {
             kind: kind.parse().ok()?,
             size: *size,
             mtime_ns: *mtime_ns,
+            link_target: None,
         })
     }
 
@@ -284,6 +285,7 @@ mod tests {
             kind: EntryKind::File,
             size: 4,
             mtime_ns: Some(-5),
+            link_target: None,
         };
         let line = Line::entry(&entry);
         let json = serde_json::to_string(&line).unwrap();

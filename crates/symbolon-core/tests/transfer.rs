@@ -564,6 +564,112 @@ fn invalid_entries_are_refused_before_anything_is_written() {
     }
 }
 
+fn link_target(catalog: &Catalog, label: &str, key: &str) -> Option<Vec<u8>> {
+    Connection::open(catalog.path())
+        .unwrap()
+        .query_row(
+            "SELECT link_target FROM entries JOIN locations l ON l.id = location_id \
+             WHERE l.label = ?1 AND path_key = ?2",
+            [label, key],
+            |r| r.get(0),
+        )
+        .unwrap()
+}
+
+/// Turns `b.jpg` into a symlink with `target` (an SQL expression).
+fn as_symlink(target: &str) -> String {
+    format!(
+        "UPDATE entries SET kind = 'symlink', hash_partial = NULL, hash_full = NULL, \
+         link_target = {target} WHERE path_key = 'b.jpg'"
+    )
+}
+
+#[cfg(unix)]
+#[test]
+fn link_targets_survive_export_and_import() {
+    use std::os::unix::ffi::OsStrExt as _;
+
+    let laptop = Machine::new();
+    let root = laptop.location("photos", FILES);
+    std::os::unix::fs::symlink(std::ffi::OsStr::from_bytes(b"a\xffb"), root.join("odd")).unwrap();
+    laptop.scan("photos");
+    let file = laptop.export("photos");
+
+    let desktop = Machine::new();
+    desktop
+        .catalog
+        .import(&file, &ImportOptions::default())
+        .unwrap();
+    assert_eq!(
+        link_target(&desktop.catalog, "photos", "odd"),
+        Some(b"a\xffb".to_vec())
+    );
+}
+
+#[test]
+fn imports_refuse_bad_link_targets() {
+    let laptop = Machine::new();
+    laptop.location("photos", FILES);
+    let original = laptop.export("photos");
+    let forged = |name: &str, sql: &str| -> PathBuf {
+        let path = laptop.dir.path().join(name);
+        fs::copy(&original, &path).unwrap();
+        Connection::open(&path).unwrap().execute_batch(sql).unwrap();
+        path
+    };
+    let long = format!("x'{}'", "61".repeat(4097));
+    let files = [
+        forged(
+            "on-a-file.symbolon",
+            "UPDATE entries SET link_target = CAST('x' AS BLOB) WHERE path_key = 'a.jpg'",
+        ),
+        forged("long.symbolon", &as_symlink(&long)),
+        forged("nul.symbolon", &as_symlink("x'610062'")),
+    ];
+    let desktop = Machine::new();
+    for file in &files {
+        let result = desktop.catalog.import(file, &ImportOptions::default());
+        assert!(
+            matches!(result, Err(TransferError::InvalidEntry { .. })),
+            "{}: {result:?}",
+            file.display()
+        );
+        assert_eq!(desktop.catalog.locations().unwrap(), Vec::new());
+    }
+
+    let good = forged("good.symbolon", &as_symlink("CAST('a.jpg' AS BLOB)"));
+    desktop
+        .catalog
+        .import(&good, &ImportOptions::default())
+        .unwrap();
+    assert_eq!(
+        link_target(&desktop.catalog, "photos", "b.jpg"),
+        Some(b"a.jpg".to_vec())
+    );
+}
+
+#[test]
+fn exports_from_schema_v3_import_with_unknown_targets() {
+    let laptop = Machine::new();
+    laptop.location("photos", FILES);
+    let file = laptop.export("photos");
+    Connection::open(&file)
+        .unwrap()
+        .execute_batch(&format!(
+            "{}; ALTER TABLE entries DROP COLUMN link_target; PRAGMA user_version = 3;",
+            as_symlink("NULL")
+        ))
+        .unwrap();
+
+    let desktop = Machine::new();
+    desktop
+        .catalog
+        .import(&file, &ImportOptions::default())
+        .unwrap();
+    assert_eq!(desktop.entries("photos").len(), 2);
+    assert_eq!(link_target(&desktop.catalog, "photos", "b.jpg"), None);
+}
+
 /// Catalogs and exports list private files; other users of the computer must not read them
 /// (#86).
 #[cfg(unix)]

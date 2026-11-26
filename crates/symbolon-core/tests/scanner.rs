@@ -387,6 +387,46 @@ fn rescans_read_only_new_and_changed_files() {
     assert_eq!(entries.len(), 10);
 }
 
+#[cfg(unix)]
+#[test]
+fn a_retargeted_link_is_rescanned_even_with_the_same_mtime() {
+    use rustix::fs::{AtFlags, CWD, Timespec, Timestamps, utimensat};
+
+    let fx = Fixture::new(HashPolicy::Eager);
+    let link = fx.root.join("latest");
+    let make_link = |target: &str| {
+        std::os::unix::fs::symlink(target, &link).unwrap();
+        let time = Timespec {
+            tv_sec: 1_700_000_000,
+            tv_nsec: 0,
+        };
+        let times = Timestamps {
+            last_access: time,
+            last_modification: time,
+        };
+        utimensat(CWD, &link, &times, AtFlags::SYMLINK_NOFOLLOW).unwrap();
+    };
+    let target = || -> Option<Vec<u8>> {
+        Connection::open(fx.catalog.path())
+            .unwrap()
+            .query_row(
+                "SELECT link_target FROM entries WHERE path_key = 'latest'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap()
+    };
+
+    make_link("a.jpg");
+    fx.scan();
+    assert_eq!(target(), Some(b"a.jpg".to_vec()));
+
+    fs::remove_file(&link).unwrap();
+    make_link("b.jpg");
+    fx.scan();
+    assert_eq!(target(), Some(b"b.jpg".to_vec()));
+}
+
 #[test]
 fn mtime_tolerance_keeps_hashes_of_jittering_timestamps() {
     let fx = Fixture::new(HashPolicy::Eager);

@@ -2,7 +2,7 @@
 //!
 //! Never edit a released migration; add a new one and a fixture (`docs/schema.md`).
 
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4];
 
 /// Schema version this build creates and understands.
 #[expect(
@@ -100,4 +100,10 @@ CREATE TABLE adb_locations (
     location_id INTEGER PRIMARY KEY REFERENCES locations (id) ON DELETE CASCADE,
     serial TEXT NOT NULL
 ) STRICT;
+";
+
+/// Symlink targets (ADR-0019): raw bytes in the location's `path_encoding`, exactly as
+/// `readlink` returns them. NULL for other kinds and for targets not read yet.
+const V4: &str = r"
+ALTER TABLE entries ADD COLUMN link_target BLOB;
 ";

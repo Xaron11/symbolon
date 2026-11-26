@@ -12,7 +12,7 @@ use super::{
     EntryKind, ReadSeek, Source, SourceEntry, SourceError, SourceWarning, WalkItem, WalkOutcome,
     WarningKind, system_time_to_ns,
 };
-use crate::pathkey::{PathEncoding, RelPath};
+use crate::pathkey::{PathEncoding, RelPath, push_native, valid_link_target};
 
 /// A directory tree on a local or mounted filesystem.
 ///
@@ -148,7 +148,18 @@ impl Source for LocalSource {
                     }
                     continue;
                 }
-                let entry = entry_from_metadata(child_rel.clone(), &meta);
+                let mut entry = entry_from_metadata(child_rel.clone(), &meta);
+                if kind == EntryKind::Symlink {
+                    match read_target(&native) {
+                        Ok(target) => entry.link_target = Some(target),
+                        Err(e) => {
+                            let warning = SourceWarning::io(Some(child_rel.clone()), &e);
+                            if visit(WalkItem::Warning(warning)).is_break() {
+                                return Ok(WalkOutcome::Stopped);
+                            }
+                        }
+                    }
+                }
                 if visit(WalkItem::Entry(entry)).is_break() {
                     return Ok(WalkOutcome::Stopped);
                 }
@@ -173,8 +184,14 @@ impl Source for LocalSource {
     }
 
     fn stat(&self, path: &RelPath) -> io::Result<SourceEntry> {
-        let meta = fs::symlink_metadata(self.native(path)?)?;
-        Ok(entry_from_metadata(path.clone(), &meta))
+        let native = self.native(path)?;
+        let meta = fs::symlink_metadata(&native)?;
+        let mut entry = entry_from_metadata(path.clone(), &meta);
+        if entry.kind == EntryKind::Symlink {
+            // A link that cannot be read is still a link: `stat` reports what it is.
+            entry.link_target = read_target(&native).ok();
+        }
+        Ok(entry)
     }
 }
 
@@ -289,6 +306,25 @@ fn entry_from_metadata(path: RelPath, meta: &Metadata) -> SourceEntry {
             meta.len()
         },
         mtime_ns: meta.modified().ok().map(system_time_to_ns),
+        link_target: None,
+    }
+}
+
+/// The link's target exactly as `readlink` returns it (ADR-0019).
+fn read_target(native: &Path) -> io::Result<Vec<u8>> {
+    let mut target = Vec::new();
+    push_native(&mut target, fs::read_link(native)?.as_os_str());
+    storable_target(target)
+}
+
+fn storable_target(target: Vec<u8>) -> io::Result<Vec<u8>> {
+    if valid_link_target(PathEncoding::native(), &target) {
+        Ok(target)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "the link target is empty, longer than 4,096 bytes or contains NUL",
+        ))
     }
 }
 
@@ -305,4 +341,18 @@ fn dir_identity(_meta: &Metadata) -> (u64, u64) {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
     (u64::MAX, NEXT.fetch_add(1, Ordering::Relaxed))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn targets_that_cannot_be_stored_are_errors() {
+        assert_eq!(storable_target(b"a.jpg".to_vec()).unwrap(), b"a.jpg");
+        for target in [Vec::new(), b"a\0b".to_vec(), vec![b'a'; 4097]] {
+            let error = storable_target(target).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        }
+    }
 }
