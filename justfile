@@ -84,6 +84,10 @@ test-acceptance:
 test-ui: ui-install
     pnpm --dir {{ ui }} test
 
+# Rewrite the frontend's command bindings from the Tauri commands (ADR-0024).
+bindings:
+    cargo test -p symbolon-app --lib bindings::tests::write -- --ignored
+
 # Line coverage report; `just coverage --html` for a browsable one in target/llvm-cov/html.
 coverage *args:
     cargo llvm-cov nextest --workspace --locked {{ args }}
