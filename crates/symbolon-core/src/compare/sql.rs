@@ -11,6 +11,7 @@ use crate::catalog::CatalogError;
 use crate::hash::{Digest, PartialDigest};
 use crate::pathkey::{KeyOptions, PathKey, RelPath};
 use crate::query::{Cursor, HashState, Page, PageOf};
+use crate::source::EntryKind;
 
 /// `sym_norm(key, nfc, case_insensitive)`: the normalized key; `sym_name(key)`: the last
 /// component. Both are deterministic, so SQLite may use them in grouping.
@@ -70,6 +71,8 @@ pub(super) fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             raw BLOB NOT NULL,
             rel TEXT NOT NULL,
             norm TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            target BLOB,
             size INTEGER NOT NULL,
             mtime_ns INTEGER,
             partial BLOB,
@@ -83,10 +86,11 @@ pub(super) fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             presence INTEGER NOT NULL,
             assumed INTEGER NOT NULL,
             size INTEGER,
-            max_size INTEGER NOT NULL,
+            max_size INTEGER,
             ext TEXT NOT NULL,
             digest BLOB,
-            files INTEGER NOT NULL,
+            kinds INTEGER NOT NULL,
+            entries INTEGER NOT NULL,
             bytes INTEGER NOT NULL
         );",
     )
@@ -113,7 +117,8 @@ const DROP_ROW_INDEXES: &str = "
     DROP INDEX IF EXISTS temp.cmp_rows_order;
     DROP INDEX IF EXISTS temp.cmp_rows_digest;";
 
-/// Copies every side's files into `cmp_files` within one read transaction (one snapshot).
+/// Copies every side's files, symlinks and directories into `cmp_files` within one read
+/// transaction (one snapshot).
 pub(super) fn load(
     conn: &mut Connection,
     sides: &[SideInfo],
@@ -124,16 +129,18 @@ pub(super) fn load(
     tx.execute_batch(DROP_FILE_INDEXES)?;
     {
         let mut insert = tx.prepare(
-            "INSERT INTO temp.cmp_files (side, entry_id, raw, rel, norm, size, mtime_ns, partial, full)
+            "INSERT INTO temp.cmp_files
+                 (side, entry_id, raw, rel, norm, kind, target, size, mtime_ns, partial, full)
              SELECT :side, id, rel_path_raw, rel,
                     CASE WHEN :nfc OR :ci THEN sym_norm(rel, :nfc, :ci) ELSE rel END,
-                    size, mtime_ns, hash_partial, hash_full
+                    kind, link_target, size, mtime_ns, hash_partial, hash_full
              FROM (
-                     SELECT id, rel_path_raw, size, mtime_ns, hash_partial, hash_full,
+                     SELECT id, rel_path_raw, kind, link_target, size, mtime_ns, hash_partial,
+                            hash_full,
                             CASE WHEN :prefix = '' THEN path_key
                                  ELSE substr(path_key, length(:prefix) + 2) END AS rel
                      FROM main.entries
-                     WHERE location_id = :location AND kind = 'file'
+                     WHERE location_id = :location AND kind IN ('file', 'symlink', 'dir')
                        AND (:prefix = '' OR (path_key > :prefix || '/' AND path_key < :prefix || '0'))
              )",
         )?;
@@ -151,8 +158,9 @@ pub(super) fn load(
     tx.commit()
 }
 
-/// Classifies path rows (ADR-0010, in order: collision, different, identical, only-in,
-/// unverified or assumed) and assigns every file to its row.
+/// Classifies path rows and assigns every entry to its row: files as in ADR-0010, symlinks by
+/// target, directories only when nothing compared lies beneath them, and kind clashes as
+/// different (ADR-0019).
 pub(super) fn classify(
     conn: &Connection,
     sides: usize,
@@ -165,18 +173,31 @@ pub(super) fn classify(
     conn.execute_batch(DROP_ROW_INDEXES)?;
     conn.execute(
         "INSERT INTO temp.cmp_rows
-             (sort_key, category, presence, assumed, size, max_size, ext, digest, files, bytes)
+             (sort_key, category, presence, assumed, size, max_size, ext, digest, kinds, entries,
+              bytes)
          SELECT norm, category, presence,
-                category IN ('identical', 'only_in') AND sides >= 2 AND fulls < n,
-                CASE WHEN sizes = 1 THEN size_max END,
+                only_files AND category IN ('identical', 'only_in') AND sides >= 2 AND fulls < n,
+                CASE WHEN only_files AND sizes = 1 THEN size_max END,
                 size_max,
-                sym_ext(sym_name(norm)),
-                CASE WHEN fulls = n AND distinct_full = 1 THEN any_full END,
-                n, bytes
+                CASE WHEN files > 0 THEN sym_ext(sym_name(norm)) ELSE '' END,
+                CASE WHEN only_files AND fulls = n AND distinct_full = 1 THEN any_full END,
+                kinds, n, bytes
          FROM (
              SELECT *,
                  CASE
+                     WHEN kinds = 2 THEN
+                         CASE WHEN presence != :all AND NOT EXISTS (
+                                  SELECT 1 FROM temp.cmp_files c
+                                  WHERE c.norm > g.norm || '/' AND c.norm < g.norm || '0'
+                                    AND (g.presence >> c.side) & 1 = 1)
+                              THEN 'only_in' END
                      WHEN n > sides THEN 'collision'
+                     WHEN kinds NOT IN (1, 2, 4) THEN 'different'
+                     WHEN kinds = 4 THEN
+                         CASE WHEN sides >= 2 AND min_target < max_target THEN 'different'
+                              WHEN targets = n AND presence = :all THEN 'identical'
+                              WHEN targets = n OR sides = 1 THEN 'only_in'
+                              ELSE 'unverified' END
                      WHEN sides >= 2 AND (sizes > 1 OR distinct_full > 1 OR distinct_partial > 1)
                          THEN 'different'
                      WHEN fulls = n AND presence = :all THEN 'identical'
@@ -184,25 +205,33 @@ pub(super) fn classify(
                      WHEN :fast AND mtimes = n AND mtime_spread <= :tolerance
                          THEN CASE WHEN presence = :all THEN 'identical' ELSE 'only_in' END
                      ELSE 'unverified'
-                 END AS category
+                 END AS category,
+                 kinds = 1 AS only_files
              FROM (
                  SELECT norm,
                         count(*) AS n,
                         count(DISTINCT side) AS sides,
                         sum(DISTINCT 1 << side) AS presence,
-                        count(DISTINCT size) AS sizes,
-                        max(size) AS size_max,
-                        sum(size) AS bytes,
+                        max(kind = 'file') | (max(kind = 'dir') << 1) | (max(kind = 'symlink') << 2)
+                            AS kinds,
+                        count(CASE WHEN kind = 'file' THEN 1 END) AS files,
+                        count(DISTINCT CASE WHEN kind = 'file' THEN size END) AS sizes,
+                        max(CASE WHEN kind = 'file' THEN size END) AS size_max,
+                        sum(CASE WHEN kind = 'file' THEN size ELSE 0 END) AS bytes,
                         count(full) AS fulls,
                         count(DISTINCT full) AS distinct_full,
                         max(full) AS any_full,
                         count(DISTINCT partial) AS distinct_partial,
                         count(mtime_ns) AS mtimes,
-                        max(mtime_ns) - min(mtime_ns) AS mtime_spread
+                        max(mtime_ns) - min(mtime_ns) AS mtime_spread,
+                        count(target) AS targets,
+                        min(target) AS min_target,
+                        max(target) AS max_target
                  FROM temp.cmp_files
                  GROUP BY norm
-             )
+             ) AS g
          )
+         WHERE category IS NOT NULL
          ORDER BY norm",
         named_params! { ":all": all, ":fast": fast, ":tolerance": tolerance },
     )?;
@@ -228,12 +257,13 @@ fn match_moves(conn: &Connection) -> rusqlite::Result<()> {
          CREATE INDEX temp.cmp_moving_key ON cmp_moving (sort_key);
 
          INSERT INTO temp.cmp_rows
-             (sort_key, category, presence, assumed, size, max_size, ext, digest, files, bytes)
+             (sort_key, category, presence, assumed, size, max_size, ext, digest, kinds, entries,
+              bytes)
          SELECT min(f.norm),
                 CASE WHEN count(DISTINCT sym_name(f.norm)) = 1 THEN 'moved' ELSE 'renamed' END,
                 sum(DISTINCT 1 << f.side), 0, max(f.size), max(f.size),
-                sym_ext(sym_name(min(f.norm))), m.digest, count(*), sum(f.size)
-         FROM temp.cmp_moving m JOIN temp.cmp_files f ON f.norm = m.sort_key
+                sym_ext(sym_name(min(f.norm))), m.digest, 1, count(*), sum(f.size)
+         FROM temp.cmp_moving m JOIN temp.cmp_files f ON f.norm = m.sort_key AND f.kind = 'file'
          GROUP BY m.digest
          ORDER BY min(f.norm);
 
@@ -242,7 +272,7 @@ fn match_moves(conn: &Connection) -> rusqlite::Result<()> {
              WHERE n.category IN ('moved', 'renamed')
                AND n.digest = (SELECT m.digest FROM temp.cmp_moving m WHERE m.sort_key = cmp_files.norm)
          )
-         WHERE norm IN (SELECT sort_key FROM temp.cmp_moving);
+         WHERE kind = 'file' AND norm IN (SELECT sort_key FROM temp.cmp_moving);
 
          DELETE FROM temp.cmp_rows WHERE id IN (SELECT id FROM temp.cmp_moving);
          DROP TABLE temp.cmp_moving;",
@@ -257,6 +287,7 @@ pub(super) struct FilterParams {
     max_size: Option<u64>,
     prefix: Option<String>,
     presence: Option<i64>,
+    kinds: Option<i64>,
 }
 
 impl FilterParams {
@@ -279,6 +310,12 @@ impl FilterParams {
             max_size: filter.max_size,
             prefix: prefix.filter(|p| !p.is_empty()),
             presence: filter.presence.map(|set| set.bits().cast_signed()),
+            kinds: (!filter.kinds.is_empty()).then(|| {
+                filter
+                    .kinds
+                    .iter()
+                    .fold(0, |bits, kind| bits | kind_bit(*kind))
+            }),
         }
     }
 }
@@ -291,11 +328,12 @@ const FILTER: &str = "
     AND (:max_size IS NULL OR max_size <= :max_size)
     AND (:prefix IS NULL OR sort_key = :prefix
          OR (sort_key > :prefix || '/' AND sort_key < :prefix || '0'))
-    AND (:presence IS NULL OR presence = :presence)";
+    AND (:presence IS NULL OR presence = :presence)
+    AND (:kinds IS NULL OR kinds & :kinds != 0)";
 
 pub(super) fn summary(conn: &Connection, filter: &FilterParams) -> Result<Summary, CompareError> {
     let mut stmt = conn.prepare_cached(&format!(
-        "SELECT category, count(*), sum(files), sum(bytes), sum(assumed)
+        "SELECT category, count(*), sum(entries), sum(bytes), sum(assumed)
          FROM temp.cmp_rows WHERE {FILTER} GROUP BY category"
     ))?;
     let mut summary = Summary::default();
@@ -307,13 +345,14 @@ pub(super) fn summary(conn: &Connection, filter: &FilterParams) -> Result<Summar
             ":max_size": filter.max_size,
             ":prefix": filter.prefix,
             ":presence": filter.presence,
+            ":kinds": filter.kinds,
         },
         |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 Totals {
                     rows: row.get(1)?,
-                    files: row.get(2)?,
+                    entries: row.get(2)?,
                     bytes: row.get(3)?,
                     assumed_rows: row.get(4)?,
                 },
@@ -356,6 +395,7 @@ pub(super) fn rows(
                 ":max_size": filter.max_size,
                 ":prefix": filter.prefix,
                 ":presence": filter.presence,
+                ":kinds": filter.kinds,
                 ":limit": limit,
             },
             |row| {
@@ -372,11 +412,11 @@ pub(super) fn rows(
         .collect::<Result<Vec<_>, _>>()?;
 
     let mut move_cells = conn.prepare_cached(
-        "SELECT side, raw, rel, size, mtime_ns, partial, full FROM temp.cmp_files
+        "SELECT side, raw, rel, kind, target, size, mtime_ns, partial, full FROM temp.cmp_files
          WHERE row_id = ?1 ORDER BY side, rel",
     )?;
     let mut path_cells = conn.prepare_cached(
-        "SELECT side, raw, rel, size, mtime_ns, partial, full FROM temp.cmp_files
+        "SELECT side, raw, rel, kind, target, size, mtime_ns, partial, full FROM temp.cmp_files
          WHERE norm = ?1 AND row_id IS NULL ORDER BY side, rel",
     )?;
     let mut items = Vec::with_capacity(heads.len());
@@ -426,7 +466,7 @@ pub(super) fn duplicates(
     let groups = conn
         .prepare_cached(
             "SELECT full, max(size) FROM temp.cmp_files
-             WHERE side = ?1 AND full IS NOT NULL AND size > 0 AND full > ?2
+             WHERE side = ?1 AND kind = 'file' AND full IS NOT NULL AND size > 0 AND full > ?2
              GROUP BY full HAVING count(*) > 1 ORDER BY full LIMIT ?3",
         )?
         .query_map(params![side, after, limit], |row| {
@@ -434,8 +474,8 @@ pub(super) fn duplicates(
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut cells_stmt = conn.prepare_cached(
-        "SELECT side, raw, rel, size, mtime_ns, partial, full FROM temp.cmp_files
-         WHERE side = ?1 AND full = ?2 ORDER BY rel",
+        "SELECT side, raw, rel, kind, target, size, mtime_ns, partial, full FROM temp.cmp_files
+         WHERE side = ?1 AND kind = 'file' AND full = ?2 ORDER BY rel",
     )?;
     let mut items = Vec::with_capacity(groups.len());
     for (raw_digest, size) in groups {
@@ -471,7 +511,7 @@ pub(super) fn duplicate_totals(
     let mut stmt = conn.prepare_cached(
         "SELECT side, count(*), sum(n), sum((n - 1) * size) FROM (
              SELECT side, count(*) AS n, max(size) AS size FROM temp.cmp_files
-             WHERE full IS NOT NULL AND size > 0 GROUP BY side, full HAVING n > 1
+             WHERE kind = 'file' AND full IS NOT NULL AND size > 0 GROUP BY side, full HAVING n > 1
          ) GROUP BY side",
     )?;
     let rows = stmt.query_map([], |row| {
@@ -493,6 +533,16 @@ pub(super) fn duplicate_totals(
     Ok(totals)
 }
 
+/// The bit of `kind` in `cmp_rows.kinds`.
+const fn kind_bit(kind: EntryKind) -> i64 {
+    match kind {
+        EntryKind::File => 1,
+        EntryKind::Dir => 2,
+        EntryKind::Symlink => 4,
+        EntryKind::Other => 0,
+    }
+}
+
 fn hex_decode(hex: &str) -> Result<Vec<u8>, CatalogError> {
     let invalid = || CatalogError::Corrupt("invalid cursor".into());
     if !hex.len().is_multiple_of(2) {
@@ -510,6 +560,8 @@ struct RawCell {
     side: usize,
     raw: Vec<u8>,
     rel: String,
+    kind: String,
+    target: Option<Vec<u8>>,
     size: u64,
     mtime_ns: Option<i64>,
     partial: Option<Vec<u8>>,
@@ -522,10 +574,12 @@ impl RawCell {
             side: row.get(0)?,
             raw: row.get(1)?,
             rel: row.get(2)?,
-            size: row.get(3)?,
-            mtime_ns: row.get(4)?,
-            partial: row.get(5)?,
-            full: row.get(6)?,
+            kind: row.get(3)?,
+            target: row.get(4)?,
+            size: row.get(5)?,
+            mtime_ns: row.get(6)?,
+            partial: row.get(7)?,
+            full: row.get(8)?,
         })
     }
 
@@ -554,6 +608,8 @@ impl RawCell {
             side: self.side,
             path: RelPath::from_raw(info.path_encoding, self.raw).map_err(|e| corrupt(&e))?,
             key: PathKey::from_stored(rel.clone()),
+            kind: self.kind.parse().map_err(|e| corrupt(&e))?,
+            link_target: self.target,
             size: self.size,
             mtime_ns: self.mtime_ns,
             hash_state,

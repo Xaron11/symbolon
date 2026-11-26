@@ -16,6 +16,7 @@ use symbolon_core::hash::HashAlgo;
 use symbolon_core::pathkey::KeyOptions;
 use symbolon_core::query::Page;
 use symbolon_core::scan::{ScanOptions, Scanner};
+use symbolon_core::source::EntryKind;
 
 struct Fixture {
     dir: tempfile::TempDir,
@@ -70,6 +71,16 @@ impl Fixture {
     fn eager(&self, label: &str, files: &[(&str, &str)]) {
         let files: Vec<_> = files.iter().map(|(p, c)| (*p, *c, 1_000)).collect();
         self.location(label, HashPolicy::Eager, HashAlgo::Blake3, &files);
+    }
+
+    /// Creates symlinks (path, target) in `label`'s root; call before the location is scanned.
+    #[cfg(unix)]
+    fn links(&self, label: &str, links: &[(&str, &str)]) {
+        for (path, target) in links {
+            let path = self.root(label).join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::os::unix::fs::symlink(target, path).unwrap();
+        }
     }
 
     fn compare(&self, sides: &[&str], options: CompareOptions) -> Comparison {
@@ -152,11 +163,11 @@ fn two_sides_identical_different_and_only_in() {
     assert_eq!(classes(&cmp), expected);
 
     let summary = cmp.summary().unwrap();
-    assert_eq!(summary.files(), 10);
+    assert_eq!(summary.entries(), 10);
     assert_eq!(
         (
             summary.get(Category::Identical).rows,
-            summary.get(Category::Identical).files
+            summary.get(Category::Identical).entries
         ),
         (2, 4)
     );
@@ -377,7 +388,7 @@ fn subpaths_compare_relative_keys_without_leaking_siblings() {
 
     // One location against itself, through two subpaths.
     let same = fx.compare(&["disk:photos", "disk:photos2"], CompareOptions::default());
-    assert_eq!(same.summary().unwrap().files(), 3);
+    assert_eq!(same.summary().unwrap().entries(), 3);
 }
 
 #[test]
@@ -478,6 +489,224 @@ fn rows_filter_by_category_and_page_stably() {
     assert_eq!(both.items[0].presence, SideSet::from_bits(0b11));
 }
 
+#[cfg(unix)]
+#[test]
+fn rows_carry_kinds_and_targets_and_filter_by_kind() {
+    let fx = Fixture::new();
+    fx.links("a", &[("l", "f.txt")]);
+    fx.eager("a", &[("f.txt", "x")]);
+    fx.eager("b", &[("f.txt", "x")]);
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+
+    let rows = all_rows(&cmp);
+    let link = rows.iter().find(|r| r.key == "l").unwrap();
+    assert_eq!(link.cells.len(), 1);
+    assert_eq!(link.cells[0].kind, EntryKind::Symlink);
+    assert_eq!(link.cells[0].link_target.as_deref(), Some(&b"f.txt"[..]));
+    let file = rows.iter().find(|r| r.key == "f.txt").unwrap();
+    assert!(
+        file.cells
+            .iter()
+            .all(|c| c.kind == EntryKind::File && c.link_target.is_none())
+    );
+
+    let links = cmp
+        .rows(
+            &RowFilter::default().kinds([EntryKind::Symlink]),
+            &Page::first(10),
+        )
+        .unwrap();
+    assert_eq!(
+        links
+            .items
+            .iter()
+            .map(|r| r.key.as_str())
+            .collect::<Vec<_>>(),
+        ["l"]
+    );
+    let summary = cmp.summary().unwrap();
+    assert_eq!(summary.entries(), 3);
+    assert_eq!(
+        cmp.filtered_summary(&RowFilter::default().kinds([EntryKind::Symlink]))
+            .unwrap()
+            .entries(),
+        1
+    );
+    assert!(
+        cmp.rows(
+            &RowFilter::default().kinds([EntryKind::Other]),
+            &Page::first(10)
+        )
+        .unwrap()
+        .items
+        .is_empty(),
+        "other entries are never compared"
+    );
+    let small = cmp
+        .rows(
+            &RowFilter::default().size_range(None, Some(10)),
+            &Page::first(10),
+        )
+        .unwrap();
+    assert_eq!(
+        small
+            .items
+            .iter()
+            .map(|r| r.key.as_str())
+            .collect::<Vec<_>>(),
+        ["f.txt"],
+        "rows without files have no size to filter by"
+    );
+}
+
+/// `key -> (category, presence)`, ignoring `assumed`.
+fn categories(comparison: &Comparison) -> BTreeMap<String, (Category, Vec<usize>)> {
+    classes(comparison)
+        .into_iter()
+        .map(|(key, (category, presence, _))| (key, (category, presence)))
+        .collect()
+}
+
+fn class(category: Category, presence: &[usize]) -> (Category, Vec<usize>) {
+    (category, presence.to_vec())
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinks_compare_by_target() {
+    let fx = Fixture::new();
+    fx.links("a", &[("same", "x"), ("moved", "x"), ("extra", "x")]);
+    fx.links("b", &[("same", "x"), ("moved", "y")]);
+    fx.eager("a", &[]);
+    fx.eager("b", &[]);
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+    assert_eq!(
+        categories(&cmp),
+        BTreeMap::from([
+            ("extra".to_owned(), class(Category::OnlyIn, &[0])),
+            ("moved".to_owned(), class(Category::Different, &[0, 1])),
+            ("same".to_owned(), class(Category::Identical, &[0, 1])),
+        ])
+    );
+    assert_eq!(cmp.summary().unwrap().get(Category::Identical).bytes, 0);
+    assert!(
+        all_rows(&cmp).iter().all(|r| r.size.is_none()),
+        "links have no content size"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn unknown_link_targets_are_unverified_unless_alone() {
+    let fx = Fixture::new();
+    fx.links("a", &[("same", "x"), ("alone", "x")]);
+    fx.links("b", &[("same", "x")]);
+    fx.eager("a", &[]);
+    fx.eager("b", &[]);
+    rusqlite::Connection::open(fx.catalog.path())
+        .unwrap()
+        .execute_batch(
+            "UPDATE entries SET link_target = NULL
+             WHERE path_key = 'alone'
+                OR (path_key = 'same' AND location_id = (SELECT id FROM locations WHERE label = 'b'))",
+        )
+        .unwrap();
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+    assert_eq!(
+        categories(&cmp),
+        BTreeMap::from([
+            ("alone".to_owned(), class(Category::OnlyIn, &[0])),
+            ("same".to_owned(), class(Category::Unverified, &[0, 1])),
+        ])
+    );
+    let fast = CompareOptions::default().assume_equal_within(Duration::from_secs(3600));
+    assert_eq!(
+        categories(&fx.compare(&["a", "b"], fast))["same"],
+        class(Category::Unverified, &[0, 1]),
+        "fast mode does not apply to symlinks"
+    );
+    assert!(
+        cmp.hash_needs().unwrap().is_empty(),
+        "links are never hashed"
+    );
+}
+
+#[test]
+fn only_uncovered_directories_are_reported() {
+    let fx = Fixture::new();
+    for dir in ["empty", "deep/x", "shared"] {
+        fs::create_dir_all(fx.root("a").join(dir)).unwrap();
+    }
+    fs::create_dir_all(fx.root("b").join("shared")).unwrap();
+    fx.eager("a", &[("full/f.txt", "f")]);
+    fx.eager("b", &[]);
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+    assert_eq!(
+        categories(&cmp),
+        BTreeMap::from([
+            ("deep/x".to_owned(), class(Category::OnlyIn, &[0])),
+            ("empty".to_owned(), class(Category::OnlyIn, &[0])),
+            ("full/f.txt".to_owned(), class(Category::OnlyIn, &[0])),
+        ])
+    );
+    let empty = all_rows(&cmp)
+        .into_iter()
+        .find(|r| r.key == "empty")
+        .unwrap();
+    assert_eq!(empty.cells[0].kind, EntryKind::Dir);
+    assert_eq!(cmp.summary().unwrap().entries(), 3);
+}
+
+#[test]
+fn a_kind_clash_is_different() {
+    let fx = Fixture::new();
+    fx.eager("a", &[("notes", "a file")]);
+    fx.eager("b", &[("notes/n.txt", "n")]);
+    let cmp = fx.compare(&["a", "b"], CompareOptions::default());
+    assert_eq!(
+        categories(&cmp),
+        BTreeMap::from([
+            ("notes".to_owned(), class(Category::Different, &[0, 1])),
+            ("notes/n.txt".to_owned(), class(Category::OnlyIn, &[1])),
+        ])
+    );
+    let notes = all_rows(&cmp)
+        .into_iter()
+        .find(|r| r.key == "notes")
+        .unwrap();
+    assert_eq!(
+        notes.cells.iter().map(|c| c.kind).collect::<Vec<_>>(),
+        [EntryKind::File, EntryKind::Dir]
+    );
+    assert_eq!(notes.size, None);
+}
+
+/// Case-insensitive filesystems (Windows, macOS) cannot hold `Photos` next to `photos`.
+#[cfg(target_os = "linux")]
+#[test]
+fn directory_only_collisions_are_not_reported() {
+    let fx = Fixture::new();
+    fx.eager("a", &[("Photos/p.jpg", "p"), ("photos/q.jpg", "q")]);
+    fx.eager("b", &[("photos/p.jpg", "p"), ("photos/q.jpg", "q")]);
+    let ci = CompareOptions::default().keys(KeyOptions {
+        case_insensitive: true,
+        ..KeyOptions::default()
+    });
+    assert_eq!(
+        categories(&fx.compare(&["a", "b"], ci)),
+        BTreeMap::from([
+            (
+                "photos/p.jpg".to_owned(),
+                class(Category::Identical, &[0, 1])
+            ),
+            (
+                "photos/q.jpg".to_owned(),
+                class(Category::Identical, &[0, 1])
+            ),
+        ])
+    );
+}
+
 #[test]
 fn same_content_at_another_path_is_moved_or_renamed() {
     let fx = Fixture::new();
@@ -554,7 +783,7 @@ fn same_content_at_another_path_is_moved_or_renamed() {
     assert!(rows.iter().all(|r| r.presence == SideSet::from_bits(0b11)));
     let cmp = fx.compare(&["a", "b"], CompareOptions::default());
     assert_eq!(
-        cmp.summary().unwrap().files(),
+        cmp.summary().unwrap().entries(),
         8,
         "every file in exactly one row"
     );
@@ -996,9 +1225,9 @@ mod filters_and_duplicates {
         let summary = cmp
             .filtered_summary(&RowFilter::default().extension("jpg"))
             .unwrap();
-        assert_eq!(summary.files(), 2 + 3 + 3);
+        assert_eq!(summary.entries(), 2 + 3 + 3);
         assert_eq!(summary.get(Category::Identical).rows, 1);
-        assert_eq!(cmp.summary().unwrap().files(), 9);
+        assert_eq!(cmp.summary().unwrap().entries(), 9);
     }
 
     #[test]

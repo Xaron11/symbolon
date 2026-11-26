@@ -84,6 +84,8 @@ fn the_full_workflow() {
     for stale in ["old/beach.jpg", "todo-list.txt", "2019.txt"] {
         std::fs::remove_file(backup.join(stale)).unwrap();
     }
+    // An empty directory left behind is a difference too (ADR-0019).
+    std::fs::remove_dir(backup.join("old")).unwrap();
     let rescan = json(&env.ok(&["scan", "backup", "--json"]));
     assert_eq!(
         rescan["scans"][0]["reused_hashes"], 1,

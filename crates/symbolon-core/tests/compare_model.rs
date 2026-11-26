@@ -1,4 +1,5 @@
-//! Property tests: the comparison engine against a small reference model (ADR-0010).
+//! Property tests: the comparison engine against a small reference model (ADR-0010, with
+//! directories and symlinks from ADR-0019).
 //!
 //! Locations are written straight into the catalog (the engine is a function of catalog
 //! state), which keeps cases fast and allows names that case-insensitive filesystems cannot
@@ -16,15 +17,17 @@ use symbolon_core::compare::{Category, CompareOptions, Comparison, Row, RowFilte
 use symbolon_core::hash::{HashAlgo, hash_bytes};
 use symbolon_core::pathkey::{KeyOptions, PathKey, RelPath};
 use symbolon_core::query::Page;
+use symbolon_core::source::EntryKind;
 
 /// Paths chosen to collide: case variants, NFC/NFD spellings, same names in other
-/// directories (moves) and other names (renames).
-const PATHS: [&str; 10] = [
+/// directories (moves) and other names (renames), and `d` as both an entry and a directory.
+const PATHS: [&str; 11] = [
     "a",
     "A",
     "b",
     "café",
     "cafe\u{301}",
+    "d",
     "d/a",
     "d/A",
     "e/a",
@@ -33,8 +36,29 @@ const PATHS: [&str; 10] = [
 ];
 /// `p` and `q` have the same size but different content.
 const CONTENTS: [&str; 3] = ["p", "q", "rr"];
+/// Symlink targets; `x` and `y` have the same length.
+const TARGETS: [&str; 3] = ["x", "y", "../zz"];
 
-type Location = BTreeMap<&'static str, &'static str>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Entry {
+    File(&'static str),
+    /// A symlink and its target, `None` when unknown.
+    Link(Option<&'static str>),
+    Dir,
+}
+
+impl Entry {
+    const fn kind(self) -> EntryKind {
+        match self {
+            Self::File(_) => EntryKind::File,
+            Self::Link(_) => EntryKind::Symlink,
+            Self::Dir => EntryKind::Dir,
+        }
+    }
+}
+
+/// Every entry of a location by path, including the directories that hold them.
+type Location = BTreeMap<String, Entry>;
 
 /// A row as a comparable value: category, assumed flag, and the files as `(side, path)`.
 type RowShape = (Category, bool, BTreeSet<(usize, String)>);
@@ -56,18 +80,26 @@ fn world(locations: &[Location], hashed: bool) -> World {
         let location = catalog
             .add_location(NewLocation::local(format!("s{index}"), &root))
             .unwrap();
-        for (path, contents) in files {
+        for (path, entry) in files {
             let rel = RelPath::from_path(path.as_ref()).unwrap();
             let key = rel.key();
-            let digest = hashed.then(|| {
-                hash_bytes(HashAlgo::Blake3, contents.as_bytes())
-                    .as_bytes()
-                    .to_vec()
-            });
+            let (size, digest, target) = match *entry {
+                Entry::File(contents) => (
+                    contents.len(),
+                    hashed.then(|| {
+                        hash_bytes(HashAlgo::Blake3, contents.as_bytes())
+                            .as_bytes()
+                            .to_vec()
+                    }),
+                    None,
+                ),
+                Entry::Link(target) => (target.map_or(2, str::len), None, target),
+                Entry::Dir => (0, None, None),
+            };
             conn.execute(
-                "INSERT INTO entries (location_id, rel_path_raw, path_key, parent_key, kind, size, mtime_ns, hash_full, seen_scan_id)
-                 VALUES (?1, ?2, ?3, ?4, 'file', ?5, 1000, ?6, 1)",
-                params![location.id.get(), rel.as_bytes(), key.as_str(), key.parent(), contents.len() as u64, digest],
+                "INSERT INTO entries (location_id, rel_path_raw, path_key, parent_key, kind, size, mtime_ns, hash_full, seen_scan_id, link_target)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1000, ?7, 1, ?8)",
+                params![location.id.get(), rel.as_bytes(), key.as_str(), key.parent(), entry.kind().name(), size as u64, digest, target.map(str::as_bytes)],
             )
             .unwrap();
         }
@@ -111,14 +143,14 @@ fn engine(world: &World, order: &[usize], options: CompareOptions) -> Vec<RowSha
     shapes
 }
 
-/// Files of one normalized path, by side.
-type Group<'a> = BTreeMap<usize, Vec<(&'a str, &'a str)>>;
+/// Entries of one normalized path, by side.
+type Group<'a> = BTreeMap<usize, Vec<(&'a str, Entry)>>;
 
 /// A path row of the model, before moves are matched.
 struct PathRow {
     category: Category,
     presence: u64,
-    /// The common content of an only-in row.
+    /// The common content of an only-in row of files.
     content: Option<String>,
     files: Vec<(usize, String)>,
 }
@@ -131,57 +163,104 @@ fn key_of(path: &str) -> String {
         .to_owned()
 }
 
-/// ADR-0010 path classification for fully hashed locations.
+/// Path classification for fully hashed locations: ADR-0010 for files, ADR-0019 for
+/// directories, symlinks and kind clashes.
 fn path_rows(locations: &[Location], keys: KeyOptions) -> Vec<PathRow> {
+    let norm = |path: &str| PathKey::from_stored(key_of(path)).normalized(keys);
     let mut groups: BTreeMap<String, Group<'_>> = BTreeMap::new();
-    for (side, files) in locations.iter().enumerate() {
-        for (path, contents) in files {
-            let norm = PathKey::from_stored(key_of(path)).normalized(keys);
+    for (side, entries) in locations.iter().enumerate() {
+        for (path, entry) in entries {
             groups
-                .entry(norm)
+                .entry(norm(path))
                 .or_default()
                 .entry(side)
                 .or_default()
-                .push((path, contents));
+                .push((path, *entry));
         }
     }
+    let every_side = (1 << locations.len()) - 1;
     groups
-        .into_values()
-        .map(|by_side| {
-            let all: Vec<(usize, &str, &str)> = by_side
+        .iter()
+        .filter_map(|(key, by_side)| {
+            let all: Vec<(usize, &str, Entry)> = by_side
                 .iter()
-                .flat_map(|(side, list)| list.iter().map(|(p, c)| (*side, *p, *c)))
+                .flat_map(|(side, list)| list.iter().map(|(p, e)| (*side, *p, *e)))
                 .collect();
-            let contents: BTreeSet<&str> = all.iter().map(|(_, _, c)| *c).collect();
-            let sizes: BTreeSet<usize> = all.iter().map(|(_, _, c)| c.len()).collect();
-            let category = if by_side.values().any(|list| list.len() > 1) {
-                Category::Collision
-            } else if by_side.len() >= 2 && (sizes.len() > 1 || contents.len() > 1) {
-                Category::Different
-            } else if by_side.len() == locations.len() {
-                Category::Identical
-            } else {
+            let presence = by_side.keys().fold(0, |mask, side| mask | (1 << side));
+            let kinds: BTreeSet<&str> = all.iter().map(|(_, _, e)| e.kind().name()).collect();
+            let category = if kinds == BTreeSet::from(["dir"]) {
+                let beneath = format!("{key}/");
+                let covered = groups.iter().any(|(other, sides)| {
+                    other.starts_with(&beneath)
+                        && sides.keys().any(|side| presence & (1 << side) != 0)
+                });
+                if presence == every_side || covered {
+                    return None;
+                }
                 Category::OnlyIn
+            } else if by_side.values().any(|list| list.len() > 1) {
+                Category::Collision
+            } else if kinds.len() > 1 {
+                Category::Different
+            } else if kinds.contains("symlink") {
+                let targets: Vec<Option<&str>> = all
+                    .iter()
+                    .filter_map(|(_, _, e)| match e {
+                        Entry::Link(target) => Some(*target),
+                        _ => None,
+                    })
+                    .collect();
+                let known: BTreeSet<&str> = targets.iter().flatten().copied().collect();
+                let all_known = targets.iter().all(Option::is_some);
+                if by_side.len() >= 2 && known.len() > 1 {
+                    Category::Different
+                } else if all_known && presence == every_side {
+                    Category::Identical
+                } else if all_known || by_side.len() == 1 {
+                    Category::OnlyIn
+                } else {
+                    Category::Unverified
+                }
+            } else {
+                let contents: BTreeSet<&str> = all
+                    .iter()
+                    .filter_map(|(_, _, e)| match e {
+                        Entry::File(c) => Some(*c),
+                        _ => None,
+                    })
+                    .collect();
+                let sizes: BTreeSet<usize> = contents.iter().map(|c| c.len()).collect();
+                if by_side.len() >= 2 && (sizes.len() > 1 || contents.len() > 1) {
+                    Category::Different
+                } else if presence == every_side {
+                    Category::Identical
+                } else {
+                    Category::OnlyIn
+                }
             };
-            PathRow {
+            let content = match all[0].2 {
+                Entry::File(c) if category == Category::OnlyIn => Some(c.to_owned()),
+                _ => None,
+            };
+            Some(PathRow {
                 category,
-                presence: by_side.keys().fold(0, |mask, side| mask | (1 << side)),
-                content: (category == Category::OnlyIn).then(|| all[0].2.to_owned()),
+                presence,
+                content,
                 files: all
                     .iter()
                     .map(|(side, path, _)| (*side, key_of(path)))
                     .collect(),
-            }
+            })
         })
         .collect()
 }
 
-/// The reference model: path rows, then only-in rows sharing content with an only-in row of
-/// disjoint presence collapse into one moved or renamed row per content.
+/// The reference model: path rows, then only-in rows of files sharing content with an only-in
+/// row of disjoint presence collapse into one moved or renamed row per content.
 fn model(locations: &[Location], keys: KeyOptions) -> Vec<RowShape> {
     let rows = path_rows(locations, keys);
     let moves = |r: &PathRow| {
-        r.category == Category::OnlyIn
+        r.content.is_some()
             && rows.iter().any(|o| {
                 !std::ptr::eq(o, r)
                     && o.category == Category::OnlyIn
@@ -221,12 +300,45 @@ fn model(locations: &[Location], keys: KeyOptions) -> Vec<RowShape> {
     shapes
 }
 
+fn entry() -> impl Strategy<Value = Entry> {
+    prop_oneof![
+        6 => proptest::sample::select(&CONTENTS[..]).prop_map(Entry::File),
+        2 => proptest::option::of(proptest::sample::select(&TARGETS[..])).prop_map(Entry::Link),
+        1 => Just(Entry::Dir),
+    ]
+}
+
+/// Chosen entries plus the directories holding them; an entry that holds others is a directory.
 fn location() -> impl Strategy<Value = Location> {
-    proptest::collection::btree_map(
-        proptest::sample::select(&PATHS[..]),
-        proptest::sample::select(&CONTENTS[..]),
-        0..6,
+    proptest::collection::btree_map(proptest::sample::select(&PATHS[..]), entry(), 0..6).prop_map(
+        |chosen| {
+            let mut location: Location = chosen
+                .into_iter()
+                .map(|(path, entry)| (path.to_owned(), entry))
+                .collect();
+            let parents: Vec<String> = location
+                .keys()
+                .filter_map(|path| path.rsplit_once('/').map(|(parent, _)| parent.to_owned()))
+                .collect();
+            for parent in parents {
+                location.insert(parent, Entry::Dir);
+            }
+            location
+        },
     )
+}
+
+/// The kind of every entry, by `(side, path key)`.
+fn kinds_of(locations: &[Location]) -> BTreeMap<(usize, String), Entry> {
+    locations
+        .iter()
+        .enumerate()
+        .flat_map(|(side, entries)| {
+            entries
+                .iter()
+                .map(move |(path, entry)| ((side, key_of(path)), *entry))
+        })
+        .collect()
 }
 
 fn locations() -> impl Strategy<Value = Vec<Location>> {
@@ -252,18 +364,64 @@ proptest! {
     }
 
     #[test]
-    fn every_file_is_in_exactly_one_row(locations in locations(), keys in key_options()) {
+    fn every_file_and_symlink_is_in_exactly_one_row_and_directories_in_at_most_one(
+        locations in locations(),
+        keys in key_options(),
+    ) {
         let world = world(&locations, true);
         let order: Vec<usize> = (0..world.sides).collect();
         let rows = engine(&world, &order, CompareOptions::default().keys(keys));
+        let kinds = kinds_of(&locations);
         let cells: Vec<&(usize, String)> = rows.iter().flat_map(|(_, _, files)| files).collect();
         let unique: BTreeSet<_> = cells.iter().collect();
         prop_assert_eq!(cells.len(), unique.len());
-        prop_assert_eq!(cells.len(), locations.iter().map(BTreeMap::len).sum::<usize>());
+        let compared = |cells: &[&(usize, String)]| {
+            cells.iter().filter(|cell| kinds[*cell] != Entry::Dir).count()
+        };
+        prop_assert_eq!(
+            compared(&cells),
+            kinds.values().filter(|entry| **entry != Entry::Dir).count()
+        );
         for (category, _, files) in &rows {
             if *category == Category::Identical {
                 let sides: BTreeSet<usize> = files.iter().map(|(s, _)| *s).collect();
                 prop_assert_eq!(sides.len(), world.sides, "identical rows cover every side");
+            }
+        }
+    }
+
+    #[test]
+    fn identical_symlink_rows_share_one_known_target(locations in locations(), keys in key_options()) {
+        let world = world(&locations, true);
+        let order: Vec<usize> = (0..world.sides).collect();
+        let kinds = kinds_of(&locations);
+        for (category, _, files) in engine(&world, &order, CompareOptions::default().keys(keys)) {
+            let entries: Vec<Entry> = files.iter().map(|cell| kinds[cell]).collect();
+            if category != Category::Identical || !matches!(entries[0], Entry::Link(_)) {
+                continue;
+            }
+            let sides: BTreeSet<usize> = files.iter().map(|(s, _)| *s).collect();
+            prop_assert_eq!(sides.len(), world.sides);
+            let targets: BTreeSet<Entry> = entries.into_iter().collect();
+            prop_assert_eq!(targets.len(), 1);
+            prop_assert!(!targets.contains(&Entry::Link(None)));
+        }
+    }
+
+    #[test]
+    fn directory_rows_are_only_in_or_kind_clashes(locations in locations(), keys in key_options()) {
+        let world = world(&locations, true);
+        let order: Vec<usize> = (0..world.sides).collect();
+        let kinds = kinds_of(&locations);
+        for (category, _, files) in engine(&world, &order, CompareOptions::default().keys(keys)) {
+            let entries: BTreeSet<&str> = files.iter().map(|cell| kinds[cell].kind().name()).collect();
+            if !entries.contains("dir") {
+                continue;
+            }
+            if entries.len() == 1 {
+                prop_assert_eq!(category, Category::OnlyIn);
+            } else {
+                prop_assert!(matches!(category, Category::Different | Category::Collision), "{category:?}");
             }
         }
     }
@@ -287,9 +445,14 @@ proptest! {
         let strict = by_files(engine(&world, &order, CompareOptions::default().keys(keys)));
         let fast = by_files(engine(&world, &order, CompareOptions::default().keys(keys).assume_equal_within(Duration::ZERO)));
         prop_assert_eq!(strict.keys().collect::<Vec<_>>(), fast.keys().collect::<Vec<_>>(), "same rows");
+        let kinds = kinds_of(&locations);
         for (files, (s_cat, s_assumed)) in &strict {
             let (f_cat, f_assumed) = fast[files];
             prop_assert!(!s_assumed);
+            if !files.iter().all(|cell| matches!(kinds[cell], Entry::File(_))) {
+                prop_assert_eq!((*s_cat, *s_assumed), (f_cat, f_assumed), "fast mode is for files only");
+                continue;
+            }
             prop_assert!(!matches!(s_cat, Category::Identical | Category::Moved | Category::Renamed), "nothing is verified without digests");
             if *s_cat == Category::Unverified {
                 prop_assert!(f_assumed && matches!(f_cat, Category::Identical | Category::OnlyIn));

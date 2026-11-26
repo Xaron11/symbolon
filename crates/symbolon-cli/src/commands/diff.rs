@@ -68,7 +68,7 @@ fn differs(summary: &Summary) -> bool {
     summary
         .categories
         .iter()
-        .any(|(category, totals)| *category != Category::Identical && totals.files > 0)
+        .any(|(category, totals)| *category != Category::Identical && totals.entries > 0)
 }
 
 fn filter(args: &DiffArgs) -> RowFilter {
@@ -203,7 +203,7 @@ fn table(
                 vec![
                     category.to_string(),
                     t.rows.to_string(),
-                    t.files.to_string(),
+                    t.entries.to_string(),
                     output::size(t.bytes),
                 ]
             })
@@ -280,7 +280,7 @@ impl Serialize for SummaryRecord<'_> {
                 category.name(),
                 &TotalsRecord {
                     rows: t.rows,
-                    files: t.files,
+                    files: t.entries,
                     bytes: t.bytes,
                     assumed_rows: t.assumed_rows,
                 },
@@ -402,7 +402,7 @@ fn csv(
             writer.write_record([
                 category.name().to_owned(),
                 t.rows.to_string(),
-                t.files.to_string(),
+                t.entries.to_string(),
                 t.bytes.to_string(),
                 t.assumed_rows.to_string(),
             ])?;
