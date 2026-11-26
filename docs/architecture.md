@@ -83,7 +83,7 @@ sequenceDiagram
     Host->>ADB: rm binary
 ```
 
-Files are hashed on the phone, so only the index crosses USB. If the agent cannot run, a fallback hashes with the phone's own `sha256sum`, guarding against its silent short reads ([ADR-0003](adr/0003-android-agent-musl-spike.md)). The transport sits behind an `AndroidTransport` trait _(planned, M5)_, which tests replace with a mock.
+Files are hashed on the phone, so only the index crosses USB. If the agent cannot run, a fallback hashes with the phone's own `sha256sum`, guarding against its silent short reads ([ADR-0003](adr/0003-android-agent-musl-spike.md)). The transport sits behind an `AndroidTransport` trait, which tests replace with a mock.
 
 ## The desktop app
 
