@@ -158,7 +158,7 @@ An imported location compares like any other but cannot be scanned there. Import
 
 Results go to stdout; progress, warnings and errors go to stderr, so piping is safe. `--quiet` turns progress and warnings off.
 
-`--format json` (or `--json`) and `--format csv` are stable for scripts: field names only change in a minor release with a changelog entry, and only by adding fields. Sizes are bytes, times are RFC 3339 in UTC, digests are lowercase hex, and paths are written with `/`, with bytes that are not valid UTF-8 escaped as `%XX`. The table format is for people and may change; it shows control characters in file names (which could otherwise drive the terminal) as `%XX`, while JSON and CSV keep them exact.
+`--format json` (or `--json`) and `--format csv` are stable for scripts: field names only change in a minor release with a changelog entry marked **Breaking**, and almost always only by adding fields (0.7 renamed `diff`'s `files` to `entries`; see below). Sizes are bytes, times are RFC 3339 in UTC, digests are lowercase hex, and paths are written with `/`, with bytes that are not valid UTF-8 escaped as `%XX`. The table format is for people and may change; it shows control characters in file names (which could otherwise drive the terminal) as `%XX`, while JSON and CSV keep them exact.
 
 ```console
 $ symbolon diff laptop backup --json | jq -r '.rows[] | select(.category == "only_in") | .key'
@@ -172,7 +172,7 @@ $ symbolon dupes laptop --json | jq '.totals[].redundant_bytes'
 13
 ```
 
-`diff --json` returns `{sides, summary, rows}`. The summary gives `rows`, `entries`, `bytes` and `assumed_rows` per category. Each row has a `category`, a `key` (its path) and `entries`, one per location with `side`, `path`, `kind` (`file`, `dir` or `symlink`), `size`, `digest` and `target` (a symlink's target, escaped like paths; `null` otherwise or when unknown). CSV has one line per entry, with a `row` number grouping them. Before 0.7, `entries` was called `files` in both the summary and the rows, and CSV had no `kind` and `target` columns.
+`diff --json` returns `{sides, summary, rows}`. The summary gives `rows`, `entries`, `bytes` and `assumed_rows` per category. Each row has a `category`, a `key` (its path) and `entries`, at least one per location it is in (several for collisions and case variants), each with `side`, `path`, `kind` (`file`, `dir` or `symlink`), `size` (of a file; a symlink's is the length of its target, a folder's 0), `digest` and `target` (a symlink's target, escaped like paths; `null` otherwise or when unknown). CSV has one line per entry, with a `row` number grouping them. Before 0.7, `entries` was called `files` in both the summary and the rows, and CSV had no `kind` and `target` columns.
 
 ## Exit codes
 
