@@ -7,6 +7,7 @@ use symbolon_core::catalog::{self, Catalog};
 use symbolon_core::source::AdbOptions;
 use symbolon_core::transport::android::{AndroidTransport, SystemAdb};
 
+use crate::compare::CompareRegistry;
 use crate::error::{ApiError, ErrorKind};
 use crate::scans::ScanRegistry;
 
@@ -15,6 +16,7 @@ pub(crate) struct AppState {
     pub(crate) catalog: Catalog,
     pub(crate) transport: Arc<dyn AndroidTransport>,
     pub(crate) scans: Arc<ScanRegistry>,
+    pub(crate) comparisons: Arc<CompareRegistry>,
 }
 
 impl AppState {
@@ -24,6 +26,7 @@ impl AppState {
             catalog,
             transport,
             scans: Arc::default(),
+            comparisons: Arc::default(),
         }
     }
 
@@ -34,6 +37,7 @@ impl AppState {
             catalog: self.catalog.clone(),
             transport: Arc::clone(&self.transport),
             scans: Arc::clone(&self.scans),
+            comparisons: Arc::clone(&self.comparisons),
         }
     }
 

@@ -2,6 +2,7 @@
 
 mod bindings;
 mod commands;
+mod compare;
 mod dto;
 mod error;
 mod locations;
@@ -39,6 +40,7 @@ pub fn run() -> Result<(), tauri::Error> {
         if let tauri::RunEvent::Exit = event
             && let Some(state) = handle.try_state::<Arc<AppState>>()
         {
+            state.comparisons.close_all();
             state.scans.cancel_all_and_wait(EXIT_WAIT);
         }
     });

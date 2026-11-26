@@ -26,6 +26,19 @@ export const commands = {
 	locationScanCount: (label: string, options?: InvokeOptions) => __TAURI_INVOKE<Num>("location_scan_count", { label }, options),
 	scanWarnings: (scanId: Num, offset: Num, limit: number, options?: InvokeOptions) => __TAURI_INVOKE<WarningView_Serialize[]>("scan_warnings", { scanId, offset, limit }, options),
 	scanWarningCount: (scanId: Num, options?: InvokeOptions) => __TAURI_INVOKE<Num>("scan_warning_count", { scanId }, options),
+	compareOpen: (request: CompareRequest_Deserialize, onUpdate: Channel<VerifyUpdate>, options?: InvokeOptions) => __TAURI_INVOKE<CompareOpened_Serialize>("compare_open", { request, onUpdate }, options),
+	compareClose: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<null>("compare_close", { id }, options),
+	compareVerify: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<null>("compare_verify", { id }, options),
+	compareCancelVerify: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<null>("compare_cancel_verify", { id }, options),
+	compareSummary: (id: number, filter: ApiFilter_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<SummaryView>("compare_summary", { id, filter }, options),
+	compareCount: (id: number, filter: ApiFilter_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<Num>("compare_count", { id, filter }, options),
+	compareRows: (id: number, filter: ApiFilter_Deserialize, order: RowOrderView, offset: Num, limit: number, options?: InvokeOptions) => __TAURI_INVOKE<CompareRowView_Serialize[]>("compare_rows", { id, filter, order, offset, limit }, options),
+	compareChildCount: (id: number, filter: ApiFilter_Deserialize, parent: string, options?: InvokeOptions) => __TAURI_INVOKE<Num>("compare_child_count", { id, filter, parent }, options),
+	compareChildren: (id: number, filter: ApiFilter_Deserialize, parent: string, offset: Num, limit: number, options?: InvokeOptions) => __TAURI_INVOKE<TreeNodeView_Serialize[]>("compare_children", { id, filter, parent, offset, limit }, options),
+	compareByExtension: (id: number, filter: ApiFilter_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<ExtensionView_Serialize[]>("compare_by_extension", { id, filter }, options),
+	compareSizeHistogram: (id: number, filter: ApiFilter_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<SizeBucketView_Serialize[]>("compare_size_histogram", { id, filter }, options),
+	compareDuplicates: (id: number, side: number, offset: Num, limit: number, options?: InvokeOptions) => __TAURI_INVOKE<DuplicateSetView_Serialize[]>("compare_duplicates", { id, side, offset, limit }, options),
+	compareDuplicateTotals: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<DuplicateTotalsView[]>("compare_duplicate_totals", { id }, options),
 };
 
 /* Types */
@@ -33,6 +46,139 @@ export const commands = {
 export type ApiError = {
 	kind: ErrorKind,
 	message: string,
+};
+
+/**  Which rows to read; unset fields match everything. */
+export type ApiFilter = ApiFilter_Serialize | ApiFilter_Deserialize;
+
+/**  Which rows to read; unset fields match everything. */
+export type ApiFilter_Deserialize = {
+	categories?: CategoryName[],
+	extension?: string | null,
+	minSize?: Num | null,
+	maxSize?: Num | null,
+	/**  Exactly these sides (indices into the comparison's sides) hold the row. */
+	presence?: number[] | null,
+};
+
+/**  Which rows to read; unset fields match everything. */
+export type ApiFilter_Serialize = {
+	categories: CategoryName[],
+	extension: string | null,
+	minSize: Num | null,
+	maxSize: Num | null,
+	/**  Exactly these sides (indices into the comparison's sides) hold the row. */
+	presence: number[] | null,
+};
+
+/**  A comparison category, named as core names it. */
+export type CategoryName = "identical" | "different" | "only_in" | "moved" | "renamed" | "collision" | "unverified";
+
+/**  Rows, entries and bytes of one category. */
+export type CategoryTotals = {
+	category: CategoryName,
+	rows: number,
+	entries: number,
+	bytes: number,
+	assumedRows: number,
+};
+
+/**  One side's entry in a row. */
+export type CellView = CellView_Serialize | CellView_Deserialize;
+
+/**  One side's entry in a row. */
+export type CellView_Deserialize = {
+	side: number,
+	/**  Path within the location, for display (lossy). */
+	path: string,
+	kind: KindView,
+	size: number,
+	mtimeMs?: number | null,
+	hashState: HashStateView,
+	digestShort?: string | null,
+};
+
+/**  One side's entry in a row. */
+export type CellView_Serialize = {
+	side: number,
+	/**  Path within the location, for display (lossy). */
+	path: string,
+	kind: KindView,
+	size: number,
+	mtimeMs: number | null,
+	hashState: HashStateView,
+	digestShort: string | null,
+};
+
+/**  An opened comparison. */
+export type CompareOpened = CompareOpened_Serialize | CompareOpened_Deserialize;
+
+/**  An opened comparison. */
+export type CompareOpened_Deserialize = {
+	id: number,
+	sides: SideRequest_Deserialize[],
+	summary: SummaryView,
+};
+
+/**  An opened comparison. */
+export type CompareOpened_Serialize = {
+	id: number,
+	sides: SideRequest_Serialize[],
+	summary: SummaryView,
+};
+
+/**  The comparison picker's choices. */
+export type CompareRequest = CompareRequest_Serialize | CompareRequest_Deserialize;
+
+/**  The comparison picker's choices. */
+export type CompareRequest_Deserialize = {
+	sides: SideRequest_Deserialize[],
+	nfc: boolean,
+	caseInsensitive: boolean,
+	/**  Fast mode: files with equal size and modification times this close are assumed equal. */
+	fastMs?: Num | null,
+	duplicates: boolean,
+};
+
+/**  The comparison picker's choices. */
+export type CompareRequest_Serialize = {
+	sides: SideRequest_Serialize[],
+	nfc: boolean,
+	caseInsensitive: boolean,
+	/**  Fast mode: files with equal size and modification times this close are assumed equal. */
+	fastMs: Num | null,
+	duplicates: boolean,
+};
+
+/**  A classified row. */
+export type CompareRowView = CompareRowView_Serialize | CompareRowView_Deserialize;
+
+/**  A classified row. */
+export type CompareRowView_Deserialize = {
+	/**  The row's key, to identify it. */
+	key: string,
+	/**  The key for display (lossy). */
+	display: string,
+	category: CategoryName,
+	presence: number[],
+	/**  Equal by size and time only (fast mode), not verified. */
+	assumed: boolean,
+	size?: number | null,
+	cells: CellView_Deserialize[],
+};
+
+/**  A classified row. */
+export type CompareRowView_Serialize = {
+	/**  The row's key, to identify it. */
+	key: string,
+	/**  The key for display (lossy). */
+	display: string,
+	category: CategoryName,
+	presence: number[],
+	/**  Equal by size and time only (fast mode), not verified. */
+	assumed: boolean,
+	size: number | null,
+	cells: CellView_Serialize[],
 };
 
 /**  A phone adb can see. */
@@ -56,13 +202,62 @@ export type DeviceView_Serialize = {
 	hint: string | null,
 };
 
+/**  Files with the same content within one side. */
+export type DuplicateSetView = DuplicateSetView_Serialize | DuplicateSetView_Deserialize;
+
+/**  Files with the same content within one side. */
+export type DuplicateSetView_Deserialize = {
+	digestShort: string,
+	size: number,
+	redundantBytes: number,
+	cells: CellView_Deserialize[],
+};
+
+/**  Files with the same content within one side. */
+export type DuplicateSetView_Serialize = {
+	digestShort: string,
+	size: number,
+	redundantBytes: number,
+	cells: CellView_Serialize[],
+};
+
+/**  Duplicate totals of one side. */
+export type DuplicateTotalsView = {
+	groups: number,
+	files: number,
+	redundantBytes: number,
+};
+
 /**  What went wrong, for screens to react to; the message says it in words. */
 export type ErrorKind = "NotFound" | "AlreadyExists" | "AlreadyScanning" | "Moved" | "Ambiguous" | "OtherDevice" | 
 /**  A folder or phone that cannot be reached right now. */
 "Unavailable" | "DeviceNotReady" | "AlgorithmMismatch" | "NotScannable" | "InvalidInput" | "Io" | "Internal";
 
+/**  Rows and bytes of one extension; no extension means all the others together. */
+export type ExtensionView = ExtensionView_Serialize | ExtensionView_Deserialize;
+
+/**  Rows and bytes of one extension; no extension means all the others together. */
+export type ExtensionView_Deserialize = {
+	extension?: string | null,
+	rows: number,
+	bytes: number,
+};
+
+/**  Rows and bytes of one extension; no extension means all the others together. */
+export type ExtensionView_Serialize = {
+	extension: string | null,
+	rows: number,
+	bytes: number,
+};
+
 /**  When to hash a location's files. */
 export type HashPolicyView = "Lazy" | "Eager";
+
+/**  How much of a file's content is known. */
+export type HashStateView = "Unhashed" | "Partial" | "Verified";
+
+/**  A file, folder or link. */
+export type KindView = "File" | "Dir" | "Symlink" | "Other";
 
 /**  Where a location's files live. */
 export type LocationKind = "Folder" | "Android" | "Imported" | "Foreign";
@@ -133,6 +328,9 @@ export type NewLocationRequest_Serialize = {
  */
 export type Num = number;
 
+/**  What to sort rows by. */
+export type OrderBy = "Path" | "Size";
+
 /**  A recorded scan of any location. */
 export type RecentScanView = RecentScanView_Serialize | RecentScanView_Deserialize;
 
@@ -146,6 +344,12 @@ export type RecentScanView_Deserialize = {
 export type RecentScanView_Serialize = {
 	label: string,
 	scan: ScanBrief_Serialize,
+};
+
+/**  A row order: by path or size, ascending unless `desc`. */
+export type RowOrderView = {
+	by: OrderBy,
+	desc: boolean,
 };
 
 /**  One recorded scan. */
@@ -184,6 +388,38 @@ export type ScanStatusView = "Running" | "Completed" | "Cancelled" | "Failed" | 
 /**  One message about a running scan. */
 export type ScanUpdate = { type: "Started"; label: string; scanId: number } | { type: "Progress"; label: string; phase: ScanPhaseView; files: number; dirs: number; bytes: number; hashedFiles: number; hashedBytes: number; toHashFiles: number; toHashBytes: number; bytesPerSec: number; warnings: number; elapsedMs: number } | { type: "Finished"; label: string; scanId: number; status: ScanStatusView; files: number; bytes: number; hashedFiles: number; warnings: number; elapsedMs: number } | { type: "Failed"; label: string; error: ApiError };
 
+/**  One side to compare: a location, or a folder within it. */
+export type SideRequest = SideRequest_Serialize | SideRequest_Deserialize;
+
+/**  One side to compare: a location, or a folder within it. */
+export type SideRequest_Deserialize = {
+	label: string,
+	subpath?: string | null,
+};
+
+/**  One side to compare: a location, or a folder within it. */
+export type SideRequest_Serialize = {
+	label: string,
+	subpath: string | null,
+};
+
+/**  Rows and bytes whose largest file is below `max_exclusive` (and at or above the bucket before). */
+export type SizeBucketView = SizeBucketView_Serialize | SizeBucketView_Deserialize;
+
+/**  Rows and bytes whose largest file is below `max_exclusive` (and at or above the bucket before). */
+export type SizeBucketView_Deserialize = {
+	maxExclusive?: number | null,
+	rows: number,
+	bytes: number,
+};
+
+/**  Rows and bytes whose largest file is below `max_exclusive` (and at or above the bucket before). */
+export type SizeBucketView_Serialize = {
+	maxExclusive: number | null,
+	rows: number,
+	bytes: number,
+};
+
 /**  What a location's catalog holds. */
 export type StatsView = {
 	files: number,
@@ -193,6 +429,45 @@ export type StatsView = {
 	verifiedFiles: number,
 	partialFiles: number,
 };
+
+/**  Totals by category; categories without rows are left out. */
+export type SummaryView = {
+	categories: CategoryTotals[],
+};
+
+/**  A child in the comparison tree: a folder with matches beneath it, or a row. */
+export type TreeNodeView = TreeNodeView_Serialize | TreeNodeView_Deserialize;
+
+/**  A child in the comparison tree: a folder with matches beneath it, or a row. */
+export type TreeNodeView_Deserialize = {
+	/**  The key: a row's key, or the folder key to expand. */
+	key: string,
+	/**  The last part of the path, for display (lossy). */
+	name: string,
+	folder: boolean,
+	row?: CompareRowView_Deserialize | null,
+	matchingRows: number,
+	matchingBytes: number,
+};
+
+/**  A child in the comparison tree: a folder with matches beneath it, or a row. */
+export type TreeNodeView_Serialize = {
+	/**  The key: a row's key, or the folder key to expand. */
+	key: string,
+	/**  The last part of the path, for display (lossy). */
+	name: string,
+	folder: boolean,
+	row: CompareRowView_Serialize | null,
+	matchingRows: number,
+	matchingBytes: number,
+};
+
+/**  Background verification of a comparison. */
+export type VerifyUpdate = 
+/**  Hashing within one location, in round `round`. */
+{ type: "Progress"; label: string; round: number; files: number; bytes: number; totalFiles: number; totalBytes: number } | 
+/**  The results were refreshed with what has been hashed so far. */
+{ type: "ResultsChanged"; summary: SummaryView } | { type: "Done" } | { type: "Cancelled" } | { type: "Failed"; error: ApiError };
 
 /**  A problem a scan recorded. */
 export type WarningView = WarningView_Serialize | WarningView_Deserialize;
