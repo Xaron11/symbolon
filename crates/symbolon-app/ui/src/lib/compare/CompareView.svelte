@@ -5,6 +5,7 @@
 	import Spinner from '../components/Spinner/Spinner.svelte';
 	import { explain } from '../locations/status';
 	import Dashboard from './Dashboard.svelte';
+	import DrillDown from './DrillDown.svelte';
 	import { createCompareSession } from './session.svelte';
 	import { fromQuery } from './url';
 	import VerifyLine from './VerifyLine.svelte';
@@ -55,6 +56,7 @@
 				/>
 			</header>
 			<Dashboard {session} />
+			<DrillDown {session} />
 		</div>
 	{/if}
 {/if}
