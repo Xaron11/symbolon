@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 88344ebb7e90d036162f1bab11dc4dfecd23b2464fe4b88b48f8a888f43beb1d # shrinks to locations = [{"e/a": "p"}, {"a": "p", "e/a": "p"}], keys = KeyOptions { nfc: false, case_insensitive: false }
+cc e5fac32345ac8edf751b465a1a9523d6d642588e0628a9ff478c19fc0a815de3 # shrinks to locations = [{"a": Dir}, {"a": File("p")}], keys = KeyOptions { nfc: false, case_insensitive: false }

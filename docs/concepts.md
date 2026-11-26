@@ -59,7 +59,7 @@ A file whose size is unique among the compared locations cannot match anything a
 
 ## Comparison categories
 
-Comparing two or more locations (or subpaths of them) sorts every file into exactly one category ([ADR-0010](adr/0010-comparison-engine.md)):
+Comparing two or more locations (or subpaths of them) sorts every file and symlink into exactly one category ([ADR-0010](adr/0010-comparison-engine.md)), and reports directories that nothing else accounts for ([ADR-0019](adr/0019-directories-and-symlinks-in-comparisons.md)):
 
 | Category              | Meaning                                                                                                                   |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -70,6 +70,14 @@ Comparing two or more locations (or subpaths of them) sorts every file into exac
 | **Renamed**           | Same content under a different file name (possibly also moved).                                                           |
 | **Collision**         | Two files of one location become the same path under case-insensitive or Unicode matching.                                |
 | **Unverified**        | Same path and size, not hashed yet, so equality is unknown.                                                               |
+
+Directories and symlinks follow the same categories:
+
+- **Symlinks** are never followed; they compare by target, as bytes. Two links with different targets are different, links with the same target on every side are identical, and a link whose target is not known yet (a catalog from before targets were stored) is unverified.
+- **Directories** are reported only when one exists in some locations and has nothing compared beneath it there, such as an empty folder a copy dropped: Only in. A directory holding files is already visible through its files' rows.
+- **Kind clashes**, such as a file in one location and a directory of the same name in another, are different. The directory's contents still get their own rows.
+
+Moves, renames, duplicates and byte totals count files only.
 
 Duplicates within one location are listed separately: a file can be identical across locations and also duplicated inside one.
 
