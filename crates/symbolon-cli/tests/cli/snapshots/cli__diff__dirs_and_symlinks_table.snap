@@ -1,0 +1,13 @@
+---
+source: crates/symbolon-cli/tests/cli/diff.rs
+expression: run.stdout
+---
+CATEGORY  ROWS  ENTRIES  SIZE
+different  2  4  6 B
+only_in  2  2  1 B
+
+CATEGORY  PATH  a  b
+only_in  empty/  dir  -
+different  l  -> f.txt  -> g.txt
+different  notes  6 B  dir
+only_in  notes/n.txt  -  1 B

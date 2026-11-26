@@ -71,12 +71,12 @@ Before reading a location, `scan` checks that its device is where it was recorde
 
 ```console
 $ symbolon diff laptop backup
-CATEGORY   ROWS  FILES  SIZE
-identical  1     2      26 B
-different  1     2      18 B
-only_in    2     2      21 B
-moved      1     2      24 B
-renamed    1     2      36 B
+CATEGORY   ROWS  ENTRIES  SIZE
+identical  1     2        26 B
+different  1     2        18 B
+only_in    2     2        21 B
+moved      1     2        24 B
+renamed    1     2        36 B
 
 CATEGORY   PATH            laptop                   backup
 only_in    2019.txt        -                        8 B
@@ -86,24 +86,24 @@ moved      old/beach.jpg   photos/beach.jpg (12 B)  12 B
 renamed    todo-list.txt   todo.txt (18 B)          18 B
 ```
 
-The first table sums up every category; the second lists each difference with one column per location: the file's size, or its path there when it differs (moves and renames), or `-` where it is missing. Identical files are left out of the list; `--all` shows them too.
+The first table sums up every category: rows, entries (files, folders and symlinks) and the size of their files. The second lists each difference with one column per location: the file's size, `dir` for a folder, `-> <target>` for a symlink (`-> ?` while its target is unknown), its path there when it differs (moves, renames, case variants), or `-` where it is missing. Folders end in `/`. Identical rows are left out of the list; `--all` shows them too.
 
-| Category     | Meaning                                                                   |
-| ------------ | ------------------------------------------------------------------------- |
-| `identical`  | Same path, same content everywhere.                                       |
-| `different`  | Same path, different size or content.                                     |
-| `only_in`    | Present in some locations only.                                           |
-| `moved`      | Same content and file name in another folder.                             |
-| `renamed`    | Same content under another name.                                          |
-| `collision`  | Several files of one location map to one path (case or Unicode spelling). |
-| `unverified` | Same path and size, not hashed, so equality is unknown.                   |
+| Category     | Meaning                                                                                                                      |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `identical`  | Same path, same content (files) or target (symlinks) everywhere.                                                             |
+| `different`  | Same path, different size, content or target, or a file in one location and a folder or symlink in another.                  |
+| `only_in`    | Present in some locations only. A folder is listed only when nothing compared lies inside it there, such as an empty folder. |
+| `moved`      | Same content and file name in another folder.                                                                                |
+| `renamed`    | Same content under another name.                                                                                             |
+| `collision`  | Several entries of one location map to one path (case or Unicode spelling).                                                  |
+| `unverified` | Same path and size, not hashed, so equality is unknown; for symlinks, a target not read yet.                                 |
 
 [Concepts](concepts.md) explains how these are decided. Before listing, `diff` hashes what it needs in lazy locations, with progress; `--no-hash` skips that and leaves such files `unverified`. A location that is not connected is reported, and its files stay unverified.
 
 Useful options:
 
 - `laptop:Photos` compares a folder of a location; any number of locations can be compared at once.
-- `--only different,only-in`, `--ext jpg`, `--min-size`, `--max-size` and `--under <folder>` narrow the list; the summary always covers everything. `--summary` prints only the totals.
+- `--only different,only-in`, `--kind file,dir,symlink`, `--ext jpg`, `--min-size`, `--max-size` and `--under <folder>` narrow the list; the summary always covers everything. `--summary` prints only the totals. Size and extension filters match files only.
 - `--case-insensitive` and `--nfc` match paths regardless of letter case or Unicode spelling, for example between Linux and Windows or macOS disks.
 - `--fast 2s` treats files of equal size whose times differ by at most 2 seconds as equal without reading them, marked `(assumed)`: fast, but not proof.
 
@@ -172,7 +172,7 @@ $ symbolon dupes laptop --json | jq '.totals[].redundant_bytes'
 13
 ```
 
-`diff --json` returns `{sides, summary, rows}`; each row has a `category`, a `key` (its path) and `files`, one per location with `side`, `path`, `size` and `digest`. CSV has one line per file, with a `row` number grouping them.
+`diff --json` returns `{sides, summary, rows}`. The summary gives `rows`, `entries`, `bytes` and `assumed_rows` per category. Each row has a `category`, a `key` (its path) and `entries`, one per location with `side`, `path`, `kind` (`file`, `dir` or `symlink`), `size`, `digest` and `target` (a symlink's target, escaped like paths; `null` otherwise or when unknown). CSV has one line per entry, with a `row` number grouping them. Before 0.7, `entries` was called `files` in both the summary and the rows, and CSV had no `kind` and `target` columns.
 
 ## Exit codes
 

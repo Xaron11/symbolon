@@ -2,7 +2,7 @@
 source: crates/symbolon-cli/tests/cli/diff.rs
 expression: "env.run(&[\"diff\", \"a\", \"b\", \"--summary\", \"--format\", \"csv\"]).stdout"
 ---
-category,rows,files,bytes,assumed_rows
+category,rows,entries,bytes,assumed_rows
 identical,1,2,8,0
 different,1,2,7,0
 only_in,1,1,9,0

@@ -7,6 +7,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use symbolon_core::catalog::HashPolicy;
 use symbolon_core::compare::Category;
 use symbolon_core::hash::HashAlgo;
+use symbolon_core::source::EntryKind;
 
 use crate::output::Format;
 
@@ -145,6 +146,9 @@ pub(crate) struct DiffArgs {
     /// List only paths under this folder (relative to the compared folders)
     #[arg(long, value_name = "FOLDER")]
     pub(crate) under: Option<String>,
+    /// List only rows with entries of these kinds
+    #[arg(long, value_enum, value_delimiter = ',', value_name = "KIND")]
+    pub(crate) kind: Vec<KindArg>,
     /// Print the totals only
     #[arg(long)]
     pub(crate) summary: bool,
@@ -191,6 +195,23 @@ impl From<CategoryArg> for Category {
             CategoryArg::Renamed => Self::Renamed,
             CategoryArg::Collision => Self::Collision,
             CategoryArg::Unverified => Self::Unverified,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum KindArg {
+    File,
+    Dir,
+    Symlink,
+}
+
+impl From<KindArg> for EntryKind {
+    fn from(kind: KindArg) -> Self {
+        match kind {
+            KindArg::File => Self::File,
+            KindArg::Dir => Self::Dir,
+            KindArg::Symlink => Self::Symlink,
         }
     }
 }

@@ -5,13 +5,14 @@ use std::ops::ControlFlow;
 
 use serde::Serialize;
 use symbolon_core::compare::{
-    Category, CompareOptions, Comparison, ResolveEvent, ResolveSummary, Row, RowFilter, Side,
+    Category, Cell, CompareOptions, Comparison, ResolveEvent, ResolveSummary, Row, RowFilter, Side,
     Summary,
 };
 use symbolon_core::hash::Digest;
-use symbolon_core::pathkey::KeyOptions;
+use symbolon_core::pathkey::{KeyOptions, escape_raw};
 use symbolon_core::query::Page;
 use symbolon_core::scan::ScanOptions;
+use symbolon_core::source::EntryKind;
 
 use super::{follow, open_catalog};
 use crate::cli::{DiffArgs, Global};
@@ -63,7 +64,7 @@ pub(super) fn run(global: &Global, args: &DiffArgs) -> anyhow::Result<Exit> {
     })
 }
 
-/// Anything but identical files counts as a difference, including unverified ones.
+/// Anything but identical rows counts as a difference, including unverified ones.
 fn differs(summary: &Summary) -> bool {
     summary
         .categories
@@ -89,6 +90,9 @@ fn filter(args: &DiffArgs) -> RowFilter {
     filter = filter.size_range(args.min_size, args.max_size);
     if let Some(prefix) = &args.under {
         filter = filter.prefix(prefix);
+    }
+    if !args.kind.is_empty() {
+        filter = filter.kinds(args.kind.iter().map(|&k| EntryKind::from(k)));
     }
     filter
 }
@@ -180,6 +184,18 @@ fn for_each_row(
     }
 }
 
+/// A cell as the table shows it: the size of a file, `dir`, or a symlink's target.
+fn cell_text(cell: &Cell) -> String {
+    match cell.kind {
+        EntryKind::Dir => "dir".to_owned(),
+        EntryKind::Symlink => cell.link_target.as_deref().map_or_else(
+            || "-> ?".to_owned(),
+            |target| format!("-> {}", escape_raw(target)),
+        ),
+        EntryKind::File | EntryKind::Other => output::size(cell.size),
+    }
+}
+
 fn category_label(row: &Row) -> String {
     if row.assumed {
         format!("{} (assumed)", row.category)
@@ -211,7 +227,7 @@ fn table(
         .collect::<Vec<_>>();
     output::table(
         out,
-        &["CATEGORY", "ROWS", "FILES", "SIZE"],
+        &["CATEGORY", "ROWS", "ENTRIES", "SIZE"],
         totals.into_iter(),
     )?;
     if summary_only {
@@ -221,7 +237,12 @@ fn table(
     headers.extend(cmp.sides().iter().map(|info| info.side.to_string()));
     let mut rows = Vec::new();
     for_each_row(cmp, filter, |row| {
-        let mut cells = vec![category_label(row), row.key.clone()];
+        let path = if row.cells.iter().all(|cell| cell.kind == EntryKind::Dir) {
+            format!("{}/", row.key)
+        } else {
+            row.key.clone()
+        };
+        let mut cells = vec![category_label(row), path];
         cells.extend((0..cmp.sides().len()).map(|side| {
             let files: Vec<String> = row
                 .cells
@@ -229,9 +250,9 @@ fn table(
                 .filter(|cell| cell.side == side)
                 .map(|cell| {
                     if cell.key.as_str() == row.key {
-                        output::size(cell.size)
+                        cell_text(cell)
                     } else {
-                        format!("{} ({})", cell.key, output::size(cell.size))
+                        format!("{} ({})", cell.key, cell_text(cell))
                     }
                 })
                 .collect();
@@ -262,7 +283,7 @@ struct SideRecord {
 #[derive(Debug, Serialize)]
 struct TotalsRecord {
     rows: u64,
-    files: u64,
+    entries: u64,
     bytes: u64,
     assumed_rows: u64,
 }
@@ -280,7 +301,7 @@ impl Serialize for SummaryRecord<'_> {
                 category.name(),
                 &TotalsRecord {
                     rows: t.rows,
-                    files: t.entries,
+                    entries: t.entries,
                     bytes: t.bytes,
                     assumed_rows: t.assumed_rows,
                 },
@@ -296,16 +317,19 @@ struct RowRecord<'a> {
     key: &'a str,
     assumed: bool,
     size: Option<u64>,
-    files: Vec<FileRecord>,
+    entries: Vec<EntryRecord>,
 }
 
 #[derive(Debug, Serialize)]
-struct FileRecord {
+struct EntryRecord {
     side: String,
     /// Path key within the location (not relative to the side's folder).
     path: String,
+    kind: &'static str,
     size: u64,
     digest: Option<String>,
+    /// A symlink's target, escaped like a path key.
+    target: Option<String>,
 }
 
 impl<'a> RowRecord<'a> {
@@ -315,14 +339,16 @@ impl<'a> RowRecord<'a> {
             key: &row.key,
             assumed: row.assumed,
             size: row.size,
-            files: row
+            entries: row
                 .cells
                 .iter()
-                .map(|cell| FileRecord {
+                .map(|cell| EntryRecord {
                     side: sides[cell.side].clone(),
                     path: cell.path.key().as_str().to_owned(),
+                    kind: cell.kind.name(),
                     size: cell.size,
                     digest: cell.digest.as_ref().map(Digest::to_hex),
+                    target: cell.link_target.as_deref().map(escape_raw),
                 })
                 .collect(),
         }
@@ -386,7 +412,7 @@ fn json(
     Ok(())
 }
 
-/// One line per file; `row` numbers the rows so files of one row can be grouped.
+/// One line per entry; `row` numbers the rows so entries of one row can be grouped.
 fn csv(
     out: &mut impl Write,
     cmp: &Comparison,
@@ -396,7 +422,7 @@ fn csv(
 ) -> anyhow::Result<()> {
     let mut writer = csv::Writer::from_writer(out);
     if summary_only {
-        writer.write_record(["category", "rows", "files", "bytes", "assumed_rows"])?;
+        writer.write_record(["category", "rows", "entries", "bytes", "assumed_rows"])?;
         for category in Category::ALL {
             let t = summary.get(category);
             writer.write_record([
@@ -412,7 +438,7 @@ fn csv(
     }
     let names = side_names(cmp);
     writer.write_record([
-        "row", "category", "assumed", "side", "path", "size", "digest",
+        "row", "category", "assumed", "side", "path", "kind", "size", "digest", "target",
     ])?;
     let mut number = 0_u64;
     for_each_row(cmp, filter, |row| {
@@ -424,8 +450,10 @@ fn csv(
                 row.assumed.to_string(),
                 names[cell.side].clone(),
                 cell.path.key().as_str().to_owned(),
+                cell.kind.name().to_owned(),
                 cell.size.to_string(),
                 cell.digest.as_ref().map_or_default(Digest::to_hex),
+                cell.link_target.as_deref().map_or_default(escape_raw),
             ])?;
         }
         Ok(())
