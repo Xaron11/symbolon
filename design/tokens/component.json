@@ -131,5 +131,12 @@
         "$description": "Narrowest a running scan card gets before cards wrap"
       }
     }
+  },
+  "form": {
+    "width": {
+      "$value": "560px",
+      "$type": "dimension",
+      "$description": "Widest a form in a view gets, such as the comparison picker"
+    }
   }
 }
