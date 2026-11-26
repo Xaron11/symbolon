@@ -56,18 +56,15 @@ impl AppState {
         label: &str,
         new_label: &str,
     ) -> Result<LocationView, ApiError> {
-        let location = self.catalog.rename(label, new_label)?;
+        let location = self
+            .scans
+            .while_idle(label, || Ok(self.catalog.rename(label, new_label)?))?;
         self.location_view(&Query::open(&self.catalog)?, &location)
     }
 
     pub(crate) fn location_remove(&self, label: &str) -> Result<(), ApiError> {
-        if self.scans.is_running(label) {
-            return Err(ApiError::new(
-                ErrorKind::AlreadyScanning,
-                "Stop the scan first.",
-            ));
-        }
-        Ok(self.catalog.remove_location(label)?)
+        self.scans
+            .while_idle(label, || Ok(self.catalog.remove_location(label)?))
     }
 
     pub(crate) fn location_set_hash_policy(

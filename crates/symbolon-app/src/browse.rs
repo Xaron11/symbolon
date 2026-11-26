@@ -132,6 +132,22 @@ mod tests {
     }
 
     #[test]
+    fn unsubscribed_browsers_hear_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = scanned(dir.path(), &["a", "b"]);
+        let changes = Collect::default();
+        let id = s.scans.subscribe_browse("loc", Box::new(changes.clone()));
+        s.scans.unsubscribe_browse(id);
+        Arc::clone(&s.scans)
+            .start(&s.catalog, "loc", Box::new(Gone))
+            .unwrap();
+        while s.scans.is_running("loc") {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(changes.all(), []);
+    }
+
+    #[test]
     fn browse_changes_are_throttled_and_finish() {
         let dir = tempfile::tempdir().unwrap();
         let files: Vec<String> = (0..300).map(|i| format!("f{i:04}")).collect();

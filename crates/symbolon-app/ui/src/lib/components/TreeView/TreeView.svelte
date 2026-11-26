@@ -44,7 +44,11 @@
 	// A source that changes (a location being scanned) is re-read with its open folders kept.
 	$effect(() =>
 		source.subscribe?.(() => {
-			void tree.refresh();
+			const key = items[active]?.key;
+			void tree.refresh().then(() => {
+				const index = tree.visible.findIndex((v) => v.key === key);
+				if (index >= 0) active = index;
+			});
 		})
 	);
 	$effect(() => {

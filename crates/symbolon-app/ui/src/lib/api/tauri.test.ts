@@ -85,3 +85,41 @@ describe('tauriBackend', () => {
 		expect(args).toEqual({ label: 'Stick', choice: null });
 	});
 });
+
+describe('tauriBackend releases what it opened', () => {
+	it('browse.subscribe unsubscribes by id when stopped', async () => {
+		const seen: [string, unknown][] = [];
+		mockIPC((cmd, payload) => {
+			seen.push([cmd, payload]);
+			return cmd === 'browse_subscribe' ? 41 : null;
+		});
+		const stop = createTauriBackend().browse.subscribe('Photos', () => undefined);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		stop();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(seen.map(([cmd]) => cmd)).toEqual(['browse_subscribe', 'browse_unsubscribe']);
+		expect(seen[1]?.[1]).toEqual({ id: 41 });
+	});
+
+	it('a subscription stopped before it is registered is released once it is', async () => {
+		const seen: string[] = [];
+		mockIPC((cmd) => {
+			seen.push(cmd);
+			return cmd === 'browse_subscribe' ? 7 : null;
+		});
+		createTauriBackend().browse.subscribe('Photos', () => undefined)();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(seen).toEqual(['browse_subscribe', 'browse_unsubscribe']);
+	});
+
+	it('compare.closeAll calls compare_close_all', async () => {
+		const seen: string[] = [];
+		mockIPC((cmd) => {
+			seen.push(cmd);
+			return null;
+		});
+		await createTauriBackend().compare.closeAll();
+		expect(seen).toEqual(['compare_close_all']);
+	});
+});

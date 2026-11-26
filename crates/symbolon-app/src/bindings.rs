@@ -29,6 +29,7 @@ pub(crate) fn builder() -> Builder<tauri::Wry> {
         scans::scan_warning_count,
         compare::compare_open,
         compare::compare_close,
+        compare::compare_close_all,
         compare::compare_verify,
         compare::compare_cancel_verify,
         compare::compare_summary,
@@ -43,6 +44,7 @@ pub(crate) fn builder() -> Builder<tauri::Wry> {
         browse::browse_child_count,
         browse::browse_children,
         browse::browse_subscribe,
+        browse::browse_unsubscribe,
     ])
 }
 

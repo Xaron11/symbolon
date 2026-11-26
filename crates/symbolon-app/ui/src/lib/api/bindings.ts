@@ -28,6 +28,8 @@ export const commands = {
 	scanWarningCount: (scanId: Num, options?: InvokeOptions) => __TAURI_INVOKE<Num>("scan_warning_count", { scanId }, options),
 	compareOpen: (request: CompareRequest_Deserialize, onUpdate: Channel<VerifyUpdate>, options?: InvokeOptions) => __TAURI_INVOKE<CompareOpened_Serialize>("compare_open", { request, onUpdate }, options),
 	compareClose: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<null>("compare_close", { id }, options),
+	/**  Closes every open comparison: a window that starts again has lost the ids of its old ones. */
+	compareCloseAll: (options?: InvokeOptions) => __TAURI_INVOKE<null>("compare_close_all", undefined, options),
 	compareVerify: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<null>("compare_verify", { id }, options),
 	compareCancelVerify: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<null>("compare_cancel_verify", { id }, options),
 	compareSummary: (id: number, filter: ApiFilter_Deserialize, options?: InvokeOptions) => __TAURI_INVOKE<SummaryView>("compare_summary", { id, filter }, options),
@@ -41,7 +43,8 @@ export const commands = {
 	compareDuplicateTotals: (id: number, options?: InvokeOptions) => __TAURI_INVOKE<DuplicateTotalsView[]>("compare_duplicate_totals", { id }, options),
 	browseChildCount: (label: string, parent: string, options?: InvokeOptions) => __TAURI_INVOKE<Num>("browse_child_count", { label, parent }, options),
 	browseChildren: (label: string, parent: string, offset: Num, limit: number, options?: InvokeOptions) => __TAURI_INVOKE<EntryView_Serialize[]>("browse_children", { label, parent, offset, limit }, options),
-	browseSubscribe: (label: string, onChange: Channel<BrowseChange>, options?: InvokeOptions) => __TAURI_INVOKE<void>("browse_subscribe", { label, onChange }, options),
+	browseSubscribe: (label: string, onChange: Channel<BrowseChange>, options?: InvokeOptions) => __TAURI_INVOKE<Num>("browse_subscribe", { label, onChange }, options),
+	browseUnsubscribe: (id: Num, options?: InvokeOptions) => __TAURI_INVOKE<null>("browse_unsubscribe", { id }, options),
 };
 
 /* Types */

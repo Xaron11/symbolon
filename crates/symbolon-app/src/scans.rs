@@ -1,6 +1,7 @@
 //! Running scans: started from the UI, streamed to it through sinks, and their history.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -170,12 +171,19 @@ impl RunningScan {
 
 type BrowseSink = Box<dyn Sink<BrowseChange>>;
 
+/// A label in the registry: reserved while core starts the scan, then running.
+enum Slot {
+    Starting,
+    Running(Arc<RunningScan>),
+}
+
 /// Scans started from the UI, by location label.
 #[derive(Default)]
 pub(crate) struct ScanRegistry {
-    running: Mutex<HashMap<String, Arc<RunningScan>>>,
-    /// Browsers of each location, notified while its scans write; kept until they are gone.
-    browsers: Mutex<HashMap<String, Vec<BrowseSink>>>,
+    running: Mutex<HashMap<String, Slot>>,
+    /// Browsers of each location, by subscription id, notified while its scans write.
+    browsers: Mutex<HashMap<String, Vec<(u64, BrowseSink)>>>,
+    next_browser: AtomicU64,
 }
 
 impl ScanRegistry {
@@ -198,14 +206,25 @@ impl ScanRegistry {
         sink: Box<dyn Sink<ScanUpdate>>,
         start: impl FnOnce() -> Result<ScanHandle, ScanError>,
     ) -> Result<(), ApiError> {
-        let mut running = lock(&self.running);
-        if running.contains_key(label) {
-            return Err(ApiError::new(
-                ErrorKind::AlreadyScanning,
-                format!("location {label:?} is already being scanned"),
-            ));
+        {
+            let mut running = lock(&self.running);
+            if running.contains_key(label) {
+                return Err(ApiError::new(
+                    ErrorKind::AlreadyScanning,
+                    format!("location {label:?} is already being scanned"),
+                ));
+            }
+            running.insert(label.to_owned(), Slot::Starting);
         }
-        let handle = start()?;
+        // Starting probes devices (mounts, adb); the reserved label keeps others out meanwhile
+        // without holding the registry.
+        let handle = match start() {
+            Ok(handle) => handle,
+            Err(error) => {
+                lock(&self.running).remove(label);
+                return Err(error.into());
+            }
+        };
         let events = handle.events().clone();
         let scan = Arc::new(RunningScan {
             handle: Mutex::new(Some(handle)),
@@ -214,8 +233,7 @@ impl ScanRegistry {
                 latest: None,
             }),
         });
-        running.insert(label.to_owned(), Arc::clone(&scan));
-        drop(running);
+        lock(&self.running).insert(label.to_owned(), Slot::Running(Arc::clone(&scan)));
 
         let registry = Arc::clone(self);
         let label = label.to_owned();
@@ -253,42 +271,73 @@ impl ScanRegistry {
                     error: error.into(),
                 });
             }
-            {
-                let mut running = lock(&registry.running);
-                if running.get(&label).is_some_and(|s| Arc::ptr_eq(s, &scan)) {
-                    running.remove(&label);
-                }
-            }
+            // Browsers hear the end before the label is free for the next scan.
             registry.notify_browsers(&label, BrowseChange::Finished);
+            let mut running = lock(&registry.running);
+            if matches!(running.get(&label), Some(Slot::Running(s)) if Arc::ptr_eq(s, &scan)) {
+                running.remove(&label);
+            }
         });
         Ok(())
     }
 
     fn get(&self, label: &str) -> Result<Arc<RunningScan>, ApiError> {
-        lock(&self.running).get(label).cloned().ok_or_else(|| {
-            ApiError::new(
+        match lock(&self.running).get(label) {
+            Some(Slot::Running(scan)) => Ok(Arc::clone(scan)),
+            _ => Err(ApiError::new(
                 ErrorKind::NotFound,
                 format!("no scan of {label:?} is running"),
-            )
-        })
+            )),
+        }
     }
 
-    /// Notifies `sink` whenever a scan of `label` writes, from now on.
-    pub(crate) fn subscribe_browse(&self, label: &str, sink: Box<dyn Sink<BrowseChange>>) {
+    /// Notifies `sink` whenever a scan of `label` writes, until [`ScanRegistry::unsubscribe_browse`]
+    /// with the returned id.
+    pub(crate) fn subscribe_browse(&self, label: &str, sink: BrowseSink) -> u64 {
+        let id = self.next_browser.fetch_add(1, Ordering::Relaxed);
         lock(&self.browsers)
             .entry(label.to_owned())
             .or_default()
-            .push(sink);
+            .push((id, sink));
+        id
+    }
+
+    /// Stops browse subscription `id`; dropping its channel also releases the frontend's side.
+    pub(crate) fn unsubscribe_browse(&self, id: u64) {
+        let mut browsers = lock(&self.browsers);
+        for sinks in browsers.values_mut() {
+            sinks.retain(|(each, _)| *each != id);
+        }
+        browsers.retain(|_, sinks| !sinks.is_empty());
     }
 
     fn notify_browsers(&self, label: &str, change: BrowseChange) {
         let mut browsers = lock(&self.browsers);
         if let Some(sinks) = browsers.get_mut(label) {
-            sinks.retain(|sink| sink.send(change));
+            sinks.retain(|(_, sink)| sink.send(change));
             if sinks.is_empty() {
                 browsers.remove(label);
             }
         }
+    }
+
+    /// Runs `work` while no scan of `label` runs or starts, holding the registry so none can
+    /// start meanwhile; refuses with "Stop the scan first." otherwise.
+    pub(crate) fn while_idle<T>(
+        &self,
+        label: &str,
+        work: impl FnOnce() -> Result<T, ApiError>,
+    ) -> Result<T, ApiError> {
+        let running = lock(&self.running);
+        if running.contains_key(label) {
+            return Err(ApiError::new(
+                ErrorKind::AlreadyScanning,
+                "Stop the scan first.",
+            ));
+        }
+        let result = work();
+        drop(running);
+        result
     }
 
     /// Adds `sink` to a running scan and sends it the scan's latest update at once.
@@ -313,10 +362,14 @@ impl ScanRegistry {
     pub(crate) fn running(&self) -> Vec<ScanUpdate> {
         lock(&self.running)
             .values()
-            .filter_map(|scan| lock(&scan.watchers).latest.clone())
+            .filter_map(|slot| match slot {
+                Slot::Running(scan) => lock(&scan.watchers).latest.clone(),
+                Slot::Starting => None,
+            })
             .collect()
     }
 
+    #[cfg(test)]
     pub(crate) fn is_running(&self, label: &str) -> bool {
         lock(&self.running).contains_key(label)
     }
@@ -344,7 +397,13 @@ impl ScanRegistry {
     /// Cancels every scan and waits up to `timeout` for them to stop; scans keep what they
     /// committed.
     pub(crate) fn cancel_all_and_wait(&self, timeout: Duration) {
-        let scans: Vec<_> = lock(&self.running).values().cloned().collect();
+        let scans: Vec<_> = lock(&self.running)
+            .values()
+            .filter_map(|slot| match slot {
+                Slot::Running(scan) => Some(Arc::clone(scan)),
+                Slot::Starting => None,
+            })
+            .collect();
         for scan in scans {
             if let Some(handle) = lock(&scan.handle).as_ref() {
                 handle.resume();
@@ -679,6 +738,80 @@ mod tests {
         f.registry.cancel("Photos").unwrap();
         f.wait_idle();
         state.location_remove("Photos").unwrap();
+    }
+
+    /// Starts a scan of "Photos" on another thread that waits for `release` before scanning,
+    /// and returns once the registry has reserved it.
+    fn start_held(f: &Fixture) -> (std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>) {
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let registry = Arc::clone(&f.registry);
+        let catalog = f.state.catalog.clone();
+        let starting = std::thread::spawn(move || {
+            registry
+                .start_with("Photos", Box::new(Gone), || {
+                    wait.recv().ok();
+                    Scanner::start(&catalog, "Photos", ScanOptions::default())
+                })
+                .unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !f.registry.is_running("Photos") {
+            assert!(Instant::now() < deadline, "start never reserved the label");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        (release, starting)
+    }
+
+    #[test]
+    fn starting_a_scan_does_not_block_other_calls() {
+        let f = fixture(10);
+        let (release, starting) = start_held(&f);
+        let registry = Arc::clone(&f.registry);
+        let (sent, answer) = std::sync::mpsc::channel();
+        std::thread::spawn(move || sent.send(registry.running()).ok());
+        assert!(
+            answer.recv_timeout(Duration::from_millis(500)).is_ok(),
+            "running() waited for a scan to start"
+        );
+        let err = f
+            .registry
+            .start(&f.state.catalog, "Photos", Box::new(Gone))
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::AlreadyScanning);
+        release.send(()).unwrap();
+        starting.join().unwrap();
+        f.wait_idle();
+    }
+
+    #[test]
+    fn remove_while_a_scan_starts_is_refused() {
+        let f = fixture(10);
+        let state = AppState {
+            scans: Arc::clone(&f.registry),
+            ..f.state.clone_for_test()
+        };
+        let (release, starting) = start_held(&f);
+        let err = state.location_remove("Photos").unwrap_err();
+        assert_eq!(err.kind, ErrorKind::AlreadyScanning);
+        release.send(()).unwrap();
+        starting.join().unwrap();
+        f.wait_idle();
+    }
+
+    #[test]
+    fn rename_while_scanning_is_refused() {
+        let f = fixture(200);
+        let state = AppState {
+            scans: Arc::clone(&f.registry),
+            ..f.state.clone_for_test()
+        };
+        f.start_slow(Box::new(Gone));
+        let err = state.location_rename("Photos", "Pics").unwrap_err();
+        assert_eq!(err.kind, ErrorKind::AlreadyScanning);
+        assert_eq!(err.message, "Stop the scan first.");
+        f.registry.cancel("Photos").unwrap();
+        f.wait_idle();
+        state.location_rename("Photos", "Pics").unwrap();
     }
 
     #[test]

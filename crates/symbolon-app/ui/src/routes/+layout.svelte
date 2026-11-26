@@ -10,7 +10,10 @@
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
-	provideBackend(createTauriBackend());
+	const backend = createTauriBackend();
+	provideBackend(backend);
+	// Comparisons opened before a reload lost their ids with the page; close them.
+	void backend.compare.closeAll().catch(() => undefined);
 </script>
 
 <svelte:head>

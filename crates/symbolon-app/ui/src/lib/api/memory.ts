@@ -250,6 +250,11 @@ export function createMemoryBackend(seed: MemorySeed = {}): MemoryBackend {
 					record('compare.close', id);
 					if (!open.delete(id)) throw notFound(`comparison ${String(id)}`);
 				}),
+			closeAll: () =>
+				resolve(() => {
+					record('compare.closeAll');
+					open.clear();
+				}),
 			verify: (id) => resolve(() => void (record('compare.verify', id), comparison(id))),
 			cancelVerify: (id) =>
 				resolve(() => void (record('compare.cancelVerify', id), comparison(id))),
