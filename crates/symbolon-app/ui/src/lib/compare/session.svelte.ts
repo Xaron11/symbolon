@@ -58,10 +58,18 @@ export function createCompareSession(backend: Backend, request: CompareRequest):
 			case 'Progress':
 				verify = { state: 'running', progress: update };
 				break;
-			case 'ResultsChanged':
+			case 'ResultsChanged': {
 				summary = update.summary;
+				// A category whose rows are gone would filter to nothing with no control to clear it.
+				const remaining = update.summary.categories
+					.filter((t) => t.rows > 0)
+					.map((t) => t.category);
+				const kept = (filter.categories ?? []).filter((c) => remaining.includes(c));
+				if (kept.length !== (filter.categories ?? []).length)
+					filter = { ...filter, categories: kept };
 				changes.notify();
 				break;
+			}
 			case 'Done':
 				verify = { state: 'done' };
 				break;

@@ -43,3 +43,17 @@ describe('comparison URLs', () => {
 		expect(fromQuery(new URLSearchParams('sides=only&dupes=1'))).not.toBeInstanceOf(ApiError);
 	});
 });
+
+describe('comparison URLs that are not valid', () => {
+	it('a malformed escape names no comparison instead of failing', () => {
+		expect(fromQuery(new URLSearchParams('sides=50%25,b'))).toBeInstanceOf(ApiError);
+	});
+
+	it('a fast-mode tolerance must be a whole number of milliseconds, zero or more', () => {
+		for (const fast of ['-5', '1.5', '', 'abc']) {
+			const result = fromQuery(new URLSearchParams(`sides=a%2Cb&fast=${fast}`));
+			expect(result, fast).toBeInstanceOf(ApiError);
+		}
+		expect(fromQuery(new URLSearchParams('sides=a%2Cb&fast=0'))).toMatchObject({ fastMs: 0 });
+	});
+});

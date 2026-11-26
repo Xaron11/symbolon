@@ -9,4 +9,4 @@ The rows of a comparison, filtered, as a list or a tree.
 - **List:** a [table](data-table.md) named Rows: path (monospace, sortable), category, size (sortable), a size column per side ("On Backup": the size, `dir`, `symlink`, or — when the side lacks it), modified. Sorting by path or size is done by the backend.
 - **Tree:** a [tree](tree-view.md) named "Rows by folder": folders read "Photos — 1,204 · 3.1 GiB" (matching rows and bytes beneath), files by name.
 
-Both refresh in place after every verification round, keeping scroll position and the active row. Enter, `o` or a double-click opens a row's [details](row-detail.md) beside the list; Escape closes them.
+Both refresh in place after every verification round, keeping scroll position and the active row. Enter, `o` or a double-click opens a row's [details](row-detail.md) beside the list; Escape or Close closes them and gives focus back to the list or tree.

@@ -27,6 +27,7 @@
 	let fastSeconds = $state('2');
 	let duplicates = $state(false);
 	let problem = $state<string | undefined>(undefined);
+	let toleranceError = $state<string | undefined>(undefined);
 
 	api.locations.list().then(
 		(list) => (locations = list),
@@ -59,7 +60,13 @@
 			return;
 		}
 		if (mismatch) return;
-		const seconds = Number(fastSeconds);
+		// People write "1,5" as often as "1.5".
+		const seconds = Number(fastSeconds.trim().replace(',', '.'));
+		if (fast && (fastSeconds.trim() === '' || !Number.isFinite(seconds) || seconds < 0)) {
+			toleranceError = 'Enter a tolerance of 0 seconds or more.';
+			return;
+		}
+		toleranceError = undefined;
 		const request: CompareRequest = {
 			sides: order.map((l) => {
 				const subpath = (subpaths[l.label] ?? '').trim();
@@ -67,7 +74,7 @@
 			}),
 			nfc,
 			caseInsensitive,
-			...(fast && Number.isFinite(seconds) && { fastMs: Math.round(seconds * 1000) }),
+			...(fast && { fastMs: Math.round(seconds * 1000) }),
 			duplicates
 		};
 		navigate(`/compare/view?${toQuery(request).toString()}`);
@@ -119,7 +126,11 @@
 			<Checkbox label="Unicode normalization (NFC)" bind:checked={nfc} />
 			<Checkbox label="Fast mode: assume files equal by size and time" bind:checked={fast} />
 			{#if fast}
-				<Input label="Time tolerance in seconds" bind:value={fastSeconds} />
+				<Input
+					label="Time tolerance in seconds"
+					bind:value={fastSeconds}
+					{...toleranceError ? { error: toleranceError } : {}}
+				/>
 			{/if}
 			<Checkbox label="Find duplicates within each location" bind:checked={duplicates} />
 		</fieldset>

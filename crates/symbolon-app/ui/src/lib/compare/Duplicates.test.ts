@@ -78,3 +78,18 @@ describe('duplicates', () => {
 		expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
 	});
 });
+
+describe('duplicates paging', () => {
+	it('a double click on Show more reads the next page once', async () => {
+		const { fireEvent } = await import('@testing-library/svelte');
+		open('sides=Photos%2CBackup&dupes=1');
+		await screen.findByText('d00000000099');
+		const more = screen.getByRole('button', { name: 'Show more' });
+		await fireEvent.click(more);
+		await fireEvent.click(more);
+		await waitFor(() => {
+			expect(screen.getByText('d00000000129')).toBeTruthy();
+		});
+		expect(screen.getAllByText('d00000000100')).toHaveLength(1);
+	});
+});

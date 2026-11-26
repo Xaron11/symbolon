@@ -64,3 +64,23 @@ describe('ComparePicker', () => {
 		expect(navigate).not.toHaveBeenCalled();
 	});
 });
+
+describe('ComparePicker fast mode', () => {
+	it('accepts a comma decimal and refuses a negative tolerance', async () => {
+		const user = userEvent.setup();
+		const { navigate } = picker();
+		await user.click(await screen.findByRole('checkbox', { name: 'Photos' }));
+		await user.click(screen.getByRole('checkbox', { name: 'Backup' }));
+		await user.click(screen.getByRole('checkbox', { name: /Fast mode/ }));
+		const tolerance = screen.getByLabelText('Time tolerance in seconds');
+		await user.clear(tolerance);
+		await user.type(tolerance, '-1');
+		await user.click(screen.getByRole('button', { name: 'Compare' }));
+		expect(screen.getByText('Enter a tolerance of 0 seconds or more.')).toBeTruthy();
+		expect(navigate).not.toHaveBeenCalled();
+		await user.clear(tolerance);
+		await user.type(tolerance, '1,5');
+		await user.click(screen.getByRole('button', { name: 'Compare' }));
+		expect(navigate).toHaveBeenCalledWith('/compare/view?sides=Photos%2CBackup&fast=1500');
+	});
+});

@@ -1,4 +1,4 @@
-import { ApiError, type CompareRequest, type SideRequest } from '../api/index.ts';
+import { ApiError, type CompareRequest } from '../api/index.ts';
 
 // A comparison lives in its URL, so a reload or a shared link opens it again:
 // `sides=Photos,Backup:2024&nfc=1&ci=1&fast=2000&dupes=1`. Each label and subfolder is
@@ -21,31 +21,37 @@ export function toQuery(request: CompareRequest): URLSearchParams {
 	return query;
 }
 
-/** The comparison `query` names, or an `InvalidInput` error saying what is missing. */
+const invalid = (message: string) => new ApiError('InvalidInput', message);
+
+/** The comparison `query` names, or an `InvalidInput` error saying what is wrong. */
 export function fromQuery(query: Pick<URLSearchParams, 'get' | 'has'>): CompareRequest | ApiError {
-	const sides: SideRequest[] = (query.get('sides') ?? '')
-		.split(',')
-		.filter((spec) => spec !== '')
-		.map((spec) => {
-			const colon = spec.indexOf(':');
-			const label = decodeURIComponent(colon < 0 ? spec : spec.slice(0, colon));
-			return colon < 0
-				? { label, subpath: null }
-				: { label, subpath: decodeURIComponent(spec.slice(colon + 1)) };
-		});
+	let sides: CompareRequest['sides'];
+	try {
+		sides = (query.get('sides') ?? '')
+			.split(',')
+			.filter((spec) => spec !== '')
+			.map((spec) => {
+				const colon = spec.indexOf(':');
+				const label = decodeURIComponent(colon < 0 ? spec : spec.slice(0, colon));
+				const subpath = colon < 0 ? '' : decodeURIComponent(spec.slice(colon + 1));
+				return subpath === '' ? { label } : { label, subpath };
+			});
+	} catch {
+		return invalid('This link names its locations in a way that cannot be read.');
+	}
 	const duplicates = query.get('dupes') === '1';
 	if (sides.length < (duplicates ? 1 : 2)) {
-		return new ApiError(
-			'InvalidInput',
-			'Choose at least two locations, or one with Find duplicates on.'
-		);
+		return invalid('Choose at least two locations, or one with Find duplicates on.');
 	}
-	const fast = Number(query.get('fast'));
+	const fast = query.get('fast');
+	if (fast !== null && !/^\d+$/.test(fast)) {
+		return invalid('The fast-mode tolerance in this link is not a whole number of milliseconds.');
+	}
 	return {
-		sides: sides.map((side) => (side.subpath === null ? { label: side.label } : side)),
+		sides,
 		nfc: query.get('nfc') === '1',
 		caseInsensitive: query.get('ci') === '1',
-		...(query.has('fast') && Number.isFinite(fast) && { fastMs: fast }),
+		...(fast !== null && { fastMs: Number(fast) }),
 		duplicates
 	};
 }

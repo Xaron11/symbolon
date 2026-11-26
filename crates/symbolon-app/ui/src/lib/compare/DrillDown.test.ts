@@ -180,3 +180,21 @@ describe('drill-down', () => {
 		});
 	});
 });
+
+describe('drill-down focus', () => {
+	it('returns focus to the list when the row panel closes', async () => {
+		const user = userEvent.setup();
+		open();
+		const grid = await list();
+		await waitFor(() => {
+			expect(within(grid).getByText('a.jpg')).toBeTruthy();
+		});
+		grid.focus();
+		await user.keyboard('{Enter}');
+		const panel = await screen.findByRole('complementary', { name: 'a.jpg' });
+		await user.click(within(panel).getByRole('button', { name: 'Close' }));
+		await waitFor(() => {
+			expect(document.activeElement).toBe(screen.getByRole('grid', { name: 'Rows' }));
+		});
+	});
+});

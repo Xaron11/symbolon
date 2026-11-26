@@ -141,3 +141,19 @@ describe('CompareView', () => {
 		);
 	});
 });
+
+describe('CompareView filters after a refresh', () => {
+	it('drops a category filter whose rows are gone', async () => {
+		const user = userEvent.setup();
+		const { backend } = compare();
+		await user.click(await tile('Unverified'));
+		backend.emitVerify(1, { type: 'ResultsChanged', summary: summary(0) });
+		await waitFor(() => {
+			expect(noTile('Unverified')).toBeNull();
+		});
+		await waitFor(() => {
+			const last = backend.calls.filter((c) => c.method === 'compare.count').at(-1);
+			expect(last?.args[1]).toMatchObject({ categories: [] });
+		});
+	});
+});

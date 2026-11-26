@@ -21,6 +21,13 @@
 	const count = new Intl.NumberFormat('en-US');
 	let view = $state<'list' | 'tree'>('list');
 	let selected = $state<CompareRowView | undefined>(undefined);
+	let pane = $state<HTMLDivElement>();
+
+	/** Closes the row panel and gives focus back to the list or tree it was opened from. */
+	function closeDetail() {
+		selected = undefined;
+		pane?.querySelector<HTMLElement>('[role="grid"], [role="tree"]')?.focus();
+	}
 	// A new filter means new sources; the key rebuilds the table or tree.
 	const filterKey = $derived(JSON.stringify(session.filter));
 
@@ -97,13 +104,13 @@
 		role="presentation"
 		onkeydowncapture={(event) => {
 			if (event.key === 'Escape' && selected) {
-				selected = undefined;
+				closeDetail();
 				event.preventDefault();
 				event.stopPropagation();
 			}
 		}}
 	>
-		<div class="pane">
+		<div class="pane" bind:this={pane}>
 			{#if session.id !== undefined}
 				{#key `${view}:${filterKey}`}
 					{#if view === 'list'}
@@ -128,7 +135,7 @@
 			{/if}
 		</div>
 		{#if selected}
-			<RowDetail row={selected} sides={session.sides} onclose={() => (selected = undefined)} />
+			<RowDetail row={selected} sides={session.sides} onclose={closeDetail} />
 		{/if}
 	</div>
 </section>

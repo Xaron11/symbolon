@@ -6,6 +6,7 @@
 		type DuplicateSetView,
 		type DuplicateTotalsView
 	} from '../api/index.ts';
+	import { SvelteSet } from 'svelte/reactivity';
 	import Alert from '../components/Alert/Alert.svelte';
 	import Button from '../components/Button/Button.svelte';
 	import { formatBytes } from '../format';
@@ -41,11 +42,24 @@
 			.catch((e: unknown) => (error = explain(toApiError(e))));
 	});
 
+	// One page read per side at a time; a page that started before a refresh is dropped.
+	const reading = new SvelteSet<number>();
+
 	async function more(side: number) {
-		if (session.id === undefined) return;
-		const shown = groups[side] ?? [];
-		const next = await api.compare.duplicates(session.id, side, shown.length, PAGE);
-		groups = groups.map((list, i) => (i === side ? [...list, ...next] : list));
+		const id = session.id;
+		if (id === undefined || reading.has(side)) return;
+		reading.add(side);
+		const started = refreshed;
+		try {
+			const next = await api.compare.duplicates(id, side, (groups[side] ?? []).length, PAGE);
+			if (started === refreshed) {
+				groups = groups.map((list, i) => (i === side ? [...list, ...next] : list));
+			}
+		} catch (e) {
+			error = explain(toApiError(e));
+		} finally {
+			reading.delete(side);
+		}
 	}
 </script>
 
