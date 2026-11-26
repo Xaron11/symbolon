@@ -43,3 +43,8 @@ Element.prototype.getClientRects = function getClientRects(): DOMRectList {
 	const list = [box()];
 	return Object.assign(list, { item: (i: number) => list[i] ?? null });
 };
+
+// Bits UI scrolls the active command into view; jsdom has nothing to scroll.
+Element.prototype.scrollIntoView = function scrollIntoView() {
+	// No layout in jsdom.
+};
