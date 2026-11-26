@@ -212,6 +212,35 @@ fn three_sides_keep_the_presence_matrix() {
 }
 
 #[test]
+fn only_in_totals_say_which_sides_hold_the_rows() {
+    let fx = Fixture::new();
+    fx.eager(
+        "a",
+        &[("all", "same"), ("ab", "pair"), ("a1", "x"), ("a2", "yy")],
+    );
+    fx.eager("b", &[("all", "same"), ("ab", "pair")]);
+    fx.eager("c", &[("all", "same"), ("c_only", "!")]);
+    let cmp = fx.compare(&["a", "b", "c"], CompareOptions::default());
+
+    let only_in = cmp.summary().unwrap().only_in;
+    let sides: Vec<Vec<usize>> = only_in.keys().map(|s| s.iter().collect()).collect();
+    assert_eq!(sides, [vec![0], vec![0, 1], vec![2]]);
+    let a = only_in[&SideSet::from_bits(0b001)];
+    assert_eq!((a.rows, a.entries, a.bytes), (2, 2, 3));
+    let ab = only_in[&SideSet::from_bits(0b011)];
+    assert_eq!((ab.rows, ab.entries, ab.bytes), (1, 2, 8));
+
+    let filtered = cmp
+        .filtered_summary(&RowFilter::default().presence(SideSet::from_bits(0b100)))
+        .unwrap()
+        .only_in;
+    assert_eq!(
+        filtered.keys().copied().collect::<Vec<_>>(),
+        [SideSet::from_bits(0b100)]
+    );
+}
+
+#[test]
 fn unhashed_files_are_unverified_unless_sizes_settle_it_or_fast_mode_assumes() {
     let fx = Fixture::new();
     let lazy = |label, files: &[(&str, &str, u64)]| {

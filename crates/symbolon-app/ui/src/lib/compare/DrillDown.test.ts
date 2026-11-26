@@ -42,7 +42,8 @@ function seed(sides = 2): MemorySeed {
 				categories: [
 					{ category: 'identical', rows: 2, entries: 4, bytes: 30, assumedRows: 0 },
 					{ category: 'different', rows: 1, entries: 2, bytes: 20, assumedRows: 0 }
-				]
+				],
+				onlyIn: []
 			},
 			rows: [
 				row('a.jpg', 'identical', 10),
@@ -100,11 +101,10 @@ describe('drill-down', () => {
 		await expectNoAxeViolations(container);
 	});
 
-	it('filters by category, and offers presence only for three sides or more', async () => {
+	it('filters by category', async () => {
 		const user = userEvent.setup();
 		const { backend } = open();
 		const chips = await screen.findByRole('group', { name: 'Filters' });
-		expect(within(chips).queryByRole('group', { name: 'Present on' })).toBeNull();
 		await user.click(within(chips).getByRole('button', { name: 'Different' }));
 		await waitFor(() => {
 			expect(
@@ -115,6 +115,60 @@ describe('drill-down', () => {
 		});
 		await waitFor(() => {
 			expect(within(screen.getByRole('grid', { name: 'Rows' })).queryByText('a.jpg')).toBeNull();
+		});
+	});
+
+	it('names the sides of only-in rows and the paths of moves and renames', async () => {
+		const user = userEvent.setup();
+		const data = seed();
+		const moved = row('new/a.jpg', 'moved', 10);
+		const first = moved.cells[0];
+		if (first) moved.cells[0] = { ...first, path: 'old/a.jpg' };
+		const onlyInBackup: CompareRowView = {
+			...row('b.jpg', 'only_in', 20),
+			presence: [1],
+			cells: row('b.jpg', 'only_in', 20).cells.filter((c) => c.side === 1)
+		};
+		if (data.comparison) {
+			data.comparison.rows = [moved, onlyInBackup];
+			data.comparison.tree = {
+				'': [
+					{
+						key: 'b.jpg',
+						name: 'b.jpg',
+						folder: false,
+						row: onlyInBackup,
+						matchingRows: 0,
+						matchingBytes: 0
+					}
+				]
+			};
+		}
+		renderWithBackend(CompareView, { query: new URLSearchParams('sides=Photos%2CBackup') }, data);
+		const grid = await list();
+		await waitFor(() => {
+			expect(within(grid).getByText('Only in Backup')).toBeTruthy();
+		});
+		expect(within(grid).getByText('Moved Photos → Backup')).toBeTruthy();
+		expect(within(grid).getByText('old/a.jpg → new/a.jpg')).toBeTruthy();
+		await user.click(screen.getByRole('radio', { name: 'Tree' }));
+		const tree = await screen.findByRole('tree', { name: 'Rows by folder' });
+		await waitFor(() => {
+			expect(within(tree).getByText('b.jpg — Only in Backup')).toBeTruthy();
+		});
+	});
+
+	it('offers presence with two sides', async () => {
+		const user = userEvent.setup();
+		const { backend } = open();
+		const presence = await screen.findByRole('group', { name: 'Present on' });
+		await user.click(within(presence).getByRole('checkbox', { name: 'Backup' }));
+		await waitFor(() => {
+			expect(
+				backend.calls.filter((c) => c.method === 'compare.rows').at(-1)?.args[1]
+			).toMatchObject({
+				presence: [1]
+			});
 		});
 	});
 
@@ -171,7 +225,7 @@ describe('drill-down', () => {
 		const before = backend.calls.filter((c) => c.method === 'compare.count').length;
 		backend.emitVerify(1, {
 			type: 'ResultsChanged',
-			summary: backend.seed.comparison?.summary ?? { categories: [] }
+			summary: backend.seed.comparison?.summary ?? { categories: [], onlyIn: [] }
 		});
 		await waitFor(() => {
 			expect(backend.calls.filter((c) => c.method === 'compare.count').length).toBeGreaterThan(

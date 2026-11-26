@@ -11,7 +11,7 @@
 	import DataTable, { type Column } from '../components/DataTable/DataTable.svelte';
 	import TreeView from '../components/TreeView/TreeView.svelte';
 	import { formatBytes } from '../format';
-	import { category } from './categories';
+	import { rowPath, rowSummary } from './categories';
 	import FilterChips from './FilterChips.svelte';
 	import RowDetail from './RowDetail.svelte';
 	import type { CompareSession } from './session.svelte';
@@ -45,15 +45,15 @@
 		{
 			id: 'path',
 			header: 'Path',
-			cell: (r: CompareRowView) => r.display,
+			cell: rowPath,
 			mono: true,
 			sortable: true
 		},
 		{
 			id: 'category',
 			header: 'Category',
-			cell: (r: CompareRowView) => category(r.category).label,
-			width: 120
+			cell: (r: CompareRowView) => rowSummary(r, session.sides),
+			width: 200
 		},
 		{
 			id: 'size',
@@ -78,7 +78,9 @@
 	const nodeLabel = (node: TreeNodeView) =>
 		node.folder
 			? `${node.name} — ${count.format(node.matchingRows)} · ${formatBytes(node.matchingBytes)}`
-			: node.name;
+			: node.row
+				? `${node.name} — ${rowSummary(node.row, session.sides)}`
+				: node.name;
 </script>
 
 <section class="sy-drill-down" aria-label="Rows">

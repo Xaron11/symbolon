@@ -50,7 +50,9 @@ describe('memory backend', () => {
 	});
 
 	it('closed comparisons are not found', async () => {
-		const b = createMemoryBackend({ comparison: { summary: { categories: [] }, rows: [] } });
+		const b = createMemoryBackend({
+			comparison: { summary: { categories: [], onlyIn: [] }, rows: [] }
+		});
 		const { id } = await b.compare.open(
 			{
 				sides: [{ label: 'a' }, { label: 'b' }],

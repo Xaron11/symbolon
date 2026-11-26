@@ -31,7 +31,8 @@ const summary = (unverified: number): SummaryView => ({
 					}
 				]
 			: [])
-	]
+	],
+	onlyIn: []
 });
 
 const seed = (): MemorySeed => ({
@@ -109,6 +110,50 @@ describe('CompareView', () => {
 		expect(different.getAttribute('aria-pressed')).toBe('true');
 		await user.click(different);
 		expect(different.getAttribute('aria-pressed')).toBe('false');
+	});
+
+	it('names the sides of only-in rows and of moves', async () => {
+		const user = userEvent.setup();
+		const data = seed();
+		if (data.comparison)
+			data.comparison.summary = {
+				categories: [
+					...summary(0).categories,
+					{ category: 'only_in', rows: 5, entries: 5, bytes: 500, assumedRows: 0 },
+					{ category: 'moved', rows: 2, entries: 4, bytes: 64, assumedRows: 0 }
+				],
+				onlyIn: [
+					{ sides: [0], rows: 3, entries: 3, bytes: 300, assumedRows: 0 },
+					{ sides: [1], rows: 2, entries: 2, bytes: 200, assumedRows: 0 }
+				]
+			};
+		const { backend } = compare('sides=Photos%2CBackup', data);
+		const photos = await tile('Only in Photos');
+		expect(within(photos).getByText('3')).toBeTruthy();
+		const backup = await tile('Only in Backup');
+		expect(within(backup).getByText('2')).toBeTruthy();
+		expect(within(await tile('Moved')).getByText(/Photos → Backup/)).toBeTruthy();
+
+		await user.click(backup);
+		expect(backup.getAttribute('aria-pressed')).toBe('true');
+		expect(photos.getAttribute('aria-pressed')).toBe('false');
+		await waitFor(() => {
+			expect(backend.calls.filter((c) => c.method === 'compare.count').at(-1)?.args[1]).toEqual({
+				categories: ['only_in'],
+				presence: [1]
+			});
+		});
+		const presence = screen.getByRole('group', { name: 'Present on' });
+		expect(
+			within(presence).getByRole<HTMLInputElement>('checkbox', { name: 'Backup' }).checked
+		).toBe(true);
+
+		await user.click(await tile('Different'));
+		await waitFor(() => {
+			expect(
+				backend.calls.filter((c) => c.method === 'compare.count').at(-1)?.args[1]
+			).toMatchObject({ categories: ['different'], presence: null });
+		});
 	});
 
 	it('charts bytes by extension and by size', async () => {

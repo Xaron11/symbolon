@@ -10,7 +10,7 @@
 	import CompositionBar from '../components/CompositionBar/CompositionBar.svelte';
 	import StatTile from '../components/StatTile/StatTile.svelte';
 	import { formatBytes } from '../format';
-	import { CATEGORIES } from './categories';
+	import { CATEGORIES, isMove, sideNames } from './categories';
 	import type { CompareSession } from './session.svelte';
 
 	let { session }: { session: CompareSession } = $props();
@@ -27,6 +27,54 @@
 		})
 	);
 	const selected = $derived(session.filter.categories ?? []);
+
+	/** A tile: a category, or the only-in rows of one set of sides. */
+	interface Tile {
+		key: string;
+		name: CategoryName;
+		label: string;
+		rows: number;
+		detail: string;
+		/** The sides the tile's rows are on exactly, for only-in tiles. */
+		presence: readonly number[] | null;
+	}
+	const tiles = $derived<Tile[]>(
+		totals.flatMap(({ info, totals: t }): Tile[] => {
+			const split = info.name === 'only_in' ? (session.summary?.onlyIn ?? []) : [];
+			if (split.some((s) => s.rows > 0))
+				return split
+					.filter((s) => s.rows > 0)
+					.map((s) => ({
+						key: `only_in:${s.sides.join(',')}`,
+						name: info.name,
+						label: `${info.label} ${sideNames(s.sides, session.sides)}`,
+						rows: s.rows,
+						detail: formatBytes(s.bytes),
+						presence: s.sides
+					}));
+			const direction =
+				isMove(info.name) && session.sides.length === 2
+					? ` · ${session.sides.map((s) => s.label).join(' → ')}`
+					: '';
+			return [
+				{
+					key: info.name,
+					name: info.name,
+					label: info.label,
+					rows: t.rows,
+					detail: formatBytes(t.bytes) + direction,
+					presence: null
+				}
+			];
+		})
+	);
+	// No presence and an empty one both mean every side.
+	const samePresence = (a: readonly number[] | null, b: readonly number[] | null | undefined) =>
+		(a ?? []).join() === (b ?? []).join();
+	const pressed = (tile: Pick<Tile, 'name' | 'presence'>) =>
+		selected.length === 1 &&
+		selected[0] === tile.name &&
+		samePresence(tile.presence, session.filter.presence);
 
 	$effect(() => session.changes.subscribe(() => refreshed++));
 
@@ -45,9 +93,14 @@
 		);
 	});
 
-	function choose(name: CategoryName) {
-		const only = selected.length === 1 && selected[0] === name;
-		session.filter = { ...session.filter, categories: only ? [] : [name] };
+	// A tile picks rows by category and, for only-in tiles, by sides; other presence choices go.
+	function choose(tile: Pick<Tile, 'name' | 'presence'>) {
+		const on = pressed(tile);
+		session.filter = {
+			...session.filter,
+			categories: on ? [] : [tile.name],
+			presence: on || tile.presence === null ? null : [...tile.presence]
+		};
 	}
 
 	const BUCKETS = ['< 1 KiB', '< 1 MiB', '< 10 MiB', '< 100 MiB', '< 1 GiB', '≥ 1 GiB'];
@@ -89,20 +142,20 @@
 
 <section class="sy-dashboard" aria-label="Summary">
 	<div class="tiles" role="group" aria-label="Categories">
-		{#each totals as { info, totals: t } (info.name)}
+		{#each tiles as tile (tile.key)}
 			<button
 				type="button"
 				class="tile"
-				aria-pressed={selected.includes(info.name)}
+				aria-pressed={pressed(tile)}
 				onclick={() => {
-					choose(info.name);
+					choose(tile);
 				}}
 			>
 				<StatTile
-					label={info.label}
-					value={count.format(t.rows)}
-					detail={formatBytes(t.bytes)}
-					category={info.name}
+					label={tile.label}
+					value={count.format(tile.rows)}
+					detail={tile.detail}
+					category={tile.name}
 				/>
 			</button>
 		{/each}
@@ -115,7 +168,9 @@
 				count: t.rows,
 				bytes: t.bytes
 			}))}
-			onselect={choose}
+			onselect={(name: CategoryName) => {
+				choose({ name, presence: null });
+			}}
 		/>
 	{/if}
 	<div class="charts">

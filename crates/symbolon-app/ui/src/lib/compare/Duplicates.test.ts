@@ -25,7 +25,8 @@ const seed = (): MemorySeed => ({
 	locations: [location('Photos'), location('Backup')],
 	comparison: {
 		summary: {
-			categories: [{ category: 'identical', rows: 1, entries: 2, bytes: 2, assumedRows: 0 }]
+			categories: [{ category: 'identical', rows: 1, entries: 2, bytes: 2, assumedRows: 0 }],
+			onlyIn: []
 		},
 		rows: [],
 		extensions: [],

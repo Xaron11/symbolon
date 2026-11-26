@@ -104,16 +104,47 @@ pub(crate) struct CategoryTotals {
     pub(crate) assumed_rows: u64,
 }
 
-/// Totals by category; categories without rows are left out.
+/// Rows, entries and bytes of the only-in rows held by exactly `sides`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct OnlyInTotals {
+    pub(crate) sides: Vec<u32>,
+    #[specta(type = Number)]
+    pub(crate) rows: u64,
+    #[specta(type = Number)]
+    pub(crate) entries: u64,
+    #[specta(type = Number)]
+    pub(crate) bytes: u64,
+    #[specta(type = Number)]
+    pub(crate) assumed_rows: u64,
+}
+
+/// Totals by category, and of only-in rows by the sides holding them; empty groups are left
+/// out.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SummaryView {
     pub(crate) categories: Vec<CategoryTotals>,
+    pub(crate) only_in: Vec<OnlyInTotals>,
 }
 
 impl From<Summary> for SummaryView {
     fn from(summary: Summary) -> Self {
         Self {
+            only_in: summary
+                .only_in
+                .into_iter()
+                .map(|(sides, totals)| OnlyInTotals {
+                    sides: sides
+                        .iter()
+                        .filter_map(|side| u32::try_from(side).ok())
+                        .collect(),
+                    rows: totals.rows,
+                    entries: totals.entries,
+                    bytes: totals.bytes,
+                    assumed_rows: totals.assumed_rows,
+                })
+                .collect(),
             categories: summary
                 .categories
                 .into_iter()
@@ -835,6 +866,7 @@ mod tests {
     use std::fs;
 
     use symbolon_core::catalog::{HashPolicy, NewLocation};
+    use symbolon_core::compare::Totals;
     use symbolon_core::hash::HashAlgo;
     use symbolon_core::scan::Scanner;
 
@@ -917,6 +949,27 @@ mod tests {
             update,
             VerifyUpdate::Done | VerifyUpdate::Cancelled | VerifyUpdate::Failed { .. }
         )
+    }
+
+    #[test]
+    fn summary_names_the_sides_holding_only_in_rows() {
+        let mut summary = Summary::default();
+        let mut totals = Totals::default();
+        totals.rows = 3;
+        totals.entries = 4;
+        totals.bytes = 50;
+        summary.only_in.insert(SideSet::from_bits(0b101), totals);
+        let view = SummaryView::from(summary);
+        assert_eq!(
+            view.only_in,
+            [OnlyInTotals {
+                sides: vec![0, 2],
+                rows: 3,
+                entries: 4,
+                bytes: 50,
+                assumed_rows: 0,
+            }]
+        );
     }
 
     #[test]

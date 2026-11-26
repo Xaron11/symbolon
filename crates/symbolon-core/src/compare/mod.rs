@@ -218,8 +218,8 @@ impl FromStr for Category {
     }
 }
 
-/// A set of sides, by index into [`Comparison::sides`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+/// A set of sides, by index into [`Comparison::sides`]. Sets order by their bitmask.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SideSet(u64);
 
 impl SideSet {
@@ -332,6 +332,8 @@ pub struct Totals {
 pub struct Summary {
     /// Totals by category; categories without rows are absent.
     pub categories: BTreeMap<Category, Totals>,
+    /// Totals of the [`Category::OnlyIn`] rows by the sides holding them.
+    pub only_in: BTreeMap<SideSet, Totals>,
 }
 
 impl Summary {

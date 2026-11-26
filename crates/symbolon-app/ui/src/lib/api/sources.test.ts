@@ -28,7 +28,9 @@ function entry(key: string, folder: boolean): EntryView {
 }
 
 async function opened(rows: CompareRowView[], tree: Record<string, TreeNodeView[]> = {}) {
-	const b = createMemoryBackend({ comparison: { summary: { categories: [] }, rows, tree } });
+	const b = createMemoryBackend({
+		comparison: { summary: { categories: [], onlyIn: [] }, rows, tree }
+	});
 	const { id } = await b.compare.open(
 		{
 			sides: [{ label: 'a' }, { label: 'b' }],

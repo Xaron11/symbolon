@@ -88,7 +88,7 @@
 			{ value: 'large', label: 'Over 100 MiB' }
 		]}
 	/>
-	{#if session.sides.length >= 3}
+	{#if session.sides.length >= 2}
 		<fieldset class="presence" aria-label="Present on">
 			<legend>Present on</legend>
 			{#each session.sides as side, i (i)}

@@ -376,6 +376,25 @@ pub(super) fn summary(conn: &Connection, filter: &FilterParams) -> Result<Summar
         let (category, totals) = row?;
         summary.categories.insert(category.parse()?, totals);
     }
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT presence, count(*), sum(entries), sum(bytes), sum(assumed)
+         FROM temp.cmp_rows WHERE category = 'only_in' AND {FILTER} GROUP BY presence"
+    ))?;
+    let rows = stmt.query_map(filter.named().as_slice(), |row| {
+        Ok((
+            SideSet::from_bits(row.get::<_, i64>(0)?.cast_unsigned()),
+            Totals {
+                rows: row.get(1)?,
+                entries: row.get(2)?,
+                bytes: row.get(3)?,
+                assumed_rows: row.get(4)?,
+            },
+        ))
+    })?;
+    for row in rows {
+        let (sides, totals) = row?;
+        summary.only_in.insert(sides, totals);
+    }
     Ok(summary)
 }
 
