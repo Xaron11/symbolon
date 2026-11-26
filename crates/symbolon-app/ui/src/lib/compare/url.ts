@@ -22,7 +22,7 @@ export function toQuery(request: CompareRequest): URLSearchParams {
 }
 
 /** The comparison `query` names, or an `InvalidInput` error saying what is missing. */
-export function fromQuery(query: URLSearchParams): CompareRequest | ApiError {
+export function fromQuery(query: Pick<URLSearchParams, 'get' | 'has'>): CompareRequest | ApiError {
 	const sides: SideRequest[] = (query.get('sides') ?? '')
 		.split(',')
 		.filter((spec) => spec !== '')
