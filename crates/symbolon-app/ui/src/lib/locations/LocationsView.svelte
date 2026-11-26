@@ -104,6 +104,7 @@
 {:else}
 	<LocationTable
 		{locations}
+		scanning={scanState.running.map((u) => u.label)}
 		onscan={(label: string) => void act(() => scanState.start(label))}
 		onrename={(label: string) => (renaming = label)}
 		onpolicy={(label: string, policy: HashPolicy) =>

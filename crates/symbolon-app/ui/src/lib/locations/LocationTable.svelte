@@ -11,6 +11,8 @@
 
 	interface Props {
 		locations: readonly LocationView[];
+		/** Labels of locations being scanned now. */
+		scanning?: readonly string[];
 		onscan: (label: string) => void;
 		onrename: (label: string) => void;
 		onpolicy: (label: string, policy: HashPolicy) => void;
@@ -19,7 +21,15 @@
 		onfollow: (label: string, choice?: number) => void;
 	}
 
-	let { locations, onscan, onrename, onpolicy, onremove, onfollow }: Props = $props();
+	let {
+		locations,
+		scanning = [],
+		onscan,
+		onrename,
+		onpolicy,
+		onremove,
+		onfollow
+	}: Props = $props();
 	const count = new Intl.NumberFormat('en-US');
 
 	function items(location: LocationView): MenuItem[] {
@@ -35,15 +45,7 @@
 					}))
 				: [];
 		return [
-			{
-				label: 'Scan',
-				disabled: scanBlocked(location.status) !== undefined,
-				onSelect: () => {
-					onscan(label);
-				}
-			},
-			...(candidates.length > 0 ? [{ separator: true } as const, ...candidates] : []),
-			{ separator: true },
+			...(candidates.length > 0 ? [...candidates, { separator: true } as const] : []),
 			{
 				label: 'Rename…',
 				onSelect: () => {
@@ -126,9 +128,26 @@
 				<td class="end sy-mono">{formatBytes(location.stats.bytes)}</td>
 				<td>{location.hashPolicy === 'Eager' ? 'Every scan' : 'When compared'}</td>
 				<td class="end">
-					<DropdownMenu label="Actions for {location.label}" items={items(location)}>
-						{#snippet trigger()}<Ellipsis aria-hidden="true" />{/snippet}
-					</DropdownMenu>
+					<div class="row-actions">
+						{#if scanning.includes(location.label)}
+							<a class="scanning" href="/scans" aria-label="Scanning {location.label}">Scanning…</a>
+						{:else}
+							<Button
+								size="sm"
+								variant="secondary"
+								aria-label="Scan {location.label}"
+								disabled={blocked !== undefined}
+								onclick={() => {
+									onscan(location.label);
+								}}
+							>
+								Scan
+							</Button>
+						{/if}
+						<DropdownMenu label="Actions for {location.label}" items={items(location)}>
+							{#snippet trigger()}<Ellipsis aria-hidden="true" />{/snippet}
+						</DropdownMenu>
+					</div>
 				</td>
 			</tr>
 		{/each}
@@ -179,6 +198,19 @@
 
 	.end {
 		text-align: end;
+	}
+
+	.row-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: var(--sy-space-4);
+	}
+
+	.scanning {
+		color: var(--sy-color-text-secondary);
+		font-size: var(--sy-font-size-small);
+		white-space: nowrap;
 	}
 
 	.note,
