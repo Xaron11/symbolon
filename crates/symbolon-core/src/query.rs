@@ -2,8 +2,10 @@
 //!
 //! A [`Query`] owns one read-only SQLite connection. In WAL mode it sees every batch a running
 //! scan has committed, so clients can browse partial results during a scan. Everything that can
-//! grow with a location is paginated with keyset cursors ([`Page`], [`PageOf`]): pages stay
-//! fast at any depth and do not skip or repeat rows when the scan inserts more.
+//! grow with a location is paginated ([`Page`], [`PageOf`]), by keyset cursor or by offset
+//! (ADR-0023). Cursor pages stay fast at any depth and do not skip or repeat rows when the scan
+//! inserts more; offset pages let a list jump anywhere, and a client re-reads counts while a
+//! scan is writing.
 
 use rusqlite::{Connection, OptionalExtension as _, params};
 
@@ -16,11 +18,14 @@ use crate::source::{EntryKind, WarningKind};
 /// Largest page [`Page::limit`] allows.
 pub const MAX_PAGE: u32 = 10_000;
 
-/// Which slice of a result to return.
+/// Which slice of a result to return: by cursor (continue after a known item) or by offset
+/// (jump to a position, as a scrolled list does).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Page {
     /// Continue after this cursor (from [`PageOf::next`]); `None` starts at the beginning.
     pub after: Option<Cursor>,
+    /// Skip this many items instead; never set together with [`Page::after`].
+    pub offset: Option<u64>,
     /// Maximum items, clamped to `1..=`[`MAX_PAGE`].
     pub limit: u32,
 }
@@ -28,15 +33,39 @@ pub struct Page {
 impl Page {
     /// The first `limit` items.
     pub fn first(limit: u32) -> Self {
-        Self { after: None, limit }
+        Self {
+            after: None,
+            offset: None,
+            limit,
+        }
     }
 
     /// The `limit` items after `cursor`.
     pub fn after(cursor: Cursor, limit: u32) -> Self {
         Self {
             after: Some(cursor),
+            offset: None,
             limit,
         }
+    }
+
+    /// The `limit` items from position `offset`. Offset pages return no [`PageOf::next`].
+    pub fn at(offset: u64, limit: u32) -> Self {
+        Self {
+            after: None,
+            offset: Some(offset),
+            limit,
+        }
+    }
+
+    /// The offset to skip, or an error for a page that also has a cursor.
+    pub(crate) fn checked_offset(&self) -> Result<Option<u64>, CatalogError> {
+        if self.after.is_some() && self.offset.is_some() {
+            return Err(CatalogError::Corrupt(
+                "page has both cursor and offset".into(),
+            ));
+        }
+        Ok(self.offset)
     }
 
     fn effective_limit(&self) -> u32 {

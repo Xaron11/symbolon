@@ -5,8 +5,8 @@ use std::ops::ControlFlow;
 
 use serde::Serialize;
 use symbolon_core::compare::{
-    Category, Cell, CompareOptions, Comparison, ResolveEvent, ResolveSummary, Row, RowFilter, Side,
-    Summary,
+    Category, Cell, CompareOptions, Comparison, ResolveEvent, ResolveSummary, Row, RowFilter,
+    RowOrder, Side, Summary,
 };
 use symbolon_core::hash::Digest;
 use symbolon_core::pathkey::{KeyOptions, escape_raw};
@@ -173,7 +173,7 @@ fn for_each_row(
 ) -> anyhow::Result<()> {
     let mut page = Page::first(PAGE);
     loop {
-        let result = cmp.rows(filter, &page)?;
+        let result = cmp.rows(filter, RowOrder::default(), &page)?;
         for row in &result.items {
             f(row)?;
         }

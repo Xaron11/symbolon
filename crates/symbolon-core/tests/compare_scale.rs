@@ -7,7 +7,9 @@ use std::time::Instant;
 
 use rusqlite::{Connection, params};
 use symbolon_core::catalog::{Catalog, NewLocation};
-use symbolon_core::compare::{Category, CompareOptions, Comparison, RowFilter, Side};
+use symbolon_core::compare::{
+    Category, CompareOptions, Comparison, Direction, RowFilter, RowOrder, Side,
+};
 use symbolon_core::hash::{HashAlgo, hash_bytes};
 use symbolon_core::pathkey::RelPath;
 use symbolon_core::query::Page;
@@ -110,6 +112,7 @@ fn compares_two_200k_entry_locations_quickly() {
     let page = cmp
         .rows(
             &RowFilter::categories([Category::Different]),
+            RowOrder::default(),
             &Page::first(500),
         )
         .expect("rows");
@@ -133,4 +136,54 @@ fn compares_two_200k_entry_locations_quickly() {
     eprintln!(
         "200k × 2: catalog built in {populated:.1?}, compared in {compared:.2?}, summary + first page in {read:.0?}"
     );
+}
+
+#[test]
+#[ignore = "builds two 200k-entry locations; run with `just test-acceptance`"]
+fn last_offset_page_is_fast() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let catalog = populate(dir.path());
+    let cmp = Comparison::new(
+        &catalog,
+        &[Side::location("a"), Side::location("b")],
+        CompareOptions::default(),
+    )
+    .expect("compare");
+    let identical = RowFilter::categories([Category::Identical]);
+    for (name, filter, order) in [
+        ("all, path", RowFilter::default(), RowOrder::default()),
+        (
+            "all, size desc",
+            RowFilter::default(),
+            RowOrder::Size(Direction::Desc),
+        ),
+        ("identical, path", identical.clone(), RowOrder::default()),
+        (
+            "identical, size desc",
+            identical,
+            RowOrder::Size(Direction::Desc),
+        ),
+    ] {
+        let count: u64 = cmp
+            .filtered_summary(&filter)
+            .expect("summary")
+            .categories
+            .values()
+            .map(|t| t.rows)
+            .sum();
+        // The first page in a size order builds that order's index once.
+        let started = Instant::now();
+        cmp.rows(&filter, order, &Page::at(0, 100)).expect("first");
+        let first = started.elapsed();
+        let started = Instant::now();
+        let page = cmp
+            .rows(&filter, order, &Page::at(count - 100, 100))
+            .expect("rows");
+        let took = started.elapsed();
+        assert_eq!(page.items.len(), 100, "{name}");
+        eprintln!("last page of {count} rows ({name}): {took:.1?} (first page {first:.1?})");
+        if !cfg!(debug_assertions) {
+            assert!(took.as_millis() < 50, "{name}: last page took {took:?}");
+        }
+    }
 }

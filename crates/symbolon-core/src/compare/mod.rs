@@ -415,6 +415,33 @@ impl RowFilter {
     }
 }
 
+/// The order of [`Comparison::rows`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum RowOrder {
+    /// By path key.
+    Path(Direction),
+    /// By the size of the row's largest file, then by path key. Rows without files
+    /// (directories, symlinks) come after all others in both directions.
+    Size(Direction),
+}
+
+impl Default for RowOrder {
+    fn default() -> Self {
+        Self::Path(Direction::Asc)
+    }
+}
+
+/// Ascending or descending.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Direction {
+    /// Smallest first.
+    #[default]
+    Asc,
+    /// Largest first.
+    Desc,
+}
+
 /// Files with identical content within one side.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -565,16 +592,25 @@ impl Comparison {
         sql::duplicate_totals(&self.conn, self.sides.len())
     }
 
-    /// A page of rows matching `filter`, in stable path order.
+    /// A page of rows matching `filter`, in `order`. Cursor pages are only available in the
+    /// default order (path, ascending); offset pages work in every order and stay valid until
+    /// the next [`Comparison::refresh`].
     ///
     /// # Errors
     ///
-    /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor.
-    pub fn rows(&self, filter: &RowFilter, page: &Page) -> Result<PageOf<Row>, CompareError> {
+    /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor, a cursor with
+    /// another order, or a page with both a cursor and an offset.
+    pub fn rows(
+        &self,
+        filter: &RowFilter,
+        order: RowOrder,
+        page: &Page,
+    ) -> Result<PageOf<Row>, CompareError> {
         sql::rows(
             &self.conn,
             &self.sides,
             &sql::FilterParams::new(filter, &self.options),
+            order,
             page,
         )
     }

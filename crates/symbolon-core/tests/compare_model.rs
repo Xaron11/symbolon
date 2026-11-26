@@ -13,7 +13,9 @@ use std::time::Duration;
 use proptest::prelude::*;
 use rusqlite::{Connection, params};
 use symbolon_core::catalog::{Catalog, NewLocation};
-use symbolon_core::compare::{Category, CompareOptions, Comparison, Row, RowFilter, Side};
+use symbolon_core::compare::{
+    Category, CompareOptions, Comparison, Row, RowFilter, RowOrder, Side,
+};
 use symbolon_core::hash::{HashAlgo, hash_bytes};
 use symbolon_core::pathkey::{KeyOptions, PathKey, RelPath};
 use symbolon_core::query::Page;
@@ -120,7 +122,9 @@ fn engine(world: &World, order: &[usize], options: CompareOptions) -> Vec<RowSha
     let mut rows: Vec<Row> = Vec::new();
     let mut page = Page::first(1000);
     loop {
-        let result = cmp.rows(&RowFilter::default(), &page).unwrap();
+        let result = cmp
+            .rows(&RowFilter::default(), RowOrder::default(), &page)
+            .unwrap();
         rows.extend(result.items);
         match result.next {
             Some(cursor) => page = Page::after(cursor, 1000),

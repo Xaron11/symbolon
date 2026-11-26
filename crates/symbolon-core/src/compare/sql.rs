@@ -4,8 +4,8 @@ use rusqlite::functions::FunctionFlags;
 use rusqlite::{Connection, OptionalExtension as _, named_params, params};
 
 use super::{
-    Category, Cell, CompareError, CompareOptions, DuplicateSet, DuplicateTotals, Row, RowFilter,
-    Side, SideInfo, SideSet, Summary, Totals, parse_row_cursor, row_cursor,
+    Category, Cell, CompareError, CompareOptions, Direction, DuplicateSet, DuplicateTotals, Row,
+    RowFilter, RowOrder, Side, SideInfo, SideSet, Summary, Totals, parse_row_cursor, row_cursor,
 };
 use crate::catalog::CatalogError;
 use crate::hash::{Digest, PartialDigest};
@@ -113,8 +113,16 @@ const DROP_FILE_INDEXES: &str = "
 const ROW_INDEXES: &str = "
     CREATE INDEX temp.cmp_rows_order ON cmp_rows (sort_key, id);
     CREATE INDEX temp.cmp_rows_digest ON cmp_rows (digest) WHERE digest IS NOT NULL;";
+/// Indexes for the size orders, built on the first page read in that order (most comparisons
+/// are never sorted by size) and dropped with the row indexes.
+const SIZE_ASC_INDEX: &str = "CREATE INDEX IF NOT EXISTS temp.cmp_rows_size_asc
+    ON cmp_rows (max_size IS NULL, max_size, sort_key, id)";
+const SIZE_DESC_INDEX: &str = "CREATE INDEX IF NOT EXISTS temp.cmp_rows_size_desc
+    ON cmp_rows (max_size IS NULL, max_size DESC, sort_key, id)";
 const DROP_ROW_INDEXES: &str = "
     DROP INDEX IF EXISTS temp.cmp_rows_order;
+    DROP INDEX IF EXISTS temp.cmp_rows_size_asc;
+    DROP INDEX IF EXISTS temp.cmp_rows_size_desc;
     DROP INDEX IF EXISTS temp.cmp_rows_digest;";
 
 /// Copies every side's files, symlinks and directories into `cmp_files` within one read
@@ -366,12 +374,34 @@ pub(super) fn summary(conn: &Connection, filter: &FilterParams) -> Result<Summar
     Ok(summary)
 }
 
+/// `ORDER BY` terms of `order`; every order ends in a unique key so pages never overlap. Each
+/// matches an index term for term, so deep offsets skip index entries instead of sorting the
+/// table.
+fn order_by(order: RowOrder) -> &'static str {
+    match order {
+        RowOrder::Path(Direction::Asc) => "sort_key, id",
+        RowOrder::Path(Direction::Desc) => "sort_key DESC, id DESC",
+        RowOrder::Size(Direction::Asc) => "max_size IS NULL, max_size, sort_key, id",
+        RowOrder::Size(Direction::Desc) => "max_size IS NULL, max_size DESC, sort_key, id",
+    }
+}
+
 pub(super) fn rows(
     conn: &Connection,
     sides: &[SideInfo],
     filter: &FilterParams,
+    order: RowOrder,
     page: &Page,
 ) -> Result<PageOf<Row>, CompareError> {
+    let offset = page.checked_offset()?;
+    if offset.is_none() && order != RowOrder::default() {
+        return Err(CatalogError::Corrupt("cursor pages are path ordered".into()).into());
+    }
+    match order {
+        RowOrder::Size(Direction::Asc) => conn.execute_batch(SIZE_ASC_INDEX)?,
+        RowOrder::Size(Direction::Desc) => conn.execute_batch(SIZE_DESC_INDEX)?,
+        RowOrder::Path(_) => {}
+    }
     let (after_key, after_id) = page
         .after
         .as_ref()
@@ -381,12 +411,14 @@ pub(super) fn rows(
     let limit = page.limit.clamp(1, crate::query::MAX_PAGE);
     let mut stmt = conn.prepare_cached(&format!(
         "SELECT id, sort_key, category, presence, assumed, size FROM temp.cmp_rows
-         WHERE (sort_key, id) > (:key, :id) AND {FILTER}
-         ORDER BY sort_key, id LIMIT :limit"
+         WHERE (:offset IS NOT NULL OR (sort_key, id) > (:key, :id)) AND {FILTER}
+         ORDER BY {} LIMIT :limit OFFSET coalesce(:offset, 0)",
+        order_by(order)
     ))?;
     let heads = stmt
         .query_map(
             named_params! {
+                ":offset": offset.map(u64::cast_signed),
                 ":key": after_key,
                 ":id": after_id,
                 ":categories": filter.categories,
@@ -440,7 +472,7 @@ pub(super) fn rows(
             cells,
         });
     }
-    let next = (items.len() == limit as usize)
+    let next = (offset.is_none() && items.len() == limit as usize)
         .then(|| last.map(|(key, id)| row_cursor(&key, id)))
         .flatten();
     Ok(PageOf { items, next })
