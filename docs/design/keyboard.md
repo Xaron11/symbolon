@@ -20,20 +20,21 @@ While text is being typed (in a field, or during IME composition), only chords w
 
 ## In tables and trees
 
-| Keys             | Action                              |
-| ---------------- | ----------------------------------- |
-| `j`, `↓`         | Next row                            |
-| `k`, `↑`         | Previous row                        |
-| `h`, `←`         | Collapse folder, or previous column |
-| `l`, `→`         | Expand folder, or next column       |
-| `g g`, `Home`    | First row                           |
-| `Shift+G`, `End` | Last row                            |
-| `Ctrl+D`         | Half a page down                    |
-| `Ctrl+U`         | Half a page up                      |
-| `PageDown`       | Page down                           |
-| `PageUp`         | Page up                             |
-| `Enter`, `o`     | Open the row                        |
-| `Space`, `x`     | Select or deselect the row          |
-| `/`              | Filter the list                     |
-| `n`              | Next match                          |
-| `Shift+N`        | Previous match                      |
+| Keys             | Action                                                              |
+| ---------------- | ------------------------------------------------------------------- |
+| `j`, `↓`         | Next row                                                            |
+| `k`, `↑`         | Previous row                                                        |
+| `h`, `←`         | Collapse folder, or previous column                                 |
+| `l`, `→`         | Expand folder, or next column                                       |
+| `g g`, `Home`    | First row                                                           |
+| `Shift+G`, `End` | Last row                                                            |
+| `Ctrl+D`         | Half a page down                                                    |
+| `Ctrl+U`         | Half a page up                                                      |
+| `PageDown`       | Page down                                                           |
+| `PageUp`         | Page up                                                             |
+| `Enter`, `o`     | Open the row                                                        |
+| `Space`, `x`     | Select or deselect the row                                          |
+| `/`              | Filter the list                                                     |
+| `n`              | Next match                                                          |
+| `Shift+N`        | Previous match                                                      |
+| `s`              | Sort by the active column (again to reverse, a third time to reset) |

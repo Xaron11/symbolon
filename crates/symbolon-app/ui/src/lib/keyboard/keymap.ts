@@ -27,7 +27,8 @@ export const ACTIONS = [
 	'list.toggleSelect',
 	'list.filter',
 	'list.nextMatch',
-	'list.prevMatch'
+	'list.prevMatch',
+	'list.sort'
 ] as const;
 
 /** An action from {@link ACTIONS}. */
@@ -108,7 +109,13 @@ export const KEYMAP: readonly Binding[] = [
 	},
 	{ action: 'list.filter', context: 'list', keys: ['/'], description: 'Filter the list' },
 	{ action: 'list.nextMatch', context: 'list', keys: ['n'], description: 'Next match' },
-	{ action: 'list.prevMatch', context: 'list', keys: ['shift+n'], description: 'Previous match' }
+	{ action: 'list.prevMatch', context: 'list', keys: ['shift+n'], description: 'Previous match' },
+	{
+		action: 'list.sort',
+		context: 'list',
+		keys: ['s'],
+		description: 'Sort by the active column (again to reverse, a third time to reset)'
+	}
 ];
 
 const NAMES: Readonly<Record<string, string>> = {

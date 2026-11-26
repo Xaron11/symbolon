@@ -44,6 +44,13 @@
         "$type": "dimension",
         "$description": "Table header"
       }
+    },
+    "column": {
+      "min": {
+        "$value": "120px",
+        "$type": "dimension",
+        "$description": "Least width of a table column without a fixed width"
+      }
     }
   },
   "tree": {

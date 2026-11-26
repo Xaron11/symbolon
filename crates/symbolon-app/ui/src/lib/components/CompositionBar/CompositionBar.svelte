@@ -23,12 +23,14 @@
 	const number = new Intl.NumberFormat('en-US');
 	const percent = (count: number) => (total === 0 ? '0.0' : ((count / total) * 100).toFixed(1));
 	let focused = $state(0);
+	// Segments can change; one of them must stay in the Tab order.
+	const current = $derived(Math.min(focused, Math.max(0, shown.length - 1)));
 	const buttons: HTMLButtonElement[] = [];
 
 	function onkeydown(event: KeyboardEvent) {
 		const moves: Record<string, number> = {
-			ArrowRight: focused + 1,
-			ArrowLeft: focused - 1,
+			ArrowRight: current + 1,
+			ArrowLeft: current - 1,
 			Home: 0,
 			End: shown.length - 1
 		};
@@ -47,7 +49,7 @@
 			<button
 				type="button"
 				class="segment"
-				tabindex={i === focused ? 0 : -1}
+				tabindex={i === current ? 0 : -1}
 				aria-label="{shownInfo.label}: {number.format(segment.count)} ({percent(segment.count)}%)"
 				title="{shownInfo.label}: {number.format(segment.count)} ({percent(segment.count)}%)"
 				style:flex-grow={segment.count}

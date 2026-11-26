@@ -34,14 +34,15 @@ async function table(rows: File[], extra: Record<string, unknown> = {}) {
 	await waitFor(() => {
 		expect(grid.getAttribute('aria-rowcount')).toBe(String(rows.length + 1));
 	});
+	// The active row points at its cell once its page has loaded.
 	await waitFor(() => {
-		expect(screen.getAllByRole('row').length).toBeGreaterThan(1);
+		expect(grid.getAttribute('aria-activedescendant')).not.toBeNull();
 	});
 	return { ...result, grid, source };
 }
 
 const activeRow = (grid: HTMLElement) =>
-	grid.querySelector(`#${grid.getAttribute('aria-activedescendant') ?? ''}`)?.closest('[role=row]');
+	document.getElementById(grid.getAttribute('aria-activedescendant') ?? '')?.closest('[role=row]');
 
 describe('DataTable', () => {
 	it('moves with vi and arrow keys and jumps to the ends', async () => {
@@ -102,5 +103,30 @@ describe('DataTable', () => {
 	it('has no axe violations', async () => {
 		const { container } = await table(files(20));
 		await expectNoAxeViolations(container);
+	});
+
+	it('sorts by the active column with s and clears the selection', async () => {
+		const user = userEvent.setup();
+		const { grid, source } = await table(files(5));
+		grid.focus();
+		await user.keyboard(' ');
+		expect(activeRow(grid)?.getAttribute('aria-selected')).toBe('true');
+		await user.keyboard('s');
+		await waitFor(() => {
+			expect(source.calls.at(-1)?.sort).toEqual({ column: 'name', direction: 'asc' });
+		});
+		expect(
+			screen.getAllByRole('row').filter((r) => r.getAttribute('aria-selected') === 'true')
+		).toEqual([]);
+	});
+
+	it('keeps focus on the grid when a row or header is clicked', async () => {
+		const user = userEvent.setup();
+		const { grid } = await table(files(5));
+		await user.click(screen.getByText('file2.jpg'));
+		expect(document.activeElement).toBe(grid);
+		expect(activeRow(grid)?.getAttribute('aria-rowindex')).toBe('4');
+		await user.click(screen.getByRole('button', { name: 'Name' }));
+		expect(document.activeElement).toBe(grid);
 	});
 });

@@ -1,4 +1,4 @@
-import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { SvelteMap } from 'svelte/reactivity';
 import type { DataSource, SortSpec } from './source';
 
 /** The visible slice of a virtualized list and how to move it. */
@@ -18,30 +18,56 @@ export interface RowWindow<Row> {
 }
 
 /**
- * Keeps the rows around a viewport loaded from `source`, a page at a time. Viewport changes in
- * one task are coalesced into one round of requests for the final position; at most `maxPages`
- * pages stay cached; responses that arrive after the sort changed are dropped.
+ * The scroll position that brings row `index` fully into view below a sticky header of
+ * `headerHeight`, or the current one if it already is.
+ */
+export function revealScroll(at: {
+	index: number;
+	scrollTop: number;
+	height: number;
+	rowHeight: number;
+	headerHeight: number;
+}): number {
+	const top = at.index * at.rowHeight;
+	if (top < at.scrollTop) return top;
+	const bottom = at.headerHeight + top + at.rowHeight;
+	return bottom > at.scrollTop + at.height ? bottom - at.height : at.scrollTop;
+}
+
+/**
+ * Keeps the rows around a viewport loaded from `source`, a page at a time. Requests wait until
+ * the viewport has been still for `settleMs`, so dragging the scrollbar reads only where it
+ * stops; answers for pages no longer in view or for an older sort are dropped; at most
+ * `maxPages` pages stay cached, never evicting the ones in view.
  */
 export function createRowWindow<Row>(
 	source: DataSource<Row>,
-	options: { rowHeight: number; overscan?: number; pageSize?: number; maxPages?: number }
+	options: {
+		rowHeight: number;
+		overscan?: number;
+		pageSize?: number;
+		maxPages?: number;
+		settleMs?: number;
+	}
 ): RowWindow<Row> {
-	const { rowHeight, overscan = 10, pageSize = 200, maxPages = 10 } = options;
+	const { rowHeight, overscan = 10, pageSize = 200, maxPages = 10, settleMs = 30 } = options;
 	let count = $state<number | undefined>(undefined);
 	let error = $state<Error | undefined>(undefined);
 	let sort = $state<SortSpec | undefined>(undefined);
 	let first = $state(0);
 	let last = $state(-1);
 	const pages = new SvelteMap<number, readonly Row[]>();
-	const loading = new SvelteSet<number>();
+	// Page → generation of the request in flight for it.
+	const loading = new SvelteMap<number, number>();
 	let generation = 0;
-	let scheduled = false;
+	let settle: ReturnType<typeof setTimeout> | undefined;
 	let viewport = { top: 0, height: 0 };
 
 	function readCount() {
 		source.count().then(
 			(n) => {
 				count = n;
+				place();
 				schedule();
 			},
 			(e: unknown) => (error = toError(e))
@@ -49,20 +75,23 @@ export function createRowWindow<Row>(
 	}
 
 	function schedule() {
-		if (scheduled) return;
-		scheduled = true;
-		queueMicrotask(() => {
-			scheduled = false;
-			load();
-		});
+		clearTimeout(settle);
+		settle = setTimeout(load, settleMs);
+	}
+
+	/** The pages the current window needs. */
+	const needed = () => ({ from: Math.floor(first / pageSize), to: Math.floor(last / pageSize) });
+
+	// The window follows the viewport at once (cached pages show immediately); only reading
+	// missing pages waits for the viewport to settle.
+	function place() {
+		if (count === undefined) return;
+		first = Math.max(0, Math.floor(viewport.top / rowHeight) - overscan);
+		last = Math.min(count - 1, Math.ceil((viewport.top + viewport.height) / rowHeight) + overscan);
 	}
 
 	function load() {
-		if (count === undefined) return;
-		const total = count;
-		first = Math.max(0, Math.floor(viewport.top / rowHeight) - overscan);
-		last = Math.min(total - 1, Math.ceil((viewport.top + viewport.height) / rowHeight) + overscan);
-		if (last < first) return;
+		if (count === undefined || last < first) return;
 		for (let page = Math.floor(first / pageSize); page <= Math.floor(last / pageSize); page++) {
 			if (pages.has(page)) {
 				// Mark as recently used.
@@ -71,18 +100,25 @@ export function createRowWindow<Row>(
 				pages.set(page, rows);
 				continue;
 			}
-			if (loading.has(page)) continue;
-			loading.add(page);
+			if (loading.get(page) === generation) continue;
 			const requested = generation;
+			loading.set(page, requested);
+			const done = () => {
+				if (loading.get(page) === requested) loading.delete(page);
+			};
 			source.rows(page * pageSize, pageSize, sort).then(
 				(rows) => {
-					loading.delete(page);
-					if (requested !== generation) return;
+					done();
+					const range = needed();
+					if (requested !== generation || page < range.from || page > range.to) return;
 					pages.set(page, rows);
-					while (pages.size > maxPages) pages.delete(pages.keys().next().value ?? page);
+					for (const old of pages.keys()) {
+						if (pages.size <= maxPages) break;
+						if (old < range.from || old > range.to) pages.delete(old);
+					}
 				},
 				(e: unknown) => {
-					loading.delete(page);
+					done();
 					if (requested === generation) error = toError(e);
 				}
 			);
@@ -118,6 +154,7 @@ export function createRowWindow<Row>(
 		},
 		setViewport(scrollTop, height) {
 			viewport = { top: Math.max(0, scrollTop), height };
+			place();
 			schedule();
 		},
 		setSort(next) {

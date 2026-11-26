@@ -18,7 +18,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { component } from '../../design/generated/tokens';
 	import type { DataSource, SortSpec } from '../../data/source';
-	import { createRowWindow } from '../../data/window.svelte';
+	import { createRowWindow, revealScroll } from '../../data/window.svelte';
 	import { createDispatcher } from '../../keyboard/dispatcher';
 	import { KEYMAP, type Action } from '../../keyboard/keymap';
 
@@ -36,18 +36,28 @@
 	let { source, columns, label, selection = $bindable(new Set()), onopen }: Props = $props();
 
 	const rowHeight = parseFloat(component['table.row.height']);
+	const headerHeight = parseFloat(component['table.header.height']);
 	// svelte-ignore state_referenced_locally
 	const rows = createRowWindow(source, { rowHeight });
 	const id = $props.id();
 	let active = $state(0);
 	let activeColumn = $state(0);
+	let grid = $state<HTMLDivElement>();
 	let scroller = $state<HTMLDivElement>();
 	let height = $state(0);
 
+	// Header and rows share one track list and one least width, so columns line up and a long
+	// value is cut with an ellipsis instead of widening its row.
+	const flexMin = 'var(--sy-table-column-min)';
 	const template = $derived(
 		columns
-			.map((c) => (c.width === undefined ? 'minmax(0, 1fr)' : `${String(c.width)}px`))
+			.map((c) => (c.width === undefined ? `minmax(${flexMin}, 1fr)` : `${String(c.width)}px`))
 			.join(' ')
+	);
+	const minWidth = $derived(
+		`calc(${String(columns.reduce((sum, c) => sum + (c.width ?? 0), 0))}px + ${String(
+			columns.filter((c) => c.width === undefined).length
+		)} * ${flexMin})`
 	);
 	const total = $derived(rows.count ?? 0);
 	const visibleRows = $derived(Math.max(1, Math.floor(height / rowHeight)));
@@ -60,11 +70,14 @@
 	function moveTo(index: number) {
 		if (total === 0) return;
 		active = Math.min(total - 1, Math.max(0, index));
-		const top = active * rowHeight;
 		if (scroller) {
-			if (top < scroller.scrollTop) scroller.scrollTop = top;
-			else if (top + rowHeight > scroller.scrollTop + height)
-				scroller.scrollTop = top + rowHeight - height;
+			scroller.scrollTop = revealScroll({
+				index: active,
+				scrollTop: scroller.scrollTop,
+				height,
+				rowHeight,
+				headerHeight
+			});
 			rows.setViewport(scroller.scrollTop, height);
 		}
 	}
@@ -113,6 +126,11 @@
 				if (row !== undefined) onopen?.(row, active);
 				break;
 			}
+			case 'list.sort': {
+				const column = columns[activeColumn];
+				if (column?.sortable) toggleSort(column.id);
+				break;
+			}
 			case 'list.filter':
 			case 'list.nextMatch':
 			case 'list.prevMatch':
@@ -141,6 +159,8 @@
 					? { column, direction: 'desc' }
 					: undefined;
 		rows.setSort(next);
+		// Selection is by position, which a new order gives to other rows.
+		selection = new SvelteSet();
 	}
 
 	function ariaSort(column: Column<Row>) {
@@ -151,6 +171,7 @@
 </script>
 
 <div
+	bind:this={grid}
 	class="sy-table"
 	role="grid"
 	aria-label={label}
@@ -175,7 +196,13 @@
 			});
 		}}
 	>
-		<div class="header" role="row" aria-rowindex="1" style:grid-template-columns={template}>
+		<div
+			class="header"
+			role="row"
+			aria-rowindex="1"
+			style:grid-template-columns={template}
+			style:min-width={minWidth}
+		>
 			{#each columns as column (column.id)}
 				<div
 					class="cell"
@@ -189,6 +216,7 @@
 							tabindex="-1"
 							onclick={() => {
 								toggleSort(column.id);
+								grid?.focus();
 							}}
 						>
 							{column.header}
@@ -202,18 +230,22 @@
 		<div class="spacer" role="presentation" style:height="{String(total * rowHeight)}px">
 			{#each rows.rows as row, i (rows.start + i)}
 				{@const index = rows.start + i}
-				<!-- Clicking only moves the active cell; the grid's keys do the same for keyboards. -->
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- Rows are reached through the grid (aria-activedescendant), not focused themselves;
+				     clicking one makes it active and keeps focus on the grid. -->
+				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_interactive_supports_focus -->
 				<div
 					class="row"
 					class:active={index === active}
 					role="row"
-					tabindex="-1"
 					aria-rowindex={index + 2}
 					aria-selected={selection.has(index)}
 					style:transform="translateY({String(index * rowHeight)}px)"
 					style:grid-template-columns={template}
-					onclick={() => (active = index)}
+					style:min-width={minWidth}
+					onclick={() => {
+						active = index;
+						grid?.focus();
+					}}
 				>
 					{#each columns as column, c (column.id)}
 						{@const text = row === undefined ? '' : column.cell(row)}
@@ -270,7 +302,6 @@
 	.header,
 	.row {
 		display: grid;
-		min-width: max-content;
 	}
 
 	.header {
@@ -278,6 +309,8 @@
 		top: 0;
 		z-index: 1;
 		height: var(--sy-table-header-height);
+		/* Matches the rows' accent-bar space, so header and cells line up. */
+		border-left: var(--sy-border-width-strong) solid transparent;
 		border-bottom: var(--sy-border-width-default) solid var(--sy-color-border-default);
 		background: var(--sy-color-surface-sunken);
 		color: var(--sy-color-text-secondary);
@@ -321,6 +354,7 @@
 
 	.cell {
 		display: flex;
+		min-width: 0;
 		align-items: center;
 		padding: 0 var(--sy-space-8);
 	}

@@ -42,4 +42,30 @@ describe('createTreeState', () => {
 		await state.toggle('a');
 		expect(state.visible.map((v) => v.node.key)).toEqual(['a', 'b.txt']);
 	});
+
+	it('reports a failed read instead of staying silently empty', async () => {
+		const state = createTreeState({
+			...tree(),
+			rootCount: () => Promise.reject(new Error('gone'))
+		});
+		await settle();
+		expect(state.error?.message).toBe('gone');
+	});
+
+	it('reads a folder once even when expanded twice quickly', async () => {
+		const source = tree();
+		const state = createTreeState(source);
+		await settle();
+		await Promise.all([state.expand('a'), state.expand('a')]);
+		expect(source.childCalls).toEqual(['a']);
+	});
+
+	it('stays collapsed when collapsed while loading', async () => {
+		const state = createTreeState(tree());
+		await settle();
+		const loading = state.expand('a');
+		state.collapse('a');
+		await loading;
+		expect(state.visible.map((v) => v.key)).toEqual(['a', 'b.txt']);
+	});
 });

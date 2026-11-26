@@ -18,6 +18,8 @@ export interface VisibleNode<Node> {
 /** The expanded state of a tree and the flat list of what is visible. */
 export interface TreeState<Node> {
 	readonly visible: readonly VisibleNode<Node>[];
+	/** The last failed read, if any. */
+	readonly error: Error | undefined;
 	expand(key: string): Promise<void>;
 	collapse(key: string): void;
 	toggle(key: string): Promise<void>;
@@ -43,6 +45,14 @@ export function createTreeState<Node>(source: TreeSource<Node>): TreeState<Node>
 	const children = new SvelteMap<string, readonly Node[]>();
 	const expanded = new SvelteSet<string>();
 	const nodes = new SvelteMap<string, Node>();
+	// Folders the user wants open, and the reads in flight, so a folder is read once and a
+	// collapse during its read wins.
+	const wanted = new SvelteSet<string>();
+	const reading = new SvelteMap<string, Promise<void>>();
+	let error = $state<Error | undefined>(undefined);
+	const fail = (e: unknown) => {
+		error = e instanceof Error ? e : new Error(String(e));
+	};
 
 	const remember = (list: readonly Node[]) => {
 		for (const node of list) nodes.set(source.key(node), node);
@@ -52,7 +62,7 @@ export function createTreeState<Node>(source: TreeSource<Node>): TreeState<Node>
 	void source
 		.rootCount()
 		.then((count) => readAll(count, (o, l) => source.roots(o, l)))
-		.then((list) => (roots = remember(list)));
+		.then((list) => (roots = remember(list)), fail);
 
 	const visible = $derived.by(() => {
 		const out: VisibleNode<Node>[] = [];
@@ -81,20 +91,35 @@ export function createTreeState<Node>(source: TreeSource<Node>): TreeState<Node>
 	async function expand(key: string) {
 		const node = nodes.get(key);
 		if (node === undefined || !source.hasChildren(node)) return;
+		wanted.add(key);
 		if (!children.has(key)) {
-			const count = await source.childCount(node);
-			children.set(key, remember(await readAll(count, (o, l) => source.children(node, o, l))));
+			let read = reading.get(key);
+			if (read === undefined) {
+				read = source
+					.childCount(node)
+					.then((count) => readAll(count, (o, l) => source.children(node, o, l)))
+					.then((list) => {
+						children.set(key, remember(list));
+					}, fail)
+					.finally(() => reading.delete(key));
+				reading.set(key, read);
+			}
+			await read;
 		}
-		expanded.add(key);
+		if (wanted.has(key) && children.has(key)) expanded.add(key);
 	}
 
 	function collapse(key: string) {
+		wanted.delete(key);
 		expanded.delete(key);
 	}
 
 	return {
 		get visible() {
 			return visible;
+		},
+		get error() {
+			return error;
 		},
 		expand,
 		collapse,

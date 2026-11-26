@@ -4,6 +4,7 @@
 	import { component } from '../../design/generated/tokens';
 	import type { TreeSource } from '../../data/source';
 	import { createTreeState } from '../../data/tree.svelte';
+	import { revealScroll } from '../../data/window.svelte';
 	import { createDispatcher } from '../../keyboard/dispatcher';
 	import { KEYMAP, type Action } from '../../keyboard/keymap';
 	import type { IconComponent } from '../icon';
@@ -26,6 +27,7 @@
 	const tree = createTreeState(source);
 	const id = $props.id();
 	let active = $state(0);
+	let view = $state<HTMLDivElement>();
 	let scroller = $state<HTMLDivElement>();
 	let scrollTop = $state(0);
 	let height = $state(0);
@@ -41,11 +43,14 @@
 	function moveTo(index: number) {
 		if (items.length === 0) return;
 		active = Math.min(items.length - 1, Math.max(0, index));
-		const top = active * rowHeight;
 		if (scroller) {
-			if (top < scroller.scrollTop) scroller.scrollTop = top;
-			else if (top + rowHeight > scroller.scrollTop + height)
-				scroller.scrollTop = top + rowHeight - height;
+			scroller.scrollTop = revealScroll({
+				index: active,
+				scrollTop: scroller.scrollTop,
+				height,
+				rowHeight,
+				headerHeight: 0
+			});
 			scrollTop = scroller.scrollTop;
 		}
 	}
@@ -94,6 +99,7 @@
 				if (item) onopen?.(item.node);
 				break;
 			case 'list.toggleSelect':
+			case 'list.sort':
 			case 'list.filter':
 			case 'list.nextMatch':
 			case 'list.prevMatch':
@@ -115,10 +121,13 @@
 </script>
 
 <div
+	bind:this={view}
 	class="sy-tree"
 	role="tree"
 	aria-label={name}
-	aria-activedescendant={items[active] ? `${id}-n${String(active)}` : undefined}
+	aria-activedescendant={active >= first && active <= last && items[active]
+		? `${id}-n${String(active)}`
+		: undefined}
 	tabindex="0"
 	onkeydown={(event) => {
 		dispatch(event);
@@ -138,14 +147,14 @@
 			{#each shown as item, i (item.key)}
 				{@const index = first + i}
 				{@const Icon = icon?.(item.node)}
-				<!-- Clicking only moves the active item; the tree's keys do the same for keyboards. -->
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- Items are reached through the tree (aria-activedescendant), not focused themselves;
+				     clicking one makes it active and keeps focus on the tree. -->
+				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_interactive_supports_focus -->
 				<div
 					id="{id}-n{index}"
 					class="item"
 					class:active={index === active}
 					role="treeitem"
-					tabindex="-1"
 					aria-level={item.level}
 					aria-setsize={item.setSize}
 					aria-posinset={item.posInSet}
@@ -153,7 +162,10 @@
 					aria-selected={index === active}
 					style:transform="translateY({String(index * rowHeight)}px)"
 					style:--depth={item.level - 1}
-					onclick={() => (active = index)}
+					onclick={() => {
+						active = index;
+						view?.focus();
+					}}
 				>
 					<span
 						class="chevron"
@@ -164,11 +176,14 @@
 						{#if item.hasChildren}<ChevronRight />{/if}
 					</span>
 					{#if Icon}<Icon aria-hidden="true" />{/if}
-					<span class="label">{label(item.node)}</span>
+					<span class="label" title={label(item.node)}>{label(item.node)}</span>
 				</div>
 			{/each}
 		</div>
 	</div>
+	{#if tree.error}
+		<p class="error" role="alert">Could not read folders: {tree.error.message}</p>
+	{/if}
 </div>
 
 <style>
@@ -237,5 +252,11 @@
 	.label {
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.error {
+		margin: 0;
+		padding: var(--sy-space-8);
+		color: var(--sy-status-error-fg);
 	}
 </style>

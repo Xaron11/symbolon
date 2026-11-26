@@ -66,6 +66,15 @@ describe('TreeView', () => {
 		await expectNoAxeViolations(view);
 	});
 
+	it('shows each full name as a tooltip and keeps focus on the tree when clicked', async () => {
+		const user = userEvent.setup();
+		const { view } = await tree();
+		const label = screen.getByText('notes.txt');
+		expect(label.getAttribute('title')).toBe('notes.txt');
+		await user.click(label);
+		expect(document.activeElement).toBe(view);
+	});
+
 	it('opens a leaf with Enter', async () => {
 		const user = userEvent.setup();
 		const onopen = vi.fn();

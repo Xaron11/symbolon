@@ -44,4 +44,13 @@ describe('CompositionBar', () => {
 		await user.keyboard('{ArrowLeft}');
 		expect(document.activeElement).toBe(buttons[1]);
 	});
+
+	it('stays reachable by Tab when segments change', async () => {
+		const user = userEvent.setup();
+		const { rerender } = render(CompositionBar, { segments, label: 'Comparison' });
+		await user.tab();
+		await user.keyboard('{End}');
+		await rerender({ segments: segments.slice(0, 1), label: 'Comparison' });
+		expect(screen.getAllByRole('button').filter((b) => b.tabIndex === 0)).toHaveLength(1);
+	});
 });

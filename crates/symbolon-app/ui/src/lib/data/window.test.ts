@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DataSource, SortSpec } from './source';
 import { memorySource } from './memory';
-import { createRowWindow } from './window.svelte';
+import { createRowWindow, revealScroll } from './window.svelte';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const numbers = (n: number) =>
@@ -10,7 +10,7 @@ const numbers = (n: number) =>
 describe('createRowWindow', () => {
 	it('renders only the visible window', async () => {
 		const source = memorySource(numbers(100_000));
-		const win = createRowWindow(source, { rowHeight: 28, overscan: 5 });
+		const win = createRowWindow(source, { rowHeight: 28, overscan: 5, settleMs: 0 });
 		await settle();
 		win.setViewport(0, 280);
 		await settle();
@@ -22,7 +22,7 @@ describe('createRowWindow', () => {
 
 	it('coalesces fast scrolling into requests for the final window', async () => {
 		const source = memorySource(numbers(200_000));
-		const win = createRowWindow(source, { rowHeight: 28, overscan: 5, pageSize: 200 });
+		const win = createRowWindow(source, { rowHeight: 28, overscan: 5, pageSize: 200, settleMs: 0 });
 		await settle();
 		source.calls.length = 0;
 		for (let i = 0; i <= 50; i++) win.setViewport((i / 50) * (200_000 * 28 - 280), 280);
@@ -46,7 +46,7 @@ describe('createRowWindow', () => {
 					});
 				})
 		};
-		const win = createRowWindow(source, { rowHeight: 28 });
+		const win = createRowWindow(source, { rowHeight: 28, settleMs: 0 });
 		await settle();
 		win.setViewport(0, 280);
 		await settle();
@@ -65,7 +65,7 @@ describe('createRowWindow', () => {
 			count: () => Promise.resolve(1),
 			rows: () => (fail ? Promise.reject(new Error('gone')) : Promise.resolve([{ id: 0 }]))
 		};
-		const win = createRowWindow(source, { rowHeight: 28 });
+		const win = createRowWindow(source, { rowHeight: 28, settleMs: 0 });
 		await settle();
 		win.setViewport(0, 280);
 		await settle();
@@ -76,5 +76,70 @@ describe('createRowWindow', () => {
 		await settle();
 		expect(win.error).toBeUndefined();
 		expect(win.rows).toEqual([{ id: 0 }]);
+	});
+
+	describe('while dragging the scrollbar', () => {
+		afterEach(() => vi.useRealTimers());
+
+		it('waits for scrolling to settle before reading', async () => {
+			vi.useFakeTimers();
+			const source = memorySource(numbers(200_000));
+			const win = createRowWindow(source, { rowHeight: 28, overscan: 5, pageSize: 200 });
+			await vi.runAllTimersAsync();
+			source.calls.length = 0;
+			for (let frame = 0; frame <= 60; frame++) {
+				win.setViewport((frame / 60) * (200_000 * 28 - 280), 280);
+				await vi.advanceTimersByTimeAsync(16);
+			}
+			await vi.runAllTimersAsync();
+			expect(source.calls.length).toBeLessThanOrEqual(2);
+			expect(win.rows.at(-1)).toEqual({ id: 199_999, name: 'file199999' });
+		});
+
+		it('ignores answers for pages scrolled away from, keeping the visible rows', async () => {
+			const resolvers = new Map<number, () => void>();
+			const all = numbers(100_000);
+			const source: DataSource<{ id: number; name: string }> = {
+				count: () => Promise.resolve(all.length),
+				rows: (offset, limit) =>
+					new Promise((resolve) => {
+						resolvers.set(offset, () => {
+							resolve(all.slice(offset, offset + limit));
+						});
+					})
+			};
+			const win = createRowWindow(source, {
+				rowHeight: 28,
+				overscan: 5,
+				pageSize: 200,
+				maxPages: 2,
+				settleMs: 0
+			});
+			await settle();
+			for (const top of [0, 30_000 * 28, 60_000 * 28, 99_990 * 28]) {
+				win.setViewport(top, 280);
+				await settle();
+			}
+			resolvers.get(99_800)?.();
+			await settle();
+			for (const [offset, resolve] of resolvers) if (offset !== 99_800) resolve();
+			await settle();
+			expect(win.rows.at(-1)).toEqual({ id: 99_999, name: 'file99999' });
+		});
+	});
+});
+
+describe('revealScroll', () => {
+	it('keeps a row below a sticky header in view', () => {
+		// Viewport 100px with a 32px header: rows of 28px; row 3 spans 84–112 in the body.
+		expect(
+			revealScroll({ index: 3, scrollTop: 0, height: 100, rowHeight: 28, headerHeight: 32 })
+		).toBe(44);
+		expect(
+			revealScroll({ index: 0, scrollTop: 60, height: 100, rowHeight: 28, headerHeight: 32 })
+		).toBe(0);
+		expect(
+			revealScroll({ index: 1, scrollTop: 0, height: 100, rowHeight: 28, headerHeight: 32 })
+		).toBe(0);
 	});
 });
