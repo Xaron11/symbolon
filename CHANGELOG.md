@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-11-26
+
+### Added
+
+- **catalog:** Store symlink targets (#137)
+- **android:** Symlink targets from the agent and the fallback (#138)
+- **compare:** Directories, symlinks and kind clashes (#139)
+- **Breaking:** **cli:** Show directories and symlinks in diff (#140). Diff's JSON and CSV output names the count and the row list "entries" instead of "files"
+
 ## [0.6.0] - 2026-11-25
 
 ### Added
