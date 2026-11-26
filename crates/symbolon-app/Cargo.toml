@@ -25,6 +25,7 @@ specta.workspace = true
 specta-typescript.workspace = true
 symbolon-core.workspace = true
 tauri = { workspace = true, features = ["specta"] }
+tauri-plugin-dialog.workspace = true
 tauri-specta.workspace = true
 
 [dev-dependencies]

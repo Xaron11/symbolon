@@ -1,4 +1,5 @@
 import { Channel } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { commands } from './bindings';
 import type { Backend } from './backend';
 import { toApiError } from './errors';
@@ -23,6 +24,12 @@ function channel<T>(onMessage: (message: T) => void): Channel<T> {
 /** The backend of the desktop app: Tauri commands and channels. */
 export function createTauriBackend(): Backend {
 	return {
+		system: {
+			async pickFolder() {
+				const picked = await call(open({ directory: true, multiple: false }));
+				return picked ?? undefined;
+			}
+		},
 		locations: {
 			list: () => call(commands.locationsList()),
 			add: (request) => call(commands.locationAdd(request)),

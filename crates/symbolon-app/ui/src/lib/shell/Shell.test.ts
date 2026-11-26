@@ -63,6 +63,16 @@ describe('Shell', () => {
 		expect(theme?.preference).toBe('dark');
 	});
 
+	it('offers Add location in the palette', async () => {
+		const user = userEvent.setup();
+		const navigate = shell('/scans');
+		await user.keyboard('{Control>}k{/Control}');
+		const palette = await screen.findByRole('dialog', { name: 'Command palette' });
+		await user.type(within(palette).getByRole('combobox'), 'add location');
+		await user.keyboard('{Enter}');
+		expect(navigate).toHaveBeenCalledWith('/locations?add');
+	});
+
 	it('opens the shortcut help with ?', async () => {
 		const user = userEvent.setup();
 		shell();

@@ -41,6 +41,8 @@ export interface MemorySeed {
 	/** Entries by location label, then by parent key (`''` for the root). */
 	entries?: Record<string, Record<string, EntryView[]>>;
 	comparison?: MemoryComparison;
+	/** What the folder picker returns; undefined means cancelled. */
+	pickedFolder?: string;
 }
 
 /** A call a memory backend served, recorded for tests. */
@@ -97,6 +99,9 @@ export function createMemoryBackend(seed: MemorySeed = {}): MemoryBackend {
 	const backend: MemoryBackend = {
 		seed,
 		calls,
+		system: {
+			pickFolder: () => resolve(() => (record('system.pickFolder'), seed.pickedFolder))
+		},
 		locations: {
 			list: () => resolve(() => (record('locations.list'), [...(seed.locations ?? [])])),
 			add: (request) =>

@@ -64,3 +64,12 @@ describe('memory backend', () => {
 		await expect(b.compare.count(id, {})).rejects.toMatchObject({ kind: 'NotFound' });
 	});
 });
+
+describe('memory backend system', () => {
+	it('pickFolder returns the seeded folder', async () => {
+		await expect(createMemoryBackend({ pickedFolder: '/p' }).system.pickFolder()).resolves.toBe(
+			'/p'
+		);
+		await expect(createMemoryBackend().system.pickFolder()).resolves.toBeUndefined();
+	});
+});

@@ -46,6 +46,14 @@
 			}
 		})),
 		{
+			id: 'location.add',
+			label: 'Add location',
+			group: 'Locations',
+			run: () => {
+				navigate('/locations?add');
+			}
+		},
+		{
 			id: 'sidebar',
 			label: 'Toggle sidebar',
 			group: 'View',
