@@ -194,3 +194,51 @@ fn children_offsets_page() {
     );
     assert!(page.next.is_none());
 }
+
+#[test]
+fn folder_names_display_unescaped() {
+    let dir = tempfile::tempdir().unwrap();
+    let catalog = Catalog::open(dir.path().join("catalog.db")).unwrap();
+    for label in ["left", "right"] {
+        let root = dir.path().join(label);
+        fs::create_dir_all(root.join("100%")).unwrap();
+        fs::write(root.join("100%/a.txt"), label).unwrap();
+        #[cfg(target_os = "linux")]
+        {
+            use std::os::unix::ffi::OsStrExt as _;
+            let odd = root.join(std::ffi::OsStr::from_bytes(b"dir\xe9"));
+            fs::create_dir_all(&odd).unwrap();
+            fs::write(odd.join("b.txt"), label).unwrap();
+        }
+        catalog
+            .add_location(NewLocation::local(label, &root).hash_policy(HashPolicy::Eager))
+            .unwrap();
+        Scanner::start(&catalog, label, ScanOptions::default())
+            .unwrap()
+            .wait()
+            .unwrap();
+    }
+    let cmp = Comparison::new(
+        &catalog,
+        &[Side::location("left"), Side::location("right")],
+        CompareOptions::default(),
+    )
+    .unwrap();
+    let shown: Vec<(String, String)> = children(&cmp, &RowFilter::default(), "")
+        .into_iter()
+        .map(|child| match child {
+            TreeChild::Folder { key, display, .. } => (key, display),
+            _ => panic!("only folders at the root"),
+        })
+        .collect();
+    assert_eq!(shown[0], ("100%25".into(), "100%".into()));
+    #[cfg(target_os = "linux")]
+    {
+        assert_eq!(shown[1], ("dir%E9".into(), "dir\u{FFFD}".into()));
+        // The key, not the display text, opens the folder.
+        assert_eq!(
+            cmp.child_count(&RowFilter::default(), &shown[1].0).unwrap(),
+            1
+        );
+    }
+}

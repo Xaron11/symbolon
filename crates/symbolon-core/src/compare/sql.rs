@@ -414,20 +414,31 @@ pub(super) fn rows(
         .transpose()?
         .unwrap_or_else(|| (String::new(), 0));
     let limit = page.limit.clamp(1, crate::query::MAX_PAGE);
+    // Two texts: a keyset condition inside an OR keeps SQLite from seeking the index, which
+    // would make every cursor page scan from the start.
+    let position = if offset.is_some() {
+        "OFFSET :offset"
+    } else {
+        "OFFSET 0"
+    };
+    let keyset = if offset.is_some() {
+        ""
+    } else {
+        "(sort_key, id) > (:key, :id) AND"
+    };
     let mut stmt = conn.prepare_cached(&format!(
-        "SELECT {HEAD_COLUMNS} FROM temp.cmp_rows
-         WHERE (:offset IS NOT NULL OR (sort_key, id) > (:key, :id)) AND {FILTER}
-         ORDER BY {} LIMIT :limit OFFSET coalesce(:offset, 0)",
+        "SELECT {HEAD_COLUMNS} FROM temp.cmp_rows WHERE {keyset} {FILTER}
+         ORDER BY {} LIMIT :limit {position}",
         order_by(order)
     ))?;
     let offset_param = offset.map(u64::cast_signed);
     let mut params = filter.named();
-    params.extend([
-        (":offset", &offset_param as &dyn ToSql),
-        (":key", &after_key),
-        (":id", &after_id),
-        (":limit", &limit),
-    ]);
+    params.push((":limit", &limit));
+    if offset.is_some() {
+        params.push((":offset", &offset_param));
+    } else {
+        params.extend([(":key", &after_key as &dyn ToSql), (":id", &after_id)]);
+    }
     let heads = stmt
         .query_map(params.as_slice(), head)?
         .collect::<Result<Vec<_>, _>>()?;
@@ -590,6 +601,7 @@ pub(super) fn children(
                 } else {
                     format!("{parent}/{name}")
                 },
+                display: PathKey::from_stored(name.clone()).display(),
                 name,
                 row,
                 matching: FolderTotals { rows, bytes },

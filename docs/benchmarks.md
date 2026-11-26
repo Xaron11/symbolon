@@ -69,6 +69,8 @@ A virtualized table reads pages by offset ([ADR-0023](adr/0023-offset-reads.md))
 | Last 100 of 196,000 identical rows, path or size     | 31–39 ms |
 | Tree root (22,001 children): first 100 and the count | 180 ms   |
 
+Walking all 221,000 rows by cursor in pages of 1,000, as `symbolon diff` does, takes 0.8 s; an early version that served both page forms from one SQL statement took 2.3 s, because the combined condition kept SQLite from seeking the index.
+
 Building both size indexes with every comparison added 0.28 s to the 2.1 s comparison, so they are built on the first size-ordered read instead. `just test-acceptance` fails if a last page takes 50 ms or more.
 
 ### Against the targets in the specification (§11)

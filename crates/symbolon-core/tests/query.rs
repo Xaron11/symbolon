@@ -546,3 +546,21 @@ fn scan_id_round_trips() {
     assert_eq!(ScanId::from_i64(id.get()), id);
     assert_eq!(q.warning_count(ScanId::from_i64(id.get())).unwrap(), 0);
 }
+
+#[test]
+fn search_and_duplicates_reject_offset_pages() {
+    let fx = Fixture::new(HashPolicy::Eager);
+    for i in 0..20 {
+        fx.write(&format!("f{i:02}"), b"same");
+    }
+    fx.scan();
+    let q = fx.query();
+    assert!(matches!(
+        q.search("loc", "f", &Page::at(10, 5)),
+        Err(CatalogError::Corrupt(_))
+    ));
+    assert!(matches!(
+        q.duplicates("loc", &Page::at(1, 5)),
+        Err(CatalogError::Corrupt(_))
+    ));
+}
