@@ -19,8 +19,12 @@ use super::{
 };
 use crate::agent::{Line, PROTOCOL, Request};
 use crate::hash::{Digest, HashAlgo};
-use crate::pathkey::{PathEncoding, RelPath};
+use crate::pathkey::{PathEncoding, RelPath, valid_link_target};
 use crate::transport::android::{AndroidTransport, shell_quote};
+
+/// Files or links one fallback shell command handles, keeping the command line well under
+/// Android's argument limit.
+const FALLBACK_BATCH: usize = 200;
 
 /// How an [`AdbSource`] reaches its phone.
 #[derive(Debug, Clone)]
@@ -336,6 +340,7 @@ impl AdbSource {
                 message: message.trim().to_owned(),
             });
         }
+        self.read_link_targets(&mut by_parent, &mut warnings)?;
         // Children of a directory together, sorted; a directory before its contents.
         let mut stack = vec![Vec::new()];
         while let Some(parent) = stack.pop() {
@@ -361,6 +366,64 @@ impl AdbSource {
             }
         }
         Ok(WalkOutcome::Complete)
+    }
+
+    /// Fills in the targets of the listed symlinks with `readlink`, [`FALLBACK_BATCH`] links
+    /// per shell command. A target that cannot be read stays unknown, with a warning.
+    fn read_link_targets(
+        &self,
+        by_parent: &mut BTreeMap<Vec<u8>, Vec<SourceEntry>>,
+        warnings: &mut Vec<SourceWarning>,
+    ) -> Result<(), SourceError> {
+        let unknown = |entry: &SourceEntry, message: &str| SourceWarning {
+            path: Some(entry.path.clone()),
+            kind: WarningKind::Io,
+            message: message.to_owned(),
+        };
+        // (link, its name for the phone's shell)
+        let mut links = Vec::new();
+        for entry in by_parent.values_mut().flatten() {
+            if entry.kind != EntryKind::Symlink {
+                continue;
+            }
+            match std::str::from_utf8(entry.path.as_bytes()) {
+                Ok(name) => {
+                    let name = shell_quote(name);
+                    links.push((entry, name));
+                }
+                Err(_) => warnings.push(unknown(
+                    entry,
+                    "the fallback cannot pass a name that is not UTF-8",
+                )),
+            }
+        }
+        for batch in links.chunks_mut(FALLBACK_BATCH) {
+            let names: Vec<&str> = batch.iter().map(|(_, name)| name.as_str()).collect();
+            let command = format!(
+                "cd {} || exit 2; for f in {}; do readlink -- \"$f\"; echo \"status|$?\"; done",
+                shell_quote(&self.root),
+                names.join(" ")
+            );
+            let output = self
+                .transport
+                .shell(&self.serial, &command)
+                .map_err(|e| SourceError::Remote(e.to_string()))?;
+            if output.status == 2 {
+                return Err(SourceError::Remote(format!(
+                    "cannot enter {} on the phone: {}",
+                    self.root,
+                    output.stderr.trim()
+                )));
+            }
+            let targets = parse_readlink_batch(&output.stdout, batch.len());
+            for ((entry, _), target) in batch.iter_mut().zip(targets) {
+                entry.link_target = target.filter(|t| valid_link_target(PathEncoding::Posix, t));
+                if entry.link_target.is_none() {
+                    warnings.push(unknown(entry, "cannot read the link target on the phone"));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn hash_agent(
@@ -418,8 +481,10 @@ impl AdbSource {
         requests: &[HashRequest],
         each: &mut dyn FnMut(usize, HashReply) -> ControlFlow<()>,
     ) -> Result<(), SourceError> {
-        const BATCH: usize = 200;
-        for (start, batch) in (0..).step_by(BATCH).zip(requests.chunks(BATCH)) {
+        for (start, batch) in (0..)
+            .step_by(FALLBACK_BATCH)
+            .zip(requests.chunks(FALLBACK_BATCH))
+        {
             // (index, request, name) of the requests the phone's shell can be given.
             let mut asked = Vec::with_capacity(batch.len());
             for (offset, request) in batch.iter().enumerate() {
@@ -617,6 +682,32 @@ fn fallback_reply(request: &HashRequest, fields: &[&str]) -> HashReply {
     }
 }
 
+/// The targets `readlink` printed for `count` links, each followed by `status|<exit status>`.
+/// A target counts only if it is the single line before a `status|0`: a target with a line
+/// break is unknown. More markers than links means a target held a line break and a fake
+/// marker, so no target of the batch can be matched to its link.
+fn parse_readlink_batch(stdout: &[u8], count: usize) -> Vec<Option<Vec<u8>>> {
+    let mut targets = Vec::with_capacity(count);
+    let mut lines: Vec<&[u8]> = Vec::new();
+    for line in stdout.split(|&b| b == b'\n') {
+        if let Some(status) = line.strip_prefix(b"status|") {
+            let target = match lines.as_slice() {
+                [target] if status == b"0" => Some(target.to_vec()),
+                _ => None,
+            };
+            targets.push(target);
+            lines.clear();
+        } else {
+            lines.push(line);
+        }
+    }
+    if targets.len() > count {
+        targets.clear();
+    }
+    targets.resize(count, None);
+    targets
+}
+
 /// `%F|%s|%Y|%n` from `stat -c`, with `%n` as `./relative/path`.
 fn parse_stat_line(line: &[u8]) -> Option<SourceEntry> {
     let mut fields = line.splitn(4, |&b| b == b'|');
@@ -673,6 +764,20 @@ mod tests {
         );
         assert!(parse_stat_line(b"half a name").is_none());
         assert!(parse_stat_line(b"regular file|x|1|./a").is_none());
+    }
+
+    #[test]
+    fn readlink_replies_need_one_line_and_status_zero() {
+        assert_eq!(
+            parse_readlink_batch(b"a.jpg\nstatus|0\nstatus|1\nx\ny\nstatus|0\n", 4),
+            [Some(b"a.jpg".to_vec()), None, None, None]
+        );
+        assert_eq!(parse_readlink_batch(b"", 1), [None]);
+        // The target `a\nstatus|0` ends in a fake marker: `a` must not become its target.
+        assert_eq!(
+            parse_readlink_batch(b"a\nstatus|0\nstatus|0\nb\nstatus|0\n", 2),
+            [None, None]
+        );
     }
 
     #[test]

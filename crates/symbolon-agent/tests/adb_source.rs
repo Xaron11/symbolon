@@ -257,6 +257,45 @@ fn without_an_agent_the_fallback_hashes_sha256() {
 }
 
 #[test]
+fn link_targets_match_a_local_scan_with_the_fallback() {
+    let phone = Phone::new();
+    let [remote, local] = scan_links_both(&phone, phone.source(None), HashAlgo::Sha256);
+    assert_eq!(remote, local);
+    assert_eq!(
+        remote,
+        [("Camera/latest".to_owned(), Some(b"a.jpg".to_vec()))]
+    );
+    assert!(
+        phone
+            .transport
+            .shells
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|c| c.contains("readlink --"))
+    );
+}
+
+#[test]
+fn a_link_name_the_fallback_cannot_pass_leaves_only_that_target_unknown() {
+    use std::os::unix::ffi::OsStrExt as _;
+
+    let phone = Phone::new();
+    let odd = phone
+        .root()
+        .join(std::ffi::OsStr::from_bytes(b"Camera/odd\xff"));
+    std::os::unix::fs::symlink("a.jpg", odd).unwrap();
+    let [remote, _] = scan_links_both(&phone, phone.source(None), HashAlgo::Sha256);
+    assert_eq!(
+        remote,
+        [
+            ("Camera/latest".to_owned(), Some(b"a.jpg".to_vec())),
+            ("Camera/odd%FF".to_owned(), None),
+        ]
+    );
+}
+
+#[test]
 fn the_fallback_cannot_make_blake3_digests() {
     let phone = Phone::new();
     let [remote, _] = scan_both(&phone, phone.source(None), HashAlgo::Blake3);
