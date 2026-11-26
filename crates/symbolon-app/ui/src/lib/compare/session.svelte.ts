@@ -24,6 +24,8 @@ export interface CompareSession {
 	/** Undefined until the comparison is open. */
 	readonly id: number | undefined;
 	readonly sides: readonly SideRequest[];
+	/** Whether it looks for duplicates within each side. */
+	readonly duplicates: boolean;
 	readonly summary: SummaryView | undefined;
 	readonly verify: VerifyState;
 	/** Why it could not be opened. */
@@ -79,6 +81,7 @@ export function createCompareSession(backend: Backend, request: CompareRequest):
 		get sides() {
 			return sides;
 		},
+		duplicates: request.duplicates,
 		get summary() {
 			return summary;
 		},

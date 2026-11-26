@@ -6,6 +6,7 @@
 	import { explain } from '../locations/status';
 	import Dashboard from './Dashboard.svelte';
 	import DrillDown from './DrillDown.svelte';
+	import Duplicates from './Duplicates.svelte';
 	import { createCompareSession } from './session.svelte';
 	import { fromQuery } from './url';
 	import VerifyLine from './VerifyLine.svelte';
@@ -57,6 +58,7 @@
 			</header>
 			<Dashboard {session} />
 			<DrillDown {session} />
+			{#if session.duplicates}<Duplicates {session} />{/if}
 		</div>
 	{/if}
 {/if}
