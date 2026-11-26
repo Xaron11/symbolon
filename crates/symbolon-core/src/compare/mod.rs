@@ -415,6 +415,36 @@ impl RowFilter {
     }
 }
 
+/// Rows and bytes matching a filter beneath a folder of the comparison tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct FolderTotals {
+    /// Matching rows anywhere beneath the folder.
+    pub rows: u64,
+    /// Bytes of the files in those rows.
+    pub bytes: u64,
+}
+
+/// A child of a folder in [`Comparison::children`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TreeChild {
+    /// A matching row with nothing matching beneath it.
+    Row(Row),
+    /// A path with matching rows beneath it.
+    Folder {
+        /// The folder's key, to pass as `parent` to [`Comparison::children`].
+        key: String,
+        /// The last part of the key.
+        name: String,
+        /// The row at this path when it matches too, such as a file on one side that is a
+        /// directory on another.
+        row: Option<Row>,
+        /// What matches beneath it.
+        matching: FolderTotals,
+    },
+}
+
 /// The order of [`Comparison::rows`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -590,6 +620,51 @@ impl Comparison {
     /// A database error.
     pub fn duplicate_totals(&self) -> Result<Vec<DuplicateTotals>, CompareError> {
         sql::duplicate_totals(&self.conn, self.sides.len())
+    }
+
+    /// Number of rows matching `filter`.
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn count(&self, filter: &RowFilter) -> Result<u64, CompareError> {
+        sql::count(&self.conn, &sql::FilterParams::new(filter, &self.options))
+    }
+
+    /// The children of folder `parent` that match `filter` or have matching rows beneath them,
+    /// ordered by name. `parent` is `""` for the root or a key from [`TreeChild::Folder`]. A
+    /// moved or renamed row sits at its first placement, as in [`Row::key`]. Children are read
+    /// by offset ([`Page::at`]); pages carry no cursor.
+    ///
+    /// # Errors
+    ///
+    /// A database error, or [`CatalogError::Corrupt`] for a cursor page.
+    pub fn children(
+        &self,
+        filter: &RowFilter,
+        parent: &str,
+        page: &Page,
+    ) -> Result<PageOf<TreeChild>, CompareError> {
+        sql::children(
+            &self.conn,
+            &self.sides,
+            &sql::FilterParams::new(filter, &self.options),
+            parent,
+            page,
+        )
+    }
+
+    /// Number of children [`Comparison::children`] lists for `parent`.
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn child_count(&self, filter: &RowFilter, parent: &str) -> Result<u64, CompareError> {
+        sql::child_count(
+            &self.conn,
+            &sql::FilterParams::new(filter, &self.options),
+            parent,
+        )
     }
 
     /// A page of rows matching `filter`, in `order`. Cursor pages are only available in the

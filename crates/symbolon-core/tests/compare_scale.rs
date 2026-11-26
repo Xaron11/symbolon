@@ -149,6 +149,17 @@ fn last_offset_page_is_fast() {
         CompareOptions::default(),
     )
     .expect("compare");
+    let started = Instant::now();
+    let roots = cmp
+        .children(&RowFilter::default(), "", &Page::at(0, 100))
+        .expect("children");
+    let root_count = cmp.child_count(&RowFilter::default(), "").expect("count");
+    let took = started.elapsed();
+    assert_eq!(roots.items.len(), 100);
+    eprintln!("tree root of {root_count} children, first page and count: {took:.1?}");
+    if !cfg!(debug_assertions) {
+        assert!(took.as_millis() < 1000, "tree root took {took:?}");
+    }
     let identical = RowFilter::categories([Category::Identical]);
     for (name, filter, order) in [
         ("all, path", RowFilter::default(), RowOrder::default()),
