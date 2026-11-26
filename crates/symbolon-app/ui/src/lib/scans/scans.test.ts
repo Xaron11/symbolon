@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createMemoryBackend, type ScanUpdate } from '../api/index.ts';
+import { ApiError, createMemoryBackend, type ScanUpdate } from '../api/index.ts';
 import { toasts } from '../feedback/toasts.svelte';
 import { createScanState, statusText } from './scans.svelte';
 
@@ -113,5 +113,55 @@ describe('createScanState', () => {
 		await state.resume('Photos');
 		expect(state.isPaused('Photos')).toBe(false);
 		expect(b.calls.map((c) => c.method)).toContain('scans.pause');
+	});
+});
+
+describe('createScanState races', () => {
+	it('a scan that ends before start resolves does not stay running', async () => {
+		const b = backendWith('Tiny');
+		b.scans.start = (label, onUpdate) => {
+			onUpdate({ type: 'Started', label, scanId: 1 });
+			onUpdate(finished(label));
+			return Promise.resolve();
+		};
+		const state = createScanState(b);
+		await state.start('Tiny');
+		expect(state.running).toEqual([]);
+	});
+
+	it('init skips scans that ended in between and still follows the others', async () => {
+		const b = backendWith('Gone', 'Photos');
+		b.scans.running = () =>
+			Promise.resolve([
+				progress('Gone', { files: 1 }),
+				progress('Photos', { files: 2 }),
+				finished('Old')
+			]);
+		const attached: string[] = [];
+		b.scans.attach = (label) => {
+			attached.push(label);
+			return label === 'Gone'
+				? Promise.reject(new ApiError('NotFound', 'no scan of "Gone" is running'))
+				: Promise.resolve();
+		};
+		const state = createScanState(b);
+		await state.init();
+		expect(attached).toEqual(['Gone', 'Photos']);
+		expect(state.running.map((u) => u.label)).toEqual(['Photos']);
+	});
+});
+
+describe('ScanStatus announcements', () => {
+	it('announces phases and ends, not every count', async () => {
+		const { render, screen } = await import('@testing-library/svelte');
+		const ScanStatus = (await import('./ScanStatus.svelte')).default;
+		const { rerender } = render(ScanStatus, { running: [progress('Photos', { files: 5 })] });
+		const live = screen.getByRole('status');
+		expect(live.textContent).toBe('Scanning Photos');
+		await rerender({ running: [progress('Photos', { files: 900 })] });
+		expect(live.textContent).toBe('Scanning Photos');
+		await rerender({ running: [progress('Photos', { phase: 'Hashing', toHashBytes: 10 })] });
+		expect(live.textContent).toBe('Hashing Photos');
+		expect(screen.getByRole('link').hasAttribute('aria-live')).toBe(false);
 	});
 });

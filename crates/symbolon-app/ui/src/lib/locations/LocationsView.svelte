@@ -1,6 +1,7 @@
 <!-- Spec: docs/design/components/location-table.md -->
 <script lang="ts">
 	import { FolderPlus } from '@lucide/svelte';
+	import { untrack } from 'svelte';
 	import { backend, toApiError, type HashPolicy, type LocationView } from '../api/index.ts';
 	import Alert from '../components/Alert/Alert.svelte';
 	import Button from '../components/Button/Button.svelte';
@@ -17,17 +18,24 @@
 	interface Props {
 		/** Opens a route, e.g. Scans when a scan already runs. */
 		navigate: (href: string) => void;
-		/** Opens Add location at once (the palette's "Add location"). */
+		/** Opens Add location (the palette's "Add location"). */
 		openAdd?: boolean;
+		/** Called once `openAdd` opened the dialog, so the page can drop the request. */
+		onaddopened?: () => void;
 	}
 
-	let { navigate, openAdd = false }: Props = $props();
+	let { navigate, openAdd = false, onaddopened }: Props = $props();
 	const api = backend();
 	const scanState = scans();
 	let locations = $state<LocationView[] | undefined>(undefined);
 	let loadError = $state<string | undefined>(undefined);
-	// svelte-ignore state_referenced_locally
-	let adding = $state(openAdd);
+	let adding = $state(false);
+	$effect(() => {
+		if (openAdd) {
+			adding = true;
+			untrack(() => onaddopened?.());
+		}
+	});
 	let renaming = $state<string | undefined>(undefined);
 	let removing = $state<string | undefined>(undefined);
 

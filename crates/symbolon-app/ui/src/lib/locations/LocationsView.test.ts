@@ -219,3 +219,58 @@ describe('LocationsView', () => {
 		expect(await screen.findByRole('dialog', { name: 'Add location' })).toBeTruthy();
 	});
 });
+
+describe('LocationsView add dialog', () => {
+	it('submits once while an add is in flight', async () => {
+		const user = userEvent.setup();
+		const { backend } = view([location('Old')]);
+		let finish: () => void = () => undefined;
+		let calls = 0;
+		const added = backend.locations.add.bind(backend.locations);
+		backend.locations.add = (request) =>
+			new Promise((resolve, reject) => {
+				calls++;
+				finish = () => {
+					added(request).then(resolve, reject);
+				};
+			});
+		await user.click(await screen.findByRole('button', { name: 'Add location' }));
+		const dialog = await screen.findByRole('dialog', { name: 'Add location' });
+		await user.type(within(dialog).getByLabelText('Folder path'), '/media/photos');
+		const add = within(dialog).getByRole('button', { name: 'Add' });
+		await user.click(add);
+		await user.click(add);
+		await user.keyboard('{Enter}');
+		finish();
+		await waitFor(() => {
+			expect(screen.queryByRole('dialog')).toBeNull();
+		});
+		expect(calls).toBe(1);
+	});
+
+	it('tells the page once the palette request was handled', async () => {
+		const onaddopened = vi.fn();
+		view([], { openAdd: true, onaddopened });
+		expect(await screen.findByRole('dialog', { name: 'Add location' })).toBeTruthy();
+		expect(onaddopened).toHaveBeenCalledTimes(1);
+	});
+
+	it('reads the phones again when asked and each time the dialog opens', async () => {
+		// jsdom keeps the dialog's body pointer-events lock for a moment after it closes.
+		const user = userEvent.setup({ pointerEventsCheck: 0 });
+		const { backend } = view([location('Old')], {}, { devices: [] });
+		await user.click(await screen.findByRole('button', { name: 'Add location' }));
+		let dialog = await screen.findByRole('dialog', { name: 'Add location' });
+		await user.click(within(dialog).getByRole('tab', { name: 'Android device' }));
+		expect(await within(dialog).findByText(/No phones found/)).toBeTruthy();
+		backend.seed.devices = [{ serial: 'A1', model: 'Pixel_10', ready: true, hint: null }];
+		await user.click(within(dialog).getByRole('button', { name: 'Look again' }));
+		expect(await within(dialog).findByRole('radio', { name: /Pixel_10/ })).toBeTruthy();
+		await user.keyboard('{Escape}');
+		backend.seed.devices = [];
+		await user.click(screen.getByRole('button', { name: 'Add location' }));
+		dialog = await screen.findByRole('dialog', { name: 'Add location' });
+		await user.click(within(dialog).getByRole('tab', { name: 'Android device' }));
+		expect(await within(dialog).findByText(/No phones found/)).toBeTruthy();
+	});
+});
