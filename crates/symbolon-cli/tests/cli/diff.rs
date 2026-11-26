@@ -239,3 +239,98 @@ fn control_characters_in_names_are_escaped_in_tables() {
     let json = env.run(&["diff", "a", "b", "--json"]);
     assert!(!json.stdout.contains('\u{1b}'), "{:?}", json.stdout);
 }
+
+/// A location: label, files `(path, contents)`, symlinks `(path, target)` and empty
+/// directories.
+#[cfg(unix)]
+type Tree<'a> = (
+    &'a str,
+    &'a [(&'a str, &'a str)],
+    &'a [(&'a str, &'a [u8])],
+    &'a [&'a str],
+);
+
+/// Locations `a` and `b`, scanned.
+#[cfg(unix)]
+fn env_with_links(sides: [Tree<'_>; 2]) -> Env {
+    use std::os::unix::ffi::OsStrExt as _;
+
+    let env = Env::new();
+    for (label, files, links, dirs) in sides {
+        let root = env.tree(label, files);
+        for (path, target) in links {
+            std::os::unix::fs::symlink(std::ffi::OsStr::from_bytes(target), root.join(path))
+                .unwrap();
+        }
+        for dir in dirs {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        env.ok(&["location", "add", label, root.to_str().unwrap()]);
+    }
+    env.ok(&["scan", "a", "b", "--json"]);
+    env
+}
+
+#[cfg(unix)]
+fn dirs_and_links() -> Env {
+    env_with_links([
+        ("a", &[("notes", "a file")], &[("l", b"f.txt")], &["empty"]),
+        ("b", &[("notes/n.txt", "n")], &[("l", b"g.txt")], &[]),
+    ])
+}
+
+#[cfg(unix)]
+#[test]
+fn dirs_and_symlinks_table() {
+    let env = dirs_and_links();
+    let run = env.run(&["diff", "a", "b"]);
+    assert_eq!(run.code, 1);
+    settings(true).bind(|| insta::assert_snapshot!("dirs_and_symlinks_table", run.stdout));
+}
+
+#[cfg(unix)]
+#[test]
+fn diff_filters_by_kind() {
+    let env = dirs_and_links();
+    assert_eq!(
+        rows(&json(&env, &["a", "b", "--kind", "symlink"])),
+        [("different".to_owned(), "l".to_owned())]
+    );
+    assert_eq!(
+        rows(&json(&env, &["a", "b", "--kind", "dir,symlink"])),
+        [
+            ("only_in".to_owned(), "empty".to_owned()),
+            ("different".to_owned(), "l".to_owned()),
+            ("different".to_owned(), "notes".to_owned()),
+        ]
+    );
+}
+
+/// Link targets come from whoever made the tree, like names (#83).
+#[cfg(unix)]
+#[test]
+fn link_targets_are_escaped() {
+    let env = env_with_links([
+        (
+            "a",
+            &[],
+            &[("evil", b"\x1b[31mred"), ("odd", b"a\xffb")],
+            &[],
+        ),
+        ("b", &[], &[], &[]),
+    ]);
+    let table = env.run(&["diff", "a", "b"]);
+    assert!(!table.stdout.contains('\u{1b}'), "{:?}", table.stdout);
+    assert!(table.stdout.contains("-> %1B[31mred"), "{:?}", table.stdout);
+    assert!(table.stdout.contains("-> a%FFb"), "{:?}", table.stdout);
+    let json = env.run(&["diff", "a", "b", "--json"]);
+    assert!(!json.stdout.contains('\u{1b}'), "{:?}", json.stdout);
+    assert!(
+        json.stdout.contains(r#""target": "a%FFb""#),
+        "{}",
+        json.stdout
+    );
+    let csv = env.run(&["diff", "a", "b", "--format", "csv"]);
+    assert!(csv.stdout.contains(",symlink,"), "{}", csv.stdout);
+    assert!(csv.stdout.contains("a%FFb"), "{}", csv.stdout);
+}

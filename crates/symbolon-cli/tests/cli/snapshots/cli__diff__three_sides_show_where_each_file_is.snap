@@ -2,7 +2,7 @@
 source: crates/symbolon-cli/tests/cli/diff.rs
 expression: "env.run(&[\"diff\", \"a\", \"b\", \"c\", \"--only\", \"only-in,identical\"]).stdout"
 ---
-CATEGORY  ROWS  FILES  SIZE
+CATEGORY  ROWS  ENTRIES  SIZE
 identical  1  3  12 B
 different  1  2  7 B
 only_in  1  1  9 B

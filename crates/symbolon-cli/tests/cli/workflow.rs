@@ -19,7 +19,7 @@ fn categories(diff: &Value) -> Vec<String> {
         .as_object()
         .unwrap()
         .iter()
-        .filter(|(_, totals)| totals["files"].as_u64() > Some(0))
+        .filter(|(_, totals)| totals["entries"].as_u64() > Some(0))
         .map(|(name, _)| name.clone())
         .collect()
 }

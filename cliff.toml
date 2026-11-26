@@ -1,4 +1,5 @@
-# git-cliff configuration: Conventional Commits rendered as Keep a Changelog.
+# git-cliff configuration: Conventional Commits rendered as Keep a Changelog. Breaking changes
+# (`feat!:` or a `BREAKING CHANGE:` footer) are marked, with the footer's description.
 # Regenerate with `just changelog`.
 
 [changelog]
@@ -18,7 +19,9 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
     ### {{ group | striptags | trim }}
     {% for commit in commits %}
-        - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | split(pat="\n") | first | upper_first | trim }}\
+        {% set summary = commit.message | split(pat="\n") | first | trim -%}
+        - {% if commit.breaking %}**Breaking:** {% endif %}{% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ summary | upper_first }}\
+          {% if commit.breaking and commit.breaking_description and commit.breaking_description != summary %}. {{ commit.breaking_description | trim | upper_first }}{% endif %}\
     {% endfor %}
 {% endfor %}\n
 """
