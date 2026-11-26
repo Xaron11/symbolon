@@ -68,6 +68,30 @@ jobs:
           if grep -qE '^crates/symbolon-agent/' <<< "$changed"; then agent=true; fi
           { echo "nix=$nix"; echo "agent=$agent"; } | tee -a "$GITHUB_OUTPUT"
 
+  # Every commit of a pull request is signed off by its author (DCO, ADR-0020).
+  dco:
+    name: dco (sign-off)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Commit subjects are the PR author's; never let them act as workflow commands.
+          stop="$(openssl rand -hex 16)"
+          echo "::stop-commands::$stop"
+          status=0
+          .github/scripts/check-dco.sh "$BASE" "$HEAD" || status=$?
+          echo "::$stop::"
+          exit "$status"
+
   hooks:
     name: hooks (format, typos, nix, workflows)
     runs-on: ubuntu-latest
@@ -340,7 +364,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, hooks, clippy, test, frontend, deny, nix, android-agent, docs]
+    needs: [changes, dco, hooks, clippy, test, frontend, deny, nix, android-agent, docs]
     runs-on: ubuntu-latest
     permissions: {}
     steps:

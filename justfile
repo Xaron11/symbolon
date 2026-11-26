@@ -145,6 +145,10 @@ docs-links:
 
 # --- release (see docs/adr/0007-development-workflow.md) ---------------------
 
+# Check that every commit since `base` is signed off (DCO, ADR-0020), as CI does for pull requests.
+dco base="origin/main":
+    .github/scripts/check-dco.sh {{ base }}
+
 changelog:
     git cliff -o CHANGELOG.md
     treefmt CHANGELOG.md
@@ -178,7 +182,7 @@ release version="": ui-install
     (cd {{ ui }} && npm pkg set version="$version")
     git cliff --tag "v$version" -o CHANGELOG.md
     treefmt CHANGELOG.md {{ ui }}/package.json
-    git commit --quiet -am "chore(release): v$version"
+    git commit --quiet --signoff -am "chore(release): v$version"
     git push --quiet -u origin HEAD
     gh pr create --title "chore(release): v$version" \
         --body "Release v$version. After merging, run \`just tag\` on main."
