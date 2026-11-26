@@ -1,0 +1,44 @@
+import { render, screen } from '@testing-library/svelte';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+import { expectNoAxeViolations } from '../../../test/axe';
+import { text } from '../../../test/snippet';
+import Button from './Button.svelte';
+
+describe('Button', () => {
+	it('renders its label as a secondary button by default', async () => {
+		const { container } = render(Button, { children: text('Scan') });
+		const button = screen.getByRole('button', { name: 'Scan' });
+		expect(button.getAttribute('type')).toBe('button');
+		expect(button.dataset['variant']).toBe('secondary');
+		expect(button.dataset['size']).toBe('md');
+		await expectNoAxeViolations(container);
+	});
+
+	it.each(['primary', 'secondary', 'ghost', 'danger'] as const)(
+		'sets the %s variant',
+		(variant) => {
+			render(Button, { variant, children: text('Go') });
+			expect(screen.getByRole('button').dataset['variant']).toBe(variant);
+		}
+	);
+
+	it('calls onclick, but not when disabled', async () => {
+		const onclick = vi.fn();
+		const { rerender } = render(Button, { onclick, children: text('Go') });
+		await userEvent.click(screen.getByRole('button'));
+		expect(onclick).toHaveBeenCalledTimes(1);
+		await rerender({ onclick, disabled: true, children: text('Go') });
+		await userEvent.click(screen.getByRole('button'));
+		expect(onclick).toHaveBeenCalledTimes(1);
+	});
+
+	it('is busy and inert while loading', async () => {
+		const onclick = vi.fn();
+		render(Button, { onclick, loading: true, children: text('Save') });
+		const button = screen.getByRole('button', { name: 'Save' });
+		expect(button.getAttribute('aria-busy')).toBe('true');
+		await userEvent.click(button);
+		expect(onclick).not.toHaveBeenCalled();
+	});
+});

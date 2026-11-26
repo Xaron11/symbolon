@@ -94,5 +94,19 @@
         "$description": "Gap between control and focus ring"
       }
     }
+  },
+  "icon": {
+    "size": {
+      "sm": {
+        "$value": "14px",
+        "$type": "dimension",
+        "$description": "Icons in compact controls and chips"
+      },
+      "md": {
+        "$value": "16px",
+        "$type": "dimension",
+        "$description": "Icons in default controls"
+      }
+    }
   }
 }
