@@ -10,6 +10,6 @@ A single-line text field.
 
 **Sizes:** `control.height.md`; `control.height.touch` under a coarse pointer.
 
-**Keyboard:** standard text editing. Single-letter shortcuts never act while typing.
+**Keyboard:** standard text editing. Single-letter shortcuts never act while typing (see [Keyboard](../keyboard.md)).
 
 **Accessibility:** the label is always visible and associated with the field; a placeholder is only a hint, never the label. After a failed submit, typed values are kept and only the fields that need changes are marked.

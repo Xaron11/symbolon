@@ -19,6 +19,7 @@
 		"format": "prettier --write .",
 		"license-check": "node scripts/check-licenses.ts",
 		"tokens": "node scripts/build-tokens.ts",
+		"keymap-doc": "node scripts/build-keymap-doc.ts",
 		"test": "pnpm tokens && vitest run"
 	},
 	"devDependencies": {
