@@ -46,14 +46,25 @@ function quoteFont(family: string): string {
 		: `'${family}'`;
 }
 
+/** The token files for `theme`, as globs; globs need `/` even on Windows. */
+export function sourceGlobs(dir: string, theme: Theme, paths: path.PlatformPath = path): string[] {
+	const root = dir.split(paths.sep).join('/');
+	return [
+		`${root}/primitive/*.json`,
+		`${root}/semantic/scale.json`,
+		`${root}/semantic/${theme}.json`,
+		`${root}/component.json`
+	];
+}
+
+/** `file` relative to the tokens directory `dir`, with `/` on every platform. */
+export function tokenFile(dir: string, file: string, paths: path.PlatformPath = path): string {
+	return paths.relative(dir, file).split(paths.sep).join('/');
+}
+
 async function resolve(theme: Theme): Promise<Resolved & { theme: Token[] }> {
 	const sd = new StyleDictionary({
-		source: [
-			path.join(TOKENS, 'primitive/*.json'),
-			path.join(TOKENS, 'semantic/scale.json'),
-			path.join(TOKENS, `semantic/${theme}.json`),
-			path.join(TOKENS, 'component.json')
-		],
+		source: sourceGlobs(TOKENS, theme),
 		usesDtcg: true,
 		log: { verbosity: 'silent' },
 		platforms: { tokens: {} }
@@ -63,7 +74,7 @@ async function resolve(theme: Theme): Promise<Resolved & { theme: Token[] }> {
 	const component: Token[] = [];
 	const themed: Token[] = [];
 	for (const token of allTokens) {
-		const file = path.relative(TOKENS, token.filePath);
+		const file = tokenFile(TOKENS, token.filePath);
 		const entry: Token = {
 			name: token.path.join('.'),
 			value: cssValue(token.$value, token.$type),

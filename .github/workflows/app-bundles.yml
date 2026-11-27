@@ -42,6 +42,8 @@ jobs:
     permissions:
       contents: read
     strategy:
+      # One platform's failure should not hide whether the other's package builds.
+      fail-fast: false
       matrix:
         include:
           # The oldest supported Ubuntu, so the AppImage and .deb also run on older systems.

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { buildTokens, DOCS_PATH } from './build-tokens';
+import { buildTokens, DOCS_PATH, sourceGlobs, tokenFile } from './build-tokens';
 
 let out: string;
 let docs: string;
@@ -64,5 +64,24 @@ describe('buildTokens', () => {
 
 	it('keeps docs/design/tokens.md current', () => {
 		expect(readFileSync(docs, 'utf8')).toBe(readFileSync(DOCS_PATH, 'utf8'));
+	});
+});
+
+describe('token paths on Windows', () => {
+	const dir = 'D:\\a\\symbolon\\design\\tokens';
+
+	it('builds source globs with forward slashes, which globs need', () => {
+		expect(sourceGlobs(dir, 'dark', path.win32)).toEqual([
+			'D:/a/symbolon/design/tokens/primitive/*.json',
+			'D:/a/symbolon/design/tokens/semantic/scale.json',
+			'D:/a/symbolon/design/tokens/semantic/dark.json',
+			'D:/a/symbolon/design/tokens/component.json'
+		]);
+	});
+
+	it('names token files with forward slashes', () => {
+		expect(tokenFile(dir, 'D:/a/symbolon/design/tokens/semantic/scale.json', path.win32)).toBe(
+			'semantic/scale.json'
+		);
 	});
 });
