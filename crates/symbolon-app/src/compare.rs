@@ -320,7 +320,11 @@ pub(crate) struct CompareRowView {
 impl From<Row> for CompareRowView {
     fn from(row: Row) -> Self {
         Self {
-            display: PathKey::from_stored(row.key.clone()).display(),
+            // The key is normalized (case folded, NFC); a cell keeps the name as written.
+            display: row.cells.first().map_or_else(
+                || PathKey::from_stored(row.key.clone()).display(),
+                |cell| cell.key.display(),
+            ),
             key: row.key,
             category: row.category.into(),
             presence: row
@@ -1168,6 +1172,45 @@ mod tests {
         let root = f.registry.children(opened.id, all, "", 0, 10).unwrap();
         assert!(root[0].folder);
         assert_eq!(root[0].matching_rows, 30);
+    }
+
+    #[test]
+    fn names_keep_their_case_when_matching_ignores_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = state(dir.path(), Vec::new());
+        for (label, path) in [("left", "Docs/Read.ME"), ("right", "docs/read.me")] {
+            let root = dir.path().join(label);
+            fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
+            fs::write(root.join(path), "same").unwrap();
+            s.catalog
+                .add_location(NewLocation::local(label, &root).hash_policy(HashPolicy::Lazy))
+                .unwrap();
+            Scanner::start(&s.catalog, label, ScanOptions::default())
+                .unwrap()
+                .wait()
+                .unwrap();
+        }
+        let registry = CompareRegistry::default();
+        let mut request = request(&["left", "right"]);
+        request.case_insensitive = true;
+        let opened = registry.open(&s.catalog, request, Box::new(Gone)).unwrap();
+        let order = RowOrderView {
+            by: OrderBy::Path,
+            desc: false,
+        };
+        let rows = registry
+            .rows(opened.id, ApiFilter::default(), order, 0, 10)
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].display, "Docs/Read.ME");
+        let root = registry
+            .children(opened.id, ApiFilter::default(), "", 0, 10)
+            .unwrap();
+        assert_eq!(root[0].name, "Docs");
+        let inside = registry
+            .children(opened.id, ApiFilter::default(), &root[0].key, 0, 10)
+            .unwrap();
+        assert_eq!(inside[0].name, "Read.ME");
     }
 
     #[test]

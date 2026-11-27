@@ -161,5 +161,14 @@
       "$type": "dimension",
       "$description": "Width of the side panel that shows one row's details"
     }
+  },
+  "picker": {
+    "options": {
+      "width": {
+        "$value": "320px",
+        "$type": "dimension",
+        "$description": "Width of the comparison options beside the location cards"
+      }
+    }
   }
 }

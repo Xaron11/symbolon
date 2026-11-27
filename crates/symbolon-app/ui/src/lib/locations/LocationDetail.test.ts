@@ -59,6 +59,15 @@ function detail(label = 'Photos', data = seed()) {
 }
 
 describe('LocationDetail', () => {
+	it('leads back to the list of locations', async () => {
+		detail();
+		const trail = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+		expect(within(trail).getByRole('link', { name: 'Locations' }).getAttribute('href')).toBe(
+			'/locations'
+		);
+		expect(within(trail).getByText('Photos').getAttribute('aria-current')).toBe('page');
+	});
+
 	it('shows what the catalog holds', async () => {
 		const { container } = detail();
 		expect(await screen.findByText('1,204')).toBeTruthy();
@@ -100,6 +109,7 @@ describe('LocationDetail', () => {
 		await waitFor(() => {
 			expect(within(tree).getAllByRole('treeitem')).toHaveLength(2);
 		});
+		expect(within(tree).getByText('10 B')).toBeTruthy();
 		data.entries = {
 			Photos: {
 				...data.entries?.['Photos'],

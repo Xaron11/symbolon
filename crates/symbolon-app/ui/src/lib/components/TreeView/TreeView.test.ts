@@ -121,3 +121,23 @@ describe('TreeView live updates', () => {
 		});
 	});
 });
+
+describe('TreeView extras', () => {
+	it('shows an aside beside each label', async () => {
+		await tree({
+			aside: (n: MemoryNode) => (n.children ? `${String(n.children.length)} items` : undefined)
+		});
+		expect(screen.getByText('2 items')).toBeTruthy();
+	});
+
+	it('says it is loading, then what an empty tree means', async () => {
+		render(TreeView<MemoryNode>, {
+			source: memoryTree([]),
+			label: (n: MemoryNode) => n.label,
+			name: 'Files',
+			empty: 'Nothing matches the filters.'
+		});
+		expect(screen.getByRole('status').textContent).toContain('Loading');
+		expect(await screen.findByText('Nothing matches the filters.')).toBeTruthy();
+	});
+});

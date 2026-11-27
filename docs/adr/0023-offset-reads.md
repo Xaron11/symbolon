@@ -23,4 +23,4 @@ The GUI shows results in virtualized tables and trees ([ADR-0022](0022-design-sy
 - `OFFSET` cost grows with the offset and with how many rows a filter skips. If that becomes too slow, store a dense row number per order after classification and seek by it.
 - The CLI and other streaming clients keep using cursors; walking all 221,000 rows of that comparison in pages of 1,000 takes 0.8 s, as before, and `just test-acceptance` fails above 1.5 s.
 - Expanding a tree level groups the matching rows of the whole comparison by their next path segment: 30–40 ms for a folder of the 200k × 2 comparison, growing with the comparison rather than the folder. Restricting the scan to the folder's key range is the next step if that becomes slow.
-- Folder names in the tree are path key text; `TreeChild::Folder::display` turns escapes back into bytes for people (lossy). Under case-insensitive or NFC matching it shows the normalized spelling.
+- Folder names in the tree are path key text; `TreeChild::Folder::display` turns escapes back into bytes for people (lossy). Under case-insensitive or NFC matching the name is taken from one of the files beneath, so it keeps its spelling.

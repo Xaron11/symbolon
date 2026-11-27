@@ -6,60 +6,60 @@ Every value the interface uses, as CSS custom properties. The source is platform
 
 ## Theme colors and shadows
 
-| Variable                          | Light                                                             | Dark                                                             | Purpose                                            |
-| --------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
-| `--sy-color-surface-canvas`       | `#fafafa`                                                         | `#0a0a0a`                                                        | Window background                                  |
-| `--sy-color-surface-base`         | `#ffffff`                                                         | `#171717`                                                        | Panels, sidebar, table body                        |
-| `--sy-color-surface-raised`       | `#ffffff`                                                         | `#262626`                                                        | Menus, dialogs, toasts                             |
-| `--sy-color-surface-sunken`       | `#f5f5f5`                                                         | `#0a0a0a`                                                        | Inputs, table header                               |
-| `--sy-color-surface-hover`        | `#f5f5f5`                                                         | `#262626`                                                        | Hovered rows and controls                          |
-| `--sy-color-surface-active`       | `#f5f5f5`                                                         | `#262626`                                                        | Pressed rows and controls                          |
-| `--sy-color-surface-selected`     | `#eff6ff`                                                         | `#172554`                                                        | Selected rows and items                            |
-| `--sy-color-border-default`       | `#e5e5e5`                                                         | `#404040`                                                        | Dividers and table lines                           |
-| `--sy-color-border-strong`        | `#737373`                                                         | `#737373`                                                        | Control outlines                                   |
-| `--sy-color-text-primary`         | `#171717`                                                         | `#fafafa`                                                        | Body text and values                               |
-| `--sy-color-text-secondary`       | `#404040`                                                         | `#d4d4d4`                                                        | Labels and supporting text                         |
-| `--sy-color-text-muted`           | `#525252`                                                         | `#a3a3a3`                                                        | Hints, placeholders, disabled text                 |
-| `--sy-color-text-on-accent`       | `#ffffff`                                                         | `#0a0a0a`                                                        | Text on accent fills                               |
-| `--sy-color-accent-default`       | `#2563eb`                                                         | `#60a5fa`                                                        | Primary actions and selection                      |
-| `--sy-color-accent-hover`         | `#1d4ed8`                                                         | `#93c5fd`                                                        | Hovered primary actions                            |
-| `--sy-color-accent-active`        | `#1e40af`                                                         | `#3b82f6`                                                        | Pressed primary actions                            |
-| `--sy-color-focus`                | `#2563eb`                                                         | `#60a5fa`                                                        | Focus ring                                         |
-| `--sy-color-scrim`                | `rgb(15 23 42 / 0.4)`                                             | `rgb(2 6 23 / 0.7)`                                              | Backdrop behind modal dialogs and sheets           |
-| `--sy-category-identical-fg`      | `#059669`                                                         | `#34d399`                                                        | Identical: icon and tint (labels use text colors)  |
-| `--sy-category-identical-bg`      | `#ecfdf5`                                                         | `#022c22`                                                        | Identical: chip and row tint                       |
-| `--sy-category-identical-border`  | `#d1fae5`                                                         | `#064e3b`                                                        | Identical: chip outline                            |
-| `--sy-category-different-fg`      | `#ef4444`                                                         | `#ef4444`                                                        | Different: icon and tint (labels use text colors)  |
-| `--sy-category-different-bg`      | `#fef2f2`                                                         | `#450a0a`                                                        | Different: chip and row tint                       |
-| `--sy-category-different-border`  | `#fee2e2`                                                         | `#7f1d1d`                                                        | Different: chip outline                            |
-| `--sy-category-only-in-fg`        | `#92400e`                                                         | `#fde68a`                                                        | Only in: icon and tint (labels use text colors)    |
-| `--sy-category-only-in-bg`        | `#fffbeb`                                                         | `#451a03`                                                        | Only in: chip and row tint                         |
-| `--sy-category-only-in-border`    | `#fef3c7`                                                         | `#78350f`                                                        | Only in: chip outline                              |
-| `--sy-category-moved-fg`          | `#4c1d95`                                                         | `#8b5cf6`                                                        | Moved: icon and tint (labels use text colors)      |
-| `--sy-category-moved-bg`          | `#f5f3ff`                                                         | `#2e1065`                                                        | Moved: chip and row tint                           |
-| `--sy-category-moved-border`      | `#ede9fe`                                                         | `#4c1d95`                                                        | Moved: chip outline                                |
-| `--sy-category-renamed-fg`        | `#4c1d95`                                                         | `#8b5cf6`                                                        | Renamed: icon and tint (labels use text colors)    |
-| `--sy-category-renamed-bg`        | `#f5f3ff`                                                         | `#2e1065`                                                        | Renamed: chip and row tint                         |
-| `--sy-category-renamed-border`    | `#ede9fe`                                                         | `#4c1d95`                                                        | Renamed: chip outline                              |
-| `--sy-category-collision-fg`      | `#9d174d`                                                         | `#f472b6`                                                        | Collision: icon and tint (labels use text colors)  |
-| `--sy-category-collision-bg`      | `#fdf2f8`                                                         | `#500724`                                                        | Collision: chip and row tint                       |
-| `--sy-category-collision-border`  | `#fce7f3`                                                         | `#831843`                                                        | Collision: chip outline                            |
-| `--sy-category-unverified-fg`     | `#262626`                                                         | `#e5e5e5`                                                        | Unverified: icon and tint (labels use text colors) |
-| `--sy-category-unverified-bg`     | `#fafafa`                                                         | `#0a0a0a`                                                        | Unverified: chip and row tint                      |
-| `--sy-category-unverified-border` | `#f5f5f5`                                                         | `#171717`                                                        | Unverified: chip outline                           |
-| `--sy-status-error-fg`            | `#991b1b`                                                         | `#fca5a5`                                                        | Error: icon and text                               |
-| `--sy-status-error-bg`            | `#fef2f2`                                                         | `#450a0a`                                                        | Error: chip and row tint                           |
-| `--sy-status-error-border`        | `#fee2e2`                                                         | `#7f1d1d`                                                        | Error: chip outline                                |
-| `--sy-status-warning-fg`          | `#92400e`                                                         | `#fcd34d`                                                        | Warning: icon and text                             |
-| `--sy-status-warning-bg`          | `#fffbeb`                                                         | `#451a03`                                                        | Warning: chip and row tint                         |
-| `--sy-status-warning-border`      | `#fef3c7`                                                         | `#78350f`                                                        | Warning: chip outline                              |
-| `--sy-status-success-fg`          | `#166534`                                                         | `#86efac`                                                        | Success: icon and text                             |
-| `--sy-status-success-bg`          | `#f0fdf4`                                                         | `#052e16`                                                        | Success: chip and row tint                         |
-| `--sy-status-success-border`      | `#dcfce7`                                                         | `#14532d`                                                        | Success: chip outline                              |
-| `--sy-status-info-fg`             | `#1e40af`                                                         | `#93c5fd`                                                        | Info: icon and text                                |
-| `--sy-status-info-bg`             | `#eff6ff`                                                         | `#172554`                                                        | Info: chip and row tint                            |
-| `--sy-status-info-border`         | `#dbeafe`                                                         | `#1e3a8a`                                                        | Info: chip outline                                 |
-| `--sy-shadow-overlay`             | `0 8px 24px rgb(15 23 42 / 0.12), 0 1px 3px rgb(15 23 42 / 0.08)` | `0 8px 24px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06)` | Floating layers only: menus, dialogs, toasts       |
+| Variable                          | Light                                                       | Dark                                                             | Purpose                                            |
+| --------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| `--sy-color-surface-canvas`       | `#fafafa`                                                   | `#0a0a0a`                                                        | Window background                                  |
+| `--sy-color-surface-base`         | `#ffffff`                                                   | `#171717`                                                        | Panels, sidebar, table body                        |
+| `--sy-color-surface-raised`       | `#ffffff`                                                   | `#262626`                                                        | Menus, dialogs, toasts                             |
+| `--sy-color-surface-sunken`       | `#f5f5f5`                                                   | `#0a0a0a`                                                        | Inputs, table header                               |
+| `--sy-color-surface-hover`        | `#f5f5f5`                                                   | `#262626`                                                        | Hovered rows and controls                          |
+| `--sy-color-surface-active`       | `#f5f5f5`                                                   | `#262626`                                                        | Pressed rows and controls                          |
+| `--sy-color-surface-selected`     | `#f5f5f5`                                                   | `#262626`                                                        | Selected rows and items                            |
+| `--sy-color-border-default`       | `#e5e5e5`                                                   | `#404040`                                                        | Dividers and table lines                           |
+| `--sy-color-border-strong`        | `#737373`                                                   | `#737373`                                                        | Control outlines                                   |
+| `--sy-color-text-primary`         | `#171717`                                                   | `#fafafa`                                                        | Body text and values                               |
+| `--sy-color-text-secondary`       | `#404040`                                                   | `#d4d4d4`                                                        | Labels and supporting text                         |
+| `--sy-color-text-muted`           | `#525252`                                                   | `#a3a3a3`                                                        | Hints, placeholders, disabled text                 |
+| `--sy-color-text-on-accent`       | `#ffffff`                                                   | `#0a0a0a`                                                        | Text on accent fills                               |
+| `--sy-color-accent-default`       | `#2563eb`                                                   | `#60a5fa`                                                        | Primary actions and selection                      |
+| `--sy-color-accent-hover`         | `#1d4ed8`                                                   | `#93c5fd`                                                        | Hovered primary actions                            |
+| `--sy-color-accent-active`        | `#1e40af`                                                   | `#3b82f6`                                                        | Pressed primary actions                            |
+| `--sy-color-focus`                | `#2563eb`                                                   | `#60a5fa`                                                        | Focus ring                                         |
+| `--sy-color-scrim`                | `rgb(0 0 0 / 0.4)`                                          | `rgb(0 0 0 / 0.7)`                                               | Backdrop behind modal dialogs and sheets           |
+| `--sy-category-identical-fg`      | `#059669`                                                   | `#34d399`                                                        | Identical: icon and tint (labels use text colors)  |
+| `--sy-category-identical-bg`      | `#ecfdf5`                                                   | `#022c22`                                                        | Identical: chip and row tint                       |
+| `--sy-category-identical-border`  | `#d1fae5`                                                   | `#064e3b`                                                        | Identical: chip outline                            |
+| `--sy-category-different-fg`      | `#ef4444`                                                   | `#ef4444`                                                        | Different: icon and tint (labels use text colors)  |
+| `--sy-category-different-bg`      | `#fef2f2`                                                   | `#450a0a`                                                        | Different: chip and row tint                       |
+| `--sy-category-different-border`  | `#fee2e2`                                                   | `#7f1d1d`                                                        | Different: chip outline                            |
+| `--sy-category-only-in-fg`        | `#92400e`                                                   | `#fde68a`                                                        | Only in: icon and tint (labels use text colors)    |
+| `--sy-category-only-in-bg`        | `#fffbeb`                                                   | `#451a03`                                                        | Only in: chip and row tint                         |
+| `--sy-category-only-in-border`    | `#fef3c7`                                                   | `#78350f`                                                        | Only in: chip outline                              |
+| `--sy-category-moved-fg`          | `#4c1d95`                                                   | `#8b5cf6`                                                        | Moved: icon and tint (labels use text colors)      |
+| `--sy-category-moved-bg`          | `#f5f3ff`                                                   | `#2e1065`                                                        | Moved: chip and row tint                           |
+| `--sy-category-moved-border`      | `#ede9fe`                                                   | `#4c1d95`                                                        | Moved: chip outline                                |
+| `--sy-category-renamed-fg`        | `#0e7490`                                                   | `#22d3ee`                                                        | Renamed: icon and tint (labels use text colors)    |
+| `--sy-category-renamed-bg`        | `#ecfeff`                                                   | `#083344`                                                        | Renamed: chip and row tint                         |
+| `--sy-category-renamed-border`    | `#cffafe`                                                   | `#164e63`                                                        | Renamed: chip outline                              |
+| `--sy-category-collision-fg`      | `#9d174d`                                                   | `#f472b6`                                                        | Collision: icon and tint (labels use text colors)  |
+| `--sy-category-collision-bg`      | `#fdf2f8`                                                   | `#500724`                                                        | Collision: chip and row tint                       |
+| `--sy-category-collision-border`  | `#fce7f3`                                                   | `#831843`                                                        | Collision: chip outline                            |
+| `--sy-category-unverified-fg`     | `#262626`                                                   | `#e5e5e5`                                                        | Unverified: icon and tint (labels use text colors) |
+| `--sy-category-unverified-bg`     | `#fafafa`                                                   | `#0a0a0a`                                                        | Unverified: chip and row tint                      |
+| `--sy-category-unverified-border` | `#f5f5f5`                                                   | `#171717`                                                        | Unverified: chip outline                           |
+| `--sy-status-error-fg`            | `#991b1b`                                                   | `#fca5a5`                                                        | Error: icon and text                               |
+| `--sy-status-error-bg`            | `#fef2f2`                                                   | `#450a0a`                                                        | Error: chip and row tint                           |
+| `--sy-status-error-border`        | `#fee2e2`                                                   | `#7f1d1d`                                                        | Error: chip outline                                |
+| `--sy-status-warning-fg`          | `#92400e`                                                   | `#fcd34d`                                                        | Warning: icon and text                             |
+| `--sy-status-warning-bg`          | `#fffbeb`                                                   | `#451a03`                                                        | Warning: chip and row tint                         |
+| `--sy-status-warning-border`      | `#fef3c7`                                                   | `#78350f`                                                        | Warning: chip outline                              |
+| `--sy-status-success-fg`          | `#166534`                                                   | `#86efac`                                                        | Success: icon and text                             |
+| `--sy-status-success-bg`          | `#f0fdf4`                                                   | `#052e16`                                                        | Success: chip and row tint                         |
+| `--sy-status-success-border`      | `#dcfce7`                                                   | `#14532d`                                                        | Success: chip outline                              |
+| `--sy-status-info-fg`             | `#1e40af`                                                   | `#93c5fd`                                                        | Info: icon and text                                |
+| `--sy-status-info-bg`             | `#eff6ff`                                                   | `#171717`                                                        | Info: chip and row tint                            |
+| `--sy-status-info-border`         | `#e5e5e5`                                                   | `#404040`                                                        | Info: chip outline                                 |
+| `--sy-shadow-overlay`             | `0 8px 24px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.08)` | `0 8px 24px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06)` | Floating layers only: menus, dialogs, toasts       |
 
 ## Scales
 
@@ -109,25 +109,29 @@ Every value the interface uses, as CSS custom properties. The source is platform
 
 ## Component sizes
 
-| Variable                       | Value   | Purpose                                                     |
-| ------------------------------ | ------- | ----------------------------------------------------------- |
-| `--sy-control-height-sm`       | `28px`  | Compact controls, table toolbars                            |
-| `--sy-control-height-md`       | `32px`  | Default controls                                            |
-| `--sy-control-height-touch`    | `44px`  | Controls under a coarse pointer                             |
-| `--sy-control-radius`          | `4px`   | Buttons, inputs, chips                                      |
-| `--sy-panel-radius`            | `6px`   | Panels, dialogs, menus                                      |
-| `--sy-table-row-height`        | `28px`  | Table and tree rows                                         |
-| `--sy-table-header-height`     | `32px`  | Table header                                                |
-| `--sy-table-column-min`        | `120px` | Least width of a table column without a fixed width         |
-| `--sy-tree-indent`             | `16px`  | Indent per tree level                                       |
-| `--sy-sidebar-width-expanded`  | `200px` | Sidebar with labels                                         |
-| `--sy-sidebar-width-collapsed` | `48px`  | Sidebar with icons only                                     |
-| `--sy-toolbar-height`          | `44px`  | Top toolbar                                                 |
-| `--sy-statusbar-height`        | `24px`  | Bottom status bar                                           |
-| `--sy-focus-ring-width`        | `2px`   | Focus ring thickness                                        |
-| `--sy-focus-ring-offset`       | `2px`   | Gap between control and focus ring                          |
-| `--sy-icon-size-sm`            | `14px`  | Icons in compact controls and chips                         |
-| `--sy-icon-size-md`            | `16px`  | Icons in default controls                                   |
-| `--sy-pane-height`             | `480px` | Height of a table or tree inside a tab of a view            |
-| `--sy-scan-card-min-width`     | `320px` | Narrowest a running scan card gets before cards wrap        |
-| `--sy-form-width`              | `560px` | Widest a form in a view gets, such as the comparison picker |
+| Variable                       | Value   | Purpose                                                                  |
+| ------------------------------ | ------- | ------------------------------------------------------------------------ |
+| `--sy-control-height-sm`       | `28px`  | Compact controls, table toolbars                                         |
+| `--sy-control-height-md`       | `32px`  | Default controls                                                         |
+| `--sy-control-height-touch`    | `44px`  | Controls under a coarse pointer                                          |
+| `--sy-control-radius`          | `4px`   | Buttons, inputs, chips                                                   |
+| `--sy-panel-radius`            | `6px`   | Panels, dialogs, menus                                                   |
+| `--sy-table-row-height`        | `28px`  | Table and tree rows                                                      |
+| `--sy-table-header-height`     | `32px`  | Table header                                                             |
+| `--sy-table-column-min`        | `120px` | Least width of a table column without a fixed width                      |
+| `--sy-tree-indent`             | `16px`  | Indent per tree level                                                    |
+| `--sy-sidebar-width-expanded`  | `200px` | Sidebar with labels                                                      |
+| `--sy-sidebar-width-collapsed` | `48px`  | Sidebar with icons only                                                  |
+| `--sy-toolbar-height`          | `44px`  | Top toolbar                                                              |
+| `--sy-statusbar-height`        | `24px`  | Bottom status bar                                                        |
+| `--sy-focus-ring-width`        | `2px`   | Focus ring thickness                                                     |
+| `--sy-focus-ring-offset`       | `2px`   | Gap between control and focus ring                                       |
+| `--sy-icon-size-sm`            | `14px`  | Icons in compact controls and chips                                      |
+| `--sy-icon-size-md`            | `16px`  | Icons in default controls                                                |
+| `--sy-pane-height`             | `480px` | Height of a table or tree inside a tab of a view                         |
+| `--sy-scan-card-min-width`     | `320px` | Narrowest a running scan card gets before cards wrap                     |
+| `--sy-form-width`              | `560px` | Widest a form in a view gets, such as the comparison picker              |
+| `--sy-chart-height`            | `220px` | Plot height of a dashboard chart, so charts side by side line up         |
+| `--sy-stat-tile-min-width`     | `104px` | Least width of a stat tile; six fit beside the expanded sidebar at 960px |
+| `--sy-detail-width`            | `360px` | Width of the side panel that shows one row's details                     |
+| `--sy-picker-options-width`    | `320px` | Width of the comparison options beside the location cards                |

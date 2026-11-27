@@ -20,6 +20,8 @@ export interface TreeState<Node> {
 	readonly visible: readonly VisibleNode<Node>[];
 	/** The last failed read, if any. */
 	readonly error: Error | undefined;
+	/** True until the roots were read the first time, or failed to be. */
+	readonly loading: boolean;
 	expand(key: string): Promise<void>;
 	collapse(key: string): void;
 	toggle(key: string): Promise<void>;
@@ -52,6 +54,7 @@ export function createTreeState<Node>(source: TreeSource<Node>): TreeState<Node>
 	const wanted = new SvelteSet<string>();
 	const reading = new SvelteMap<string, Promise<void>>();
 	let error = $state<Error | undefined>(undefined);
+	let loading = $state(true);
 	// Bumped by every refresh; folder reads started before it are dropped.
 	let generation = 0;
 	const fail = (e: unknown) => {
@@ -67,7 +70,8 @@ export function createTreeState<Node>(source: TreeSource<Node>): TreeState<Node>
 		source
 			.rootCount()
 			.then((count) => readAll(count, (o, l) => source.roots(o, l)))
-			.then((list) => (roots = remember(list)), fail);
+			.then((list) => (roots = remember(list)), fail)
+			.finally(() => (loading = false));
 	void readRoots();
 
 	const visible = $derived.by(() => {
@@ -182,6 +186,9 @@ export function createTreeState<Node>(source: TreeSource<Node>): TreeState<Node>
 		},
 		get error() {
 			return error;
+		},
+		get loading() {
+			return loading;
 		},
 		expand,
 		collapse,

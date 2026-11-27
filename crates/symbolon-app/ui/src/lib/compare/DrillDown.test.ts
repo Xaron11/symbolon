@@ -75,7 +75,7 @@ function open(sides = 2) {
 	const labels = ['Photos', 'Backup', 'Phone'].slice(0, sides).join('%2C');
 	return renderWithBackend(
 		CompareView,
-		{ query: new URLSearchParams(`sides=${labels}`) },
+		{ query: new URLSearchParams(`sides=${labels}`), navigate: () => undefined },
 		seed(sides)
 	);
 }
@@ -144,7 +144,11 @@ describe('drill-down', () => {
 				]
 			};
 		}
-		renderWithBackend(CompareView, { query: new URLSearchParams('sides=Photos%2CBackup') }, data);
+		renderWithBackend(
+			CompareView,
+			{ query: new URLSearchParams('sides=Photos%2CBackup'), navigate: () => undefined },
+			data
+		);
 		const grid = await list();
 		await waitFor(() => {
 			expect(within(grid).getByText('Only in Backup')).toBeTruthy();
@@ -154,8 +158,9 @@ describe('drill-down', () => {
 		await user.click(screen.getByRole('radio', { name: 'Tree' }));
 		const tree = await screen.findByRole('tree', { name: 'Rows by folder' });
 		await waitFor(() => {
-			expect(within(tree).getByText('b.jpg — Only in Backup')).toBeTruthy();
+			expect(within(tree).getByText('b.jpg')).toBeTruthy();
 		});
+		expect(within(tree).getByText('Only in Backup')).toBeTruthy();
 	});
 
 	it('offers presence with two sides', async () => {
@@ -193,8 +198,9 @@ describe('drill-down', () => {
 		await user.click(screen.getByRole('radio', { name: 'Tree' }));
 		const tree = await screen.findByRole('tree', { name: 'Rows by folder' });
 		await waitFor(() => {
-			expect(within(tree).getByText('Photos — 1,204 · 3.1 GiB')).toBeTruthy();
+			expect(within(tree).getByText('Photos')).toBeTruthy();
 		});
+		expect(within(tree).getByText('1,204 files · 3.1 GiB')).toBeTruthy();
 		expect(screen.getByRole('radio', { name: 'Tree' }).getAttribute('aria-checked')).toBe('true');
 	});
 
@@ -245,7 +251,11 @@ describe('row details', () => {
 			cells: row('b.jpg', 'only_in', 20).cells.filter((c) => c.side === 1)
 		};
 		if (data.comparison) data.comparison.rows = [onlyInBackup];
-		renderWithBackend(CompareView, { query: new URLSearchParams('sides=Photos%2CBackup') }, data);
+		renderWithBackend(
+			CompareView,
+			{ query: new URLSearchParams('sides=Photos%2CBackup'), navigate: () => undefined },
+			data
+		);
 		const grid = await list();
 		await waitFor(() => {
 			expect(within(grid).getByText('b.jpg')).toBeTruthy();

@@ -7,6 +7,7 @@ use std::fs;
 
 use symbolon_core::catalog::{Catalog, HashPolicy, NewLocation};
 use symbolon_core::compare::{Category, CompareOptions, Comparison, RowFilter, Side, TreeChild};
+use symbolon_core::pathkey::KeyOptions;
 use symbolon_core::query::Page;
 use symbolon_core::scan::{ScanOptions, Scanner};
 
@@ -241,4 +242,44 @@ fn folder_names_display_unescaped() {
             1
         );
     }
+}
+
+#[test]
+fn folder_names_keep_their_case_when_matching_ignores_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let catalog = Catalog::open(dir.path().join("catalog.db")).unwrap();
+    for (label, path) in [
+        ("left", "Docs/Inner/Read.ME"),
+        ("right", "docs/inner/read.me"),
+    ] {
+        let root = dir.path().join(label);
+        let file = root.join(path);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(file, "same").unwrap();
+        catalog
+            .add_location(NewLocation::local(label, &root).hash_policy(HashPolicy::Eager))
+            .unwrap();
+        Scanner::start(&catalog, label, ScanOptions::default())
+            .unwrap()
+            .wait()
+            .unwrap();
+    }
+    let ci = CompareOptions::default().keys(KeyOptions {
+        case_insensitive: true,
+        ..KeyOptions::default()
+    });
+    let cmp = Comparison::new(
+        &catalog,
+        &[Side::location("left"), Side::location("right")],
+        ci,
+    )
+    .unwrap();
+    let display = |parent: &str| match children(&cmp, &RowFilter::default(), parent).remove(0) {
+        TreeChild::Folder { key, display, .. } => (key, display),
+        _ => panic!("expected a folder"),
+    };
+    let (docs, shown) = display("");
+    assert_eq!(shown, "Docs");
+    let (_, inner) = display(&docs);
+    assert_eq!(inner, "Inner");
 }

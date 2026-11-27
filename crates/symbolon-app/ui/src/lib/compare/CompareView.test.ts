@@ -1,9 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { MemorySeed, SummaryView } from '../api/index.ts';
 import { expectNoAxeViolations } from '../../test/axe';
-import { location, renderWithBackend } from '../../test/backend';
+import { location, renderAgain, renderWithBackend } from '../../test/backend';
 import CompareView from './CompareView.svelte';
 
 /** The category tile named `name`. */
@@ -57,7 +57,13 @@ const seed = (): MemorySeed => ({
 });
 
 function compare(query = 'sides=Photos%2CBackup', data = seed()) {
-	return renderWithBackend(CompareView, { query: new URLSearchParams(query) }, data);
+	const navigate = vi.fn();
+	const rendered = renderWithBackend(
+		CompareView,
+		{ query: new URLSearchParams(query), navigate },
+		data
+	);
+	return { ...rendered, navigate };
 }
 
 describe('CompareView', () => {
@@ -167,10 +173,25 @@ describe('CompareView', () => {
 		}
 	});
 
-	it('closes the comparison when leaving', async () => {
-		const { backend, unmount } = compare();
+	it('keeps the comparison open while away and comes back to it', async () => {
+		const viewProps = { query: new URLSearchParams('sides=Photos%2CBackup'), navigate: vi.fn() };
+		const first = renderWithBackend(CompareView, viewProps, seed());
 		await tile('Identical');
-		unmount();
+		first.unmount();
+		expect(first.open.href).toBe('/compare/view?sides=Photos%2CBackup');
+		renderAgain(CompareView, viewProps, first);
+		await tile('Identical');
+		expect(first.backend.calls.filter((c) => c.method === 'compare.open')).toHaveLength(1);
+		expect(first.backend.calls.some((c) => c.method === 'compare.close')).toBe(false);
+	});
+
+	it('closes it and opens the picker for a new comparison', async () => {
+		const user = userEvent.setup();
+		const { backend, open, navigate } = compare();
+		await tile('Identical');
+		await user.click(screen.getByRole('button', { name: 'New comparison' }));
+		expect(navigate).toHaveBeenCalledWith('/compare');
+		expect(open.href).toBeUndefined();
 		await waitFor(() => {
 			expect(backend.calls.some((c) => c.method === 'compare.close')).toBe(true);
 		});

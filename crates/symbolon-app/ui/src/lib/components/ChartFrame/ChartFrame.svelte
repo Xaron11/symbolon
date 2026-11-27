@@ -39,7 +39,8 @@
 		if (!canvas) return;
 		const built = config(palette);
 		// The frame sets the height, so charts side by side line up.
-		built.options = { maintainAspectRatio: false, ...built.options };
+		// Numbers appear at once; growing bars only delay reading them.
+		built.options = { maintainAspectRatio: false, animation: false, ...built.options };
 		const chart = new Chart(canvas, built);
 		return () => {
 			chart.destroy();

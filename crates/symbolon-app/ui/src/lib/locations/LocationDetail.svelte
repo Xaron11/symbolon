@@ -130,6 +130,8 @@
 			source={tree}
 			name="Files of {label}"
 			label={(entry: EntryView) => entry.name}
+			aside={(entry: EntryView) => (entry.folder ? undefined : formatBytes(entry.size))}
+			empty="Nothing scanned here yet."
 			icon={(entry: EntryView) => (entry.folder ? Folder : File)}
 		/>
 	</div>
@@ -138,7 +140,13 @@
 {#snippet scanList()}
 	<div class="pane">
 		{#key historyGeneration}
-			<DataTable source={history} columns={scanColumns} label="Scans of {label}" />
+			<DataTable
+				source={history}
+				columns={scanColumns}
+				label="Scans of {label}"
+				empty="Not scanned yet."
+				fit
+			/>
 		{/key}
 	</div>
 {/snippet}
@@ -151,6 +159,8 @@
 					source={scanWarnings(api, location.lastScan.scanId)}
 					columns={warningColumns}
 					label="Warnings of the last scan"
+					empty="No warnings in the last scan."
+					fit
 				/>
 			{/key}
 		{:else}
@@ -158,6 +168,12 @@
 		{/if}
 	</div>
 {/snippet}
+
+<nav class="trail" aria-label="Breadcrumb">
+	<a href="/locations">Locations</a>
+	<span aria-hidden="true">›</span>
+	<span aria-current="page">{label}</span>
+</nav>
 
 {#if loadError}
 	<Alert tone="error" title="Could not read the location">{loadError}</Alert>
@@ -170,13 +186,14 @@
 {:else}
 	{@const status = statusInfo(location.status)}
 	{@const blocked = scanBlocked(location.status)}
+	{@const Icon = status.icon}
 	<div class="detail">
 		<header class="head">
 			<div>
 				<h2>{location.label}</h2>
 				<p class="sy-mono muted root">{location.root}</p>
 			</div>
-			<Badge tone={status.tone}>{status.label}</Badge>
+			<Badge tone={status.tone}><Icon aria-hidden="true" />{status.label}</Badge>
 			<div class="spacer"></div>
 			{#if running.length > 0}<p class="muted">{statusText(running)}</p>{/if}
 			<Button
@@ -209,6 +226,24 @@
 {/if}
 
 <style>
+	.trail {
+		display: flex;
+		gap: var(--sy-space-8);
+		margin-bottom: var(--sy-space-12);
+		color: var(--sy-color-text-muted);
+		font-size: var(--sy-font-size-small);
+	}
+
+	.trail a {
+		color: var(--sy-color-text-secondary);
+		text-decoration: none;
+	}
+
+	.trail a:hover {
+		color: var(--sy-color-text-primary);
+		text-decoration: underline;
+	}
+
 	.detail {
 		display: flex;
 		flex-direction: column;

@@ -40,7 +40,11 @@ const seed = (): MemorySeed => ({
 });
 
 const open = (query: string) =>
-	renderWithBackend(CompareView, { query: new URLSearchParams(query) }, seed());
+	renderWithBackend(
+		CompareView,
+		{ query: new URLSearchParams(query), navigate: () => undefined },
+		seed()
+	);
 
 describe('duplicates', () => {
 	it('appear only when the comparison looks for them', async () => {

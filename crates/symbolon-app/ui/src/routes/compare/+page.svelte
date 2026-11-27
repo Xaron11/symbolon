@@ -5,4 +5,6 @@
 
 <svelte:head><title>Compare · Symbolon</title></svelte:head>
 
-<ComparePicker navigate={(href: string) => void goto(href)} />
+<ComparePicker
+	navigate={(href: string, options?: { replace: boolean }) => void goto(href, options)}
+/>

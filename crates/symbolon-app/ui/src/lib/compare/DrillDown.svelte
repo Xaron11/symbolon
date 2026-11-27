@@ -76,12 +76,15 @@
 		{ id: 'modified', header: 'Modified', cell: modified, mono: true, width: 100 }
 	]);
 
-	const nodeLabel = (node: TreeNodeView) =>
+	const nodeAside = (node: TreeNodeView) =>
 		node.folder
-			? `${node.name} — ${count.format(node.matchingRows)} · ${formatBytes(node.matchingBytes)}`
+			? `${count.format(node.matchingRows)} files · ${formatBytes(node.matchingBytes)}`
 			: node.row
-				? `${node.name} — ${rowSummary(node.row, session.sides)}`
-				: node.name;
+				? rowSummary(node.row, session.sides)
+				: undefined;
+	// A folder that is itself a row (an empty folder on one side) is still a folder.
+	const nodeIcon = (node: TreeNodeView) =>
+		node.folder || node.row?.cells.some((c) => c.kind === 'Dir') ? Folder : File;
 </script>
 
 <section class="sy-drill-down" aria-label="Rows">
@@ -121,14 +124,17 @@
 							source={comparisonRows(api, session.id, session.filter, session.changes)}
 							{columns}
 							label="Rows"
+							empty="Nothing matches the filters."
 							onopen={(row: CompareRowView) => (selected = row)}
 						/>
 					{:else}
 						<TreeView
 							source={comparisonTree(api, session.id, session.filter, session.changes)}
 							name="Rows by folder"
-							label={nodeLabel}
-							icon={(node: TreeNodeView) => (node.folder ? Folder : File)}
+							label={(node: TreeNodeView) => node.name}
+							aside={nodeAside}
+							empty="Nothing matches the filters."
+							icon={nodeIcon}
 							onopen={(node: TreeNodeView) => {
 								if (node.row) selected = node.row;
 							}}

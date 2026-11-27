@@ -33,10 +33,22 @@
 		label: string;
 		/** Indices of selected rows. */
 		selection?: ReadonlySet<number>;
+		/** What an empty table means, e.g. "Nothing matches the filters." */
+		empty?: string;
+		/** Shrink to the rows when they need less than the space given. */
+		fit?: boolean;
 		onopen?: (row: Row, index: number) => void;
 	}
 
-	let { source, columns, label, selection = $bindable(new Set()), onopen }: Props = $props();
+	let {
+		source,
+		columns,
+		label,
+		selection = $bindable(new Set()),
+		empty = 'Nothing here.',
+		fit = false,
+		onopen
+	}: Props = $props();
 
 	const rowHeight = parseFloat(component['table.row.height']);
 	const headerHeight = parseFloat(component['table.header.height']);
@@ -197,109 +209,122 @@
 	}
 </script>
 
+<!-- Messages sit beside the grid: a grid may only hold rows. -->
 <div
-	bind:this={grid}
-	class="sy-table"
-	role="grid"
-	aria-label={label}
-	aria-rowcount={total + 1}
-	aria-colcount={columns.length}
-	aria-multiselectable="true"
-	aria-activedescendant={activeLoaded
-		? `${id}-r${String(active)}-c${String(activeColumn)}`
+	class="frame"
+	style:height={fit
+		? `min(100%, ${String(headerHeight + Math.max(1, total) * rowHeight)}px + 2 * var(--sy-border-width-default))`
 		: undefined}
-	tabindex="0"
-	onkeydown={(event) => {
-		dispatch(event);
-	}}
 >
 	<div
-		class="body"
-		bind:this={scroller}
-		bind:clientHeight={height}
-		onscroll={() => {
-			requestAnimationFrame(() => {
-				rows.setViewport(scroller?.scrollTop ?? 0, height);
-			});
+		bind:this={grid}
+		class="sy-table"
+		role="grid"
+		aria-label={label}
+		aria-rowcount={total + 1}
+		aria-colcount={columns.length}
+		aria-multiselectable="true"
+		aria-activedescendant={activeLoaded
+			? `${id}-r${String(active)}-c${String(activeColumn)}`
+			: undefined}
+		tabindex="0"
+		onkeydown={(event) => {
+			dispatch(event);
 		}}
 	>
 		<div
-			class="header"
-			role="row"
-			aria-rowindex="1"
-			style:grid-template-columns={template}
-			style:min-width={minWidth}
+			class="body"
+			bind:this={scroller}
+			bind:clientHeight={height}
+			onscroll={() => {
+				requestAnimationFrame(() => {
+					rows.setViewport(scroller?.scrollTop ?? 0, height);
+				});
+			}}
 		>
-			{#each columns as column (column.id)}
-				<div
-					class="cell"
-					class:end={column.align === 'end'}
-					role="columnheader"
-					aria-sort={ariaSort(column)}
-				>
-					{#if column.sortable}
-						<button
-							type="button"
-							tabindex="-1"
-							onclick={() => {
-								toggleSort(column.id);
-								grid?.focus();
-							}}
-						>
+			<div
+				class="header"
+				role="row"
+				aria-rowindex="1"
+				style:grid-template-columns={template}
+				style:min-width={minWidth}
+			>
+				{#each columns as column (column.id)}
+					<div
+						class="cell"
+						class:end={column.align === 'end'}
+						role="columnheader"
+						aria-sort={ariaSort(column)}
+					>
+						{#if column.sortable}
+							<button
+								type="button"
+								tabindex="-1"
+								onclick={() => {
+									toggleSort(column.id);
+									grid?.focus();
+								}}
+							>
+								{column.header}
+							</button>
+						{:else}
 							{column.header}
-						</button>
-					{:else}
-						{column.header}
-					{/if}
-				</div>
-			{/each}
-		</div>
-		<div class="spacer" role="presentation" style:height="{String(total * rowHeight)}px">
-			{#each rows.rows as row, i (rows.start + i)}
-				{@const index = rows.start + i}
-				<!-- Rows are reached through the grid (aria-activedescendant), not focused themselves;
-				     clicking one makes it active and keeps focus on the grid. -->
-				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_interactive_supports_focus -->
-				<div
-					class="row"
-					class:active={index === active}
-					class:marked={chosen && index === active}
-					role="row"
-					aria-rowindex={index + 2}
-					aria-selected={selection.has(index)}
-					style:transform="translateY({String(index * rowHeight)}px)"
-					style:grid-template-columns={template}
-					style:min-width={minWidth}
-					onclick={() => {
-						active = index;
-						chosen = true;
-						columnCursor = false;
-						grid?.focus();
-					}}
-					ondblclick={() => {
-						if (row !== undefined) onopen?.(row, index);
-					}}
-				>
-					{#each columns as column, c (column.id)}
-						{@const text = row === undefined ? '' : column.cell(row)}
-						{@const marker = row === undefined ? undefined : column.marker?.(row)}
-						<div
-							id="{id}-r{index}-c{c}"
-							class="cell truncate"
-							class:sy-mono={column.mono}
-							class:end={column.align === 'end'}
-							class:current={columnCursor && index === active && c === activeColumn}
-							role="gridcell"
-							title={text}
-						>
-							{#if marker}<span class="marker" style:background={marker} aria-hidden="true"
-								></span>{/if}{text}
-						</div>
-					{/each}
-				</div>
-			{/each}
+						{/if}
+					</div>
+				{/each}
+			</div>
+			<div class="spacer" role="presentation" style:height="{String(total * rowHeight)}px">
+				{#each rows.rows as row, i (rows.start + i)}
+					{@const index = rows.start + i}
+					<!-- Rows are reached through the grid (aria-activedescendant), not focused themselves;
+					     clicking one makes it active and keeps focus on the grid. -->
+					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_interactive_supports_focus -->
+					<div
+						class="row"
+						class:active={index === active}
+						class:marked={chosen && index === active}
+						role="row"
+						aria-rowindex={index + 2}
+						aria-selected={selection.has(index)}
+						style:transform="translateY({String(index * rowHeight)}px)"
+						style:grid-template-columns={template}
+						style:min-width={minWidth}
+						onclick={() => {
+							active = index;
+							chosen = true;
+							columnCursor = false;
+							grid?.focus();
+						}}
+						ondblclick={() => {
+							if (row !== undefined) onopen?.(row, index);
+						}}
+					>
+						{#each columns as column, c (column.id)}
+							{@const text = row === undefined ? '' : column.cell(row)}
+							{@const marker = row === undefined ? undefined : column.marker?.(row)}
+							<div
+								id="{id}-r{index}-c{c}"
+								class="cell truncate"
+								class:sy-mono={column.mono}
+								class:end={column.align === 'end'}
+								class:current={columnCursor && index === active && c === activeColumn}
+								role="gridcell"
+								title={text}
+							>
+								{#if marker}<span class="marker" style:background={marker} aria-hidden="true"
+									></span>{/if}{text}
+							</div>
+						{/each}
+					</div>
+				{/each}
+			</div>
 		</div>
 	</div>
+	{#if rows.count === undefined && !rows.error}
+		<p class="message" role="status">Loading…</p>
+	{:else if total === 0 && !rows.error}
+		<p class="message">{empty}</p>
+	{/if}
 	{#if rows.error}
 		<p class="error" role="alert">
 			Could not load rows: {rows.error.message}
@@ -316,6 +341,12 @@
 </div>
 
 <style>
+	.frame {
+		position: relative;
+		height: 100%;
+		min-height: 0;
+	}
+
 	.sy-table {
 		position: relative;
 		display: flex;
@@ -423,6 +454,17 @@
 	.sy-table:focus .current {
 		outline: var(--sy-border-width-default) solid var(--sy-color-focus);
 		outline-offset: calc(var(--sy-border-width-default) * -1);
+	}
+
+	.message {
+		position: absolute;
+		top: var(--sy-table-header-height);
+		right: 0;
+		left: 0;
+		margin: 0;
+		padding: var(--sy-space-8) var(--sy-space-12);
+		color: var(--sy-color-text-muted);
+		font-size: var(--sy-font-size-small);
 	}
 
 	.error {

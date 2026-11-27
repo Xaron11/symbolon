@@ -121,6 +121,8 @@
 					source={recentScans(api)}
 					{columns}
 					label="Recent scans"
+					empty="No scans yet."
+					fit
 					onopen={(row: RecentScanView) => {
 						navigate(`/locations/${encodeURIComponent(row.label)}`);
 					}}

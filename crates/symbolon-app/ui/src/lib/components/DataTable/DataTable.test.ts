@@ -192,3 +192,20 @@ describe('DataTable opening rows', () => {
 		expect(onopen).toHaveBeenCalledWith({ name: 'file2.jpg', size: 20 }, 2);
 	});
 });
+
+describe('DataTable states', () => {
+	it('says what an empty table means', async () => {
+		render(DataTable<File>, {
+			source: memorySource([], () => () => 0),
+			columns,
+			label: 'Files',
+			empty: 'No scans yet.'
+		});
+		expect(await screen.findByText('No scans yet.')).toBeTruthy();
+	});
+
+	it('is only as tall as its rows when asked to fit them', async () => {
+		const { grid } = await table(files(2), { fit: true });
+		expect(grid.parentElement?.style.height).toContain('min(100%');
+	});
+});

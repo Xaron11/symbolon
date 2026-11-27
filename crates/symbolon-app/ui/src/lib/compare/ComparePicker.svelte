@@ -7,16 +7,22 @@
 	import Checkbox from '../components/Checkbox/Checkbox.svelte';
 	import EmptyState from '../components/EmptyState/EmptyState.svelte';
 	import Input from '../components/Input/Input.svelte';
+	import { formatAgo, formatBytes } from '../format';
 	import { explain } from '../locations/status';
+	import { openComparison } from './open.svelte';
 	import { toQuery } from './url';
 
 	interface Props {
 		/** Opens a route: the comparison once chosen. */
-		navigate: (href: string) => void;
+		navigate: (href: string, options?: { replace: boolean }) => void;
 	}
 
 	let { navigate }: Props = $props();
 	const api = backend();
+	const open = openComparison();
+	// Compare shows the comparison that is open; "New comparison" there closes it first.
+	// svelte-ignore state_referenced_locally
+	if (open.href) navigate(open.href, { replace: true });
 	let locations = $state<LocationView[] | undefined>(undefined);
 	let loadError = $state<string | undefined>(undefined);
 	const chosen = new SvelteSet<string>();
@@ -32,6 +38,18 @@
 	api.locations.list().then(
 		(list) => (locations = list),
 		(e: unknown) => (loadError = explain(toApiError(e)))
+	);
+
+	const count = new Intl.NumberFormat('en-US');
+	const chosenLabels = $derived(
+		(locations ?? []).filter((l) => chosen.has(l.label)).map((l) => l.label)
+	);
+	const summary = $derived(
+		chosenLabels.length === 0
+			? 'No locations chosen'
+			: chosenLabels.length === 1
+				? `${chosenLabels[0] ?? ''} only`
+				: `${chosenLabels.slice(0, -1).join(', ')} and ${chosenLabels.at(-1) ?? ''}`
 	);
 
 	const ALGORITHMS: Record<string, string> = { blake3: 'BLAKE3', xxh3: 'XXH3', sha256: 'SHA-256' };
@@ -88,84 +106,236 @@
 		{#snippet actions()}<a href="/locations">Go to Locations</a>{/snippet}
 	</EmptyState>
 {:else if locations !== undefined}
-	<form
-		class="picker"
-		onsubmit={(event) => {
-			event.preventDefault();
-			compare();
-		}}
-	>
-		<fieldset>
-			<legend>Locations</legend>
-			{#each locations as location (location.label)}
-				<div class="side">
+	<div class="wrap">
+		<form
+			class="picker"
+			onsubmit={(event) => {
+				event.preventDefault();
+				compare();
+			}}
+		>
+			<fieldset class="locations">
+				<legend>Locations to compare</legend>
+				<p class="hint">Choose two or more. Each one's latest scan is compared.</p>
+				<div class="cards">
+					{#each locations as location (location.label)}
+						{@const on = chosen.has(location.label)}
+						{@const last = location.lastScan}
+						<!-- The checkbox is the keyboard target; the card only widens it for pointers. -->
+						<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+						<div
+							class="card"
+							class:on
+							onclick={(event) => {
+								const target = event.target as Element;
+								if (!target.closest('label, input')) toggle(location.label, !on);
+							}}
+						>
+							<Checkbox
+								label={location.label}
+								bind:checked={
+									() => on,
+									(next: boolean) => {
+										toggle(location.label, next);
+									}
+								}
+							/>
+							<p class="root sy-mono" title={location.root}>{location.root}</p>
+							<p class="facts">
+								{#if last}
+									{count.format(location.stats.files)} files · {formatBytes(location.stats.bytes)} · scanned
+									{formatAgo(last.finishedMs ?? last.startedMs)}
+								{:else}
+									Not scanned yet
+								{/if}
+							</p>
+							{#if on}
+								<Input
+									label="Only this subfolder (optional)"
+									placeholder="e.g. Photos/2024"
+									bind:value={
+										() => subpaths[location.label] ?? '',
+										(value: string) => (subpaths = { ...subpaths, [location.label]: value })
+									}
+								/>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</fieldset>
+			<div class="options-panel">
+				<fieldset class="options">
+					<legend>Comparison options</legend>
 					<Checkbox
-						label={location.label}
-						bind:checked={
-							() => chosen.has(location.label),
-							(on: boolean) => {
-								toggle(location.label, on);
-							}
-						}
+						label="Ignore case"
+						description="Photo.JPG and photo.jpg count as the same file."
+						bind:checked={caseInsensitive}
 					/>
-					{#if chosen.has(location.label)}
+					<Checkbox
+						label="Unicode normalization (NFC)"
+						description="Names typed differently on macOS and Linux still match."
+						bind:checked={nfc}
+					/>
+					<Checkbox
+						label="Fast mode: assume files equal by size and time"
+						description="Skips hashing; quicker, but can miss edited files."
+						bind:checked={fast}
+					/>
+					{#if fast}
 						<Input
-							label="Subfolder of {location.label} (optional)"
-							bind:value={
-								() => subpaths[location.label] ?? '',
-								(value: string) => (subpaths = { ...subpaths, [location.label]: value })
-							}
+							label="Time tolerance in seconds"
+							bind:value={fastSeconds}
+							{...toleranceError ? { error: toleranceError } : {}}
 						/>
 					{/if}
+					<Checkbox
+						label="Find duplicates within each location"
+						description="Also lists files with the same content inside one location."
+						bind:checked={duplicates}
+					/>
+				</fieldset>
+			</div>
+			<div class="submit">
+				{#if mismatch}<Alert tone="warning" title="Different hash algorithms">
+						{mismatch}
+					</Alert>{/if}
+				{#if problem}<p class="problem" role="alert">{problem}</p>{/if}
+				<div class="bar">
+					<p class="summary">{summary}</p>
+					<Button variant="primary" type="submit">Compare</Button>
 				</div>
-			{/each}
-		</fieldset>
-		<fieldset>
-			<legend>Matching</legend>
-			<Checkbox label="Ignore case" bind:checked={caseInsensitive} />
-			<Checkbox label="Unicode normalization (NFC)" bind:checked={nfc} />
-			<Checkbox label="Fast mode: assume files equal by size and time" bind:checked={fast} />
-			{#if fast}
-				<Input
-					label="Time tolerance in seconds"
-					bind:value={fastSeconds}
-					{...toleranceError ? { error: toleranceError } : {}}
-				/>
-			{/if}
-			<Checkbox label="Find duplicates within each location" bind:checked={duplicates} />
-		</fieldset>
-		{#if mismatch}<Alert tone="warning" title="Different hash algorithms">{mismatch}</Alert>{/if}
-		{#if problem}<p class="problem" role="alert">{problem}</p>{/if}
-		<div><Button variant="primary" type="submit">Compare</Button></div>
-	</form>
+			</div>
+		</form>
+	</div>
 {/if}
 
 <style>
+	/* Locations take the room; options sit beside them on wide windows and below on narrow ones. */
 	.picker {
-		display: flex;
-		flex-direction: column;
-		gap: var(--sy-space-16);
-		max-width: var(--sy-form-width);
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) var(--sy-picker-options-width);
+		grid-template-areas:
+			'locations options'
+			'submit submit';
+		gap: var(--sy-space-24);
+		align-items: start;
+	}
+
+	.wrap {
+		container-type: inline-size;
+	}
+
+	@container (width < 720px) {
+		.picker {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-areas: 'locations' 'options' 'submit';
+		}
 	}
 
 	fieldset {
-		display: flex;
-		flex-direction: column;
-		gap: var(--sy-space-8);
+		min-width: 0;
 		margin: 0;
 		padding: 0;
 		border: 0;
 	}
 
 	legend {
-		margin-bottom: var(--sy-space-8);
+		padding: 0;
+		font-size: var(--sy-font-size-title);
+		font-weight: var(--sy-font-weight-semibold);
+	}
+
+	.locations {
+		grid-area: locations;
+	}
+
+	.hint {
+		margin: var(--sy-space-4) 0 var(--sy-space-12);
+		color: var(--sy-color-text-secondary);
+		font-size: var(--sy-font-size-small);
+	}
+
+	.cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(var(--sy-scan-card-min-width), 1fr));
+		gap: var(--sy-space-12);
+	}
+
+	.card {
+		display: grid;
+		gap: var(--sy-space-4);
+		align-content: start;
+		min-width: 0;
+		padding: var(--sy-space-12);
+		border: var(--sy-border-width-default) solid var(--sy-color-border-default);
+		border-radius: var(--sy-panel-radius);
+		background: var(--sy-color-surface-base);
+		cursor: pointer;
+	}
+
+	.card:hover {
+		border-color: var(--sy-color-border-strong);
+	}
+
+	.card.on {
+		border-color: var(--sy-color-accent-default);
+		background: var(--sy-color-surface-selected);
+	}
+
+	.card :global(.sy-checkbox) {
 		font-weight: var(--sy-font-weight-medium);
 	}
 
-	.side {
+	.root,
+	.facts {
+		margin: 0;
+		overflow: hidden;
+		color: var(--sy-color-text-secondary);
+		font-size: var(--sy-font-size-small);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.facts {
+		color: var(--sy-color-text-muted);
+	}
+
+	.options-panel {
+		grid-area: options;
+		padding: var(--sy-space-16);
+		border: var(--sy-border-width-default) solid var(--sy-color-border-default);
+		border-radius: var(--sy-panel-radius);
+		background: var(--sy-color-surface-sunken);
+	}
+
+	.options {
+		display: grid;
+		gap: var(--sy-space-12);
+	}
+
+	.options legend {
+		margin-bottom: var(--sy-space-4);
+		font-size: var(--sy-font-size-body);
+	}
+
+	.submit {
+		display: grid;
+		grid-area: submit;
+		gap: var(--sy-space-12);
+	}
+
+	.bar {
 		display: flex;
-		flex-direction: column;
-		gap: var(--sy-space-4);
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--sy-space-16);
+		padding-top: var(--sy-space-16);
+		border-top: var(--sy-border-width-default) solid var(--sy-color-border-default);
+	}
+
+	.summary {
+		margin: 0;
+		color: var(--sy-color-text-secondary);
 	}
 
 	.problem {

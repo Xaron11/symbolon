@@ -439,8 +439,8 @@ pub enum TreeChild {
         key: String,
         /// The last part of the key, as stored (escaped and normalized like the key).
         name: String,
-        /// The last part of the key for people to read ([`PathKey::display`]); under
-        /// case-insensitive or NFC matching it is the normalized spelling.
+        /// The folder's name for people to read ([`PathKey::display`]), as written in one of
+        /// the files beneath it, so case-insensitive or NFC matching does not change it.
         display: String,
         /// The row at this path when it matches too, such as a file on one side that is a
         /// directory on another.
