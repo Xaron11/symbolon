@@ -48,6 +48,8 @@ export type CategoryName = B.CategoryName;
 export type SummaryView = B.SummaryView;
 /** Rows, entries and bytes of one category. */
 export type CategoryTotals = B.CategoryTotals;
+/** Rows, entries and bytes of the only-in rows held by exactly some sides. */
+export type OnlyInTotals = B.OnlyInTotals;
 /** A classified row. */
 export type CompareRowView = B.CompareRowView_Serialize;
 /** One side's entry in a row. */

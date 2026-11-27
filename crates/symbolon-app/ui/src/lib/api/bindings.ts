@@ -370,6 +370,15 @@ export type NewLocationRequest_Serialize = {
  */
 export type Num = number;
 
+/**  Rows, entries and bytes of the only-in rows held by exactly `sides`. */
+export type OnlyInTotals = {
+	sides: number[],
+	rows: number,
+	entries: number,
+	bytes: number,
+	assumedRows: number,
+};
+
 /**  What to sort rows by. */
 export type OrderBy = "Path" | "Size";
 
@@ -472,9 +481,13 @@ export type StatsView = {
 	partialFiles: number,
 };
 
-/**  Totals by category; categories without rows are left out. */
+/**
+ *  Totals by category, and of only-in rows by the sides holding them; empty groups are left
+ *  out.
+ */
 export type SummaryView = {
 	categories: CategoryTotals[],
+	onlyIn: OnlyInTotals[],
 };
 
 /**  A child in the comparison tree: a folder with matches beneath it, or a row. */

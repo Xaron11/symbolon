@@ -1,10 +1,8 @@
 <script lang="ts">
-	import EmptyState from '#lib/components/EmptyState/EmptyState.svelte';
+	import { goto } from '$app/navigation';
+	import ComparePicker from '#lib/compare/ComparePicker.svelte';
 </script>
 
 <svelte:head><title>Compare · Symbolon</title></svelte:head>
 
-<EmptyState
-	title="Compare"
-	description="Pick two or more locations to see what differs. Arrives with the app–core bridge."
-/>
+<ComparePicker navigate={(href: string) => void goto(href)} />

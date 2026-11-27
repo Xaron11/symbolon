@@ -143,11 +143,27 @@ describe('LocationsView', () => {
 		});
 	});
 
-	it('scans, renames, changes the hash policy and removes from the row menu', async () => {
+	it('scans from the button on each row, then links to the running scan', async () => {
+		const user = userEvent.setup();
+		const { backend } = view([location('Photos'), location('Stick')]);
+		await user.click(await screen.findByRole('button', { name: 'Scan Photos' }));
+		await waitFor(() => {
+			expect(backend.calls.filter((c) => c.method === 'scans.start')).toEqual([
+				{ method: 'scans.start', args: ['Photos'] }
+			]);
+		});
+		backend.emitScan('Photos', { type: 'Started', label: 'Photos', scanId: 1 });
+		const link = await screen.findByRole('link', { name: 'Scanning Photos' });
+		expect(link.getAttribute('href')).toBe('/scans');
+		expect(screen.queryByRole('button', { name: 'Scan Photos' })).toBeNull();
+		expect(screen.getByRole('button', { name: 'Scan Stick' })).toBeTruthy();
+	});
+
+	it('renames, changes the hash policy and removes from the row menu', async () => {
 		const { backend } = view([location('Photos')]);
 		let { user, menu } = await openActions('Photos');
-		await user.click(within(menu).getByRole('menuitem', { name: 'Scan' }));
-		expect(backend.calls.some((c) => c.method === 'scans.start')).toBe(true);
+		expect(within(menu).queryByRole('menuitem', { name: 'Scan' })).toBeNull();
+		await user.keyboard('{Escape}');
 
 		({ user, menu } = await openActions('Photos'));
 		await user.click(within(menu).getByRole('menuitem', { name: 'Hash during every scan' }));
@@ -185,14 +201,13 @@ describe('LocationsView', () => {
 
 	it('does not scan imported locations', async () => {
 		view([location('Old', { kind: 'Imported', status: { type: 'NotScannable' } })]);
-		const { menu } = await openActions('Old');
-		expect(within(menu).getByRole('menuitem', { name: /Scan/ }).getAttribute('aria-disabled')).toBe(
-			'true'
-		);
+		const scan = await screen.findByRole('button', { name: 'Scan Old' });
+		expect((scan as HTMLButtonElement).disabled).toBe(true);
 		expect(screen.getByText('Imported locations cannot be scanned.')).toBeTruthy();
 	});
 
 	it('explains scan errors, and opens Scans for a scan already running', async () => {
+		const user = userEvent.setup();
 		const { backend, navigate } = view([location('Phone'), location('Photos')]);
 		backend.scans.start = (label) =>
 			Promise.reject(
@@ -200,15 +215,13 @@ describe('LocationsView', () => {
 					? new ApiError('DeviceNotReady', 'phone A1 is not connected over adb')
 					: new ApiError('AlreadyScanning', 'already')
 			);
-		let { user, menu } = await openActions('Phone');
-		await user.click(within(menu).getByRole('menuitem', { name: 'Scan' }));
+		await user.click(await screen.findByRole('button', { name: 'Scan Phone' }));
 		await waitFor(() => {
 			expect(toasts.items.at(-1)?.message).toBe(
 				'Connect the phone and allow USB debugging, then try again.'
 			);
 		});
-		({ user, menu } = await openActions('Photos'));
-		await user.click(within(menu).getByRole('menuitem', { name: 'Scan' }));
+		await user.click(screen.getByRole('button', { name: 'Scan Photos' }));
 		await waitFor(() => {
 			expect(navigate).toHaveBeenCalledWith('/scans');
 		});
