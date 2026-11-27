@@ -35,10 +35,6 @@ filter_unconventional = true
 commit_parsers = [
   # A license change matters to every user, whatever its commit type.
   { message = "^[a-z]+(\\(.*\\))?!?: relicense", group = "<!-- 1 -->Changed" },
-  # CI fixes, and two fixes to tests and dev tooling (#176, #178) typed `fix`, never reach users.
-  { message = "^fix\\(ci\\)", skip = true },
-  { sha = "0fe59e4fb5a8e76032f011dbc259077a95ee693d", skip = true },
-  { sha = "72e6104bfa6c7e030c48af73988f43703c986b28", skip = true },
   { message = "^feat", group = "<!-- 0 -->Added" },
   { message = "^fix", group = "<!-- 2 -->Fixed" },
   { message = "^perf", group = "<!-- 1 -->Changed" },
