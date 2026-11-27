@@ -10,7 +10,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use symbolon_core::catalog::{Catalog, CatalogError, HashPolicy, NewLocation};
 use symbolon_core::compare::{
-    Category, CompareError, CompareOptions, Comparison, Row, RowFilter, Side, SideSet,
+    Category, CompareError, CompareOptions, Comparison, Row, RowFilter, RowOrder, Side, SideSet,
 };
 use symbolon_core::hash::HashAlgo;
 use symbolon_core::pathkey::KeyOptions;
@@ -93,7 +93,9 @@ fn all_rows(comparison: &Comparison) -> Vec<Row> {
     let mut rows = Vec::new();
     let mut page = Page::first(3);
     loop {
-        let result = comparison.rows(&RowFilter::default(), &page).unwrap();
+        let result = comparison
+            .rows(&RowFilter::default(), RowOrder::default(), &page)
+            .unwrap();
         rows.extend(result.items);
         match result.next {
             Some(cursor) => page = Page::after(cursor, 3),
@@ -463,7 +465,11 @@ fn rows_filter_by_category_and_page_stably() {
         let mut page = Page::first(2);
         loop {
             let result = cmp
-                .rows(&RowFilter::categories([Category::OnlyIn]), &page)
+                .rows(
+                    &RowFilter::categories([Category::OnlyIn]),
+                    RowOrder::default(),
+                    &page,
+                )
                 .unwrap();
             out.extend(result.items.iter().map(|r| r.key.clone()));
             match result.next {
@@ -476,6 +482,7 @@ fn rows_filter_by_category_and_page_stably() {
     let both = cmp
         .rows(
             &RowFilter::categories([Category::Identical, Category::Different]),
+            RowOrder::default(),
             &Page::first(10),
         )
         .unwrap();
@@ -513,6 +520,7 @@ fn rows_carry_kinds_and_targets_and_filter_by_kind() {
     let links = cmp
         .rows(
             &RowFilter::default().kinds([EntryKind::Symlink]),
+            RowOrder::default(),
             &Page::first(10),
         )
         .unwrap();
@@ -535,6 +543,7 @@ fn rows_carry_kinds_and_targets_and_filter_by_kind() {
     assert!(
         cmp.rows(
             &RowFilter::default().kinds([EntryKind::Other]),
+            RowOrder::default(),
             &Page::first(10)
         )
         .unwrap()
@@ -545,6 +554,7 @@ fn rows_carry_kinds_and_targets_and_filter_by_kind() {
     let small = cmp
         .rows(
             &RowFilter::default().size_range(None, Some(10)),
+            RowOrder::default(),
             &Page::first(10),
         )
         .unwrap();
@@ -1162,7 +1172,7 @@ mod filters_and_duplicates {
     use super::*;
 
     fn keys(cmp: &Comparison, filter: &RowFilter) -> Vec<String> {
-        cmp.rows(filter, &Page::first(100))
+        cmp.rows(filter, RowOrder::default(), &Page::first(100))
             .unwrap()
             .items
             .into_iter()

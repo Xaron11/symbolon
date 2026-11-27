@@ -16,7 +16,7 @@ use crossbeam_channel::{Receiver, Sender};
 use symbolon_core::catalog::{Catalog, CatalogError, HashPolicy, NewLocation};
 use symbolon_core::pathkey::RelPath;
 use symbolon_core::query::{EntryInfo, HashState, Page, PageOf, Query};
-use symbolon_core::scan::{ScanOptions, ScanStatus, Scanner};
+use symbolon_core::scan::{ScanId, ScanOptions, ScanStatus, Scanner};
 use symbolon_core::source::{
     LocalSource, ReadSeek, Source, SourceEntry, SourceError, WalkItem, WalkOutcome, WarningKind,
 };
@@ -429,4 +429,138 @@ fn queries_see_partial_results_while_a_scan_runs() {
         q.scans("loc", &Page::first(1)).unwrap().items[0].status,
         ScanStatus::Completed
     );
+}
+
+/// Reads `fetch` by offset pages of `limit` until an empty page.
+fn offset_pages<T>(limit: u32, mut fetch: impl FnMut(&Page) -> PageOf<T>) -> Vec<T> {
+    let mut out = Vec::new();
+    loop {
+        let result = fetch(&Page::at(out.len() as u64, limit));
+        assert!(result.next.is_none(), "offset pages carry no cursor");
+        if result.items.is_empty() {
+            return out;
+        }
+        out.extend(result.items);
+    }
+}
+
+#[test]
+fn children_offsets_match_cursors() {
+    let fx = Fixture::new(HashPolicy::Lazy);
+    for i in 0..10 {
+        fx.write(&format!("f{i}"), b"x");
+    }
+    fx.write("dir/inner", b"x");
+    fx.scan();
+    let q = fx.query();
+    let by_cursor = all_pages(3, |page| q.children("loc", "", page).unwrap());
+    let by_offset = offset_pages(3, |page| q.children("loc", "", page).unwrap());
+    assert_eq!(keys(&by_offset), by_cursor);
+}
+
+#[test]
+fn child_count_counts_direct_children() {
+    let fx = Fixture::new(HashPolicy::Lazy);
+    for name in ["a", "b", "dir/inner", "dir/deeper/x"] {
+        fx.write(name, b"x");
+    }
+    fx.scan();
+    let q = fx.query();
+    assert_eq!(q.child_count("loc", "").unwrap(), 3);
+    assert_eq!(q.child_count("loc", "dir").unwrap(), 2);
+    assert_eq!(q.child_count("loc", "missing").unwrap(), 0);
+    assert!(matches!(
+        q.child_count("nope", ""),
+        Err(CatalogError::LocationNotFound(_))
+    ));
+}
+
+#[test]
+fn scans_and_warnings_page_by_offset() {
+    let fx = Fixture::new(HashPolicy::Eager);
+    fx.write("ok", b"ok");
+    for _ in 0..3 {
+        fx.scan();
+    }
+    for name in ["gone", "gone2", "gone3"] {
+        fx.write(name, b"changed so it is hashed again");
+    }
+    let source = Arc::new(FailAll(LocalSource::new(&fx.root, &[]).unwrap()));
+    Scanner::start_with_source(&fx.catalog, "loc", source, ScanOptions::default())
+        .unwrap()
+        .wait()
+        .unwrap();
+    let q = fx.query();
+
+    let scans = offset_pages(1, |page| q.scans("loc", page).unwrap());
+    assert_eq!(scans.len(), 4);
+    assert_eq!(q.scan_count("loc").unwrap(), 4);
+    assert!(scans.windows(2).all(|pair| pair[0].id > pair[1].id));
+
+    let newest = scans[0].id;
+    let warnings = offset_pages(2, |page| q.warnings(newest, page).unwrap());
+    assert_eq!(warnings.len(), 3);
+    assert_eq!(q.warning_count(newest).unwrap(), 3);
+    assert_eq!(q.warning_count(scans[3].id).unwrap(), 0);
+}
+
+#[test]
+fn recent_scans_merge_locations_newest_first() {
+    let fx = Fixture::new(HashPolicy::Lazy);
+    fx.write("f", b"x");
+    let other = fx.root.with_file_name("other");
+    fs::create_dir(&other).unwrap();
+    fx.catalog
+        .add_location(NewLocation::local("other", &other))
+        .unwrap();
+    fx.scan();
+    Scanner::start(&fx.catalog, "other", ScanOptions::default())
+        .unwrap()
+        .wait()
+        .unwrap();
+    fx.scan();
+    let q = fx.query();
+    let recent = offset_pages(2, |page| q.recent_scans(page).unwrap());
+    assert_eq!(
+        recent.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(),
+        ["loc", "other", "loc"]
+    );
+    assert!(
+        recent
+            .windows(2)
+            .all(|pair| pair[0].scan.id > pair[1].scan.id)
+    );
+    assert_eq!(q.recent_scan_count().unwrap(), 3);
+    assert!(matches!(
+        q.recent_scans(&Page::first(5)),
+        Err(CatalogError::Corrupt(_))
+    ));
+}
+
+#[test]
+fn scan_id_round_trips() {
+    let fx = Fixture::new(HashPolicy::Lazy);
+    fx.scan();
+    let q = fx.query();
+    let id = q.scans("loc", &Page::first(1)).unwrap().items[0].id;
+    assert_eq!(ScanId::from_i64(id.get()), id);
+    assert_eq!(q.warning_count(ScanId::from_i64(id.get())).unwrap(), 0);
+}
+
+#[test]
+fn search_and_duplicates_reject_offset_pages() {
+    let fx = Fixture::new(HashPolicy::Eager);
+    for i in 0..20 {
+        fx.write(&format!("f{i:02}"), b"same");
+    }
+    fx.scan();
+    let q = fx.query();
+    assert!(matches!(
+        q.search("loc", "f", &Page::at(10, 5)),
+        Err(CatalogError::Corrupt(_))
+    ));
+    assert!(matches!(
+        q.duplicates("loc", &Page::at(1, 5)),
+        Err(CatalogError::Corrupt(_))
+    ));
 }

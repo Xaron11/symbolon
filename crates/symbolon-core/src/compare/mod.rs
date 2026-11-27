@@ -415,6 +415,102 @@ impl RowFilter {
     }
 }
 
+/// Rows and bytes matching a filter beneath a folder of the comparison tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct FolderTotals {
+    /// Matching rows anywhere beneath the folder.
+    pub rows: u64,
+    /// Bytes of the files in those rows.
+    pub bytes: u64,
+}
+
+/// A child of a folder in [`Comparison::children`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TreeChild {
+    /// A matching row with nothing matching beneath it.
+    Row(Row),
+    /// A path with matching rows beneath it.
+    Folder {
+        /// The folder's key, to pass as `parent` to [`Comparison::children`].
+        key: String,
+        /// The last part of the key, as stored (escaped and normalized like the key).
+        name: String,
+        /// The last part of the key for people to read ([`PathKey::display`]); under
+        /// case-insensitive or NFC matching it is the normalized spelling.
+        display: String,
+        /// The row at this path when it matches too, such as a file on one side that is a
+        /// directory on another.
+        row: Option<Row>,
+        /// What matches beneath it.
+        matching: FolderTotals,
+    },
+}
+
+/// Rows and bytes of one file extension in [`Comparison::by_extension`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ExtensionTotals {
+    /// The extension, lowercase and without the dot (`""` for names without one); `None` for
+    /// the extensions beyond the requested limit, counted together.
+    pub extension: Option<String>,
+    /// Rows whose file name has the extension.
+    pub rows: u64,
+    /// Bytes of the files in those rows, all sides together.
+    pub bytes: u64,
+}
+
+/// Upper bounds (exclusive) of the [`Comparison::size_histogram`] buckets: below 1 KiB, 1 MiB,
+/// 10 MiB, 100 MiB and 1 GiB, and the rest.
+pub const SIZE_BUCKETS: [Option<u64>; 6] = [
+    Some(1 << 10),
+    Some(1 << 20),
+    Some(10 << 20),
+    Some(100 << 20),
+    Some(1 << 30),
+    None,
+];
+
+/// Rows and bytes in one bucket of [`Comparison::size_histogram`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SizeBucket {
+    /// Rows in the bucket have their largest file below this size; `None` for the last bucket.
+    pub max_exclusive: Option<u64>,
+    /// Rows in the bucket.
+    pub rows: u64,
+    /// Bytes of the files in those rows, all sides together.
+    pub bytes: u64,
+}
+
+/// The order of [`Comparison::rows`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum RowOrder {
+    /// By path key.
+    Path(Direction),
+    /// By the size of the row's largest file, then by path key. Rows without files
+    /// (directories, symlinks) come after all others in both directions.
+    Size(Direction),
+}
+
+impl Default for RowOrder {
+    fn default() -> Self {
+        Self::Path(Direction::Asc)
+    }
+}
+
+/// Ascending or descending.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Direction {
+    /// Smallest first.
+    #[default]
+    Asc,
+    /// Largest first.
+    Desc,
+}
+
 /// Files with identical content within one side.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -543,11 +639,12 @@ impl Comparison {
 
     /// Duplicate groups within side `side` (an index into [`Comparison::sides`]), ordered by
     /// digest. Only files with full digests count; empty files are left out, since they are
-    /// all trivially identical.
+    /// all trivially identical. Pages by cursor or by offset ([`Page::at`]).
     ///
     /// # Errors
     ///
-    /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor.
+    /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor or a page with both a
+    /// cursor and an offset.
     pub fn duplicates(
         &self,
         side: usize,
@@ -565,16 +662,100 @@ impl Comparison {
         sql::duplicate_totals(&self.conn, self.sides.len())
     }
 
-    /// A page of rows matching `filter`, in stable path order.
+    /// Rows and bytes matching `filter` per file extension: the `limit` extensions with the
+    /// most bytes (ties by name), then one entry without an extension for all others if any
+    /// remain. Rows without files are not counted.
     ///
     /// # Errors
     ///
-    /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor.
-    pub fn rows(&self, filter: &RowFilter, page: &Page) -> Result<PageOf<Row>, CompareError> {
+    /// A database error.
+    pub fn by_extension(
+        &self,
+        filter: &RowFilter,
+        limit: u32,
+    ) -> Result<Vec<ExtensionTotals>, CompareError> {
+        sql::by_extension(
+            &self.conn,
+            &sql::FilterParams::new(filter, &self.options),
+            limit,
+        )
+    }
+
+    /// Rows and bytes matching `filter` by the size of their largest file, one entry per
+    /// [`SIZE_BUCKETS`] bound in that order (empty buckets included). Rows without files are not
+    /// counted.
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn size_histogram(&self, filter: &RowFilter) -> Result<Vec<SizeBucket>, CompareError> {
+        sql::size_histogram(&self.conn, &sql::FilterParams::new(filter, &self.options))
+    }
+
+    /// Number of rows matching `filter`.
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn count(&self, filter: &RowFilter) -> Result<u64, CompareError> {
+        sql::count(&self.conn, &sql::FilterParams::new(filter, &self.options))
+    }
+
+    /// The children of folder `parent` that match `filter` or have matching rows beneath them,
+    /// ordered by name. `parent` is `""` for the root or a key from [`TreeChild::Folder`]. A
+    /// moved or renamed row sits at its first placement, as in [`Row::key`]. Children are read
+    /// by offset ([`Page::at`]); pages carry no cursor.
+    ///
+    /// # Errors
+    ///
+    /// A database error, or [`CatalogError::Corrupt`] for a cursor page.
+    pub fn children(
+        &self,
+        filter: &RowFilter,
+        parent: &str,
+        page: &Page,
+    ) -> Result<PageOf<TreeChild>, CompareError> {
+        sql::children(
+            &self.conn,
+            &self.sides,
+            &sql::FilterParams::new(filter, &self.options),
+            parent,
+            page,
+        )
+    }
+
+    /// Number of children [`Comparison::children`] lists for `parent`.
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn child_count(&self, filter: &RowFilter, parent: &str) -> Result<u64, CompareError> {
+        sql::child_count(
+            &self.conn,
+            &sql::FilterParams::new(filter, &self.options),
+            parent,
+        )
+    }
+
+    /// A page of rows matching `filter`, in `order`. Cursor pages are only available in the
+    /// default order (path, ascending); offset pages work in every order and stay valid until
+    /// the next [`Comparison::refresh`].
+    ///
+    /// # Errors
+    ///
+    /// A database error, or [`CatalogError::Corrupt`] for an invalid cursor, a cursor with
+    /// another order, or a page with both a cursor and an offset.
+    pub fn rows(
+        &self,
+        filter: &RowFilter,
+        order: RowOrder,
+        page: &Page,
+    ) -> Result<PageOf<Row>, CompareError> {
         sql::rows(
             &self.conn,
             &self.sides,
             &sql::FilterParams::new(filter, &self.options),
+            order,
             page,
         )
     }

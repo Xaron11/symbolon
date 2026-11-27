@@ -57,6 +57,22 @@ The first 200k × 2 measurement was 4.2 s. Profiling showed index maintenance du
 
 Since directories and symlinks are compared too ([ADR-0019](adr/0019-directories-and-symlinks-in-comparisons.md), 2026-11-26), the 200k × 2 test also holds each side's 2,000 directories plus 20,000 empty directories on one side, each of which is checked for anything compared beneath it. The comparison takes 2.1 s; the same files without directories took 1.7 s on the same machine. Deriving the kinds of a row with `max()` instead of `DISTINCT` aggregates saved 0.1 s.
 
+### Jumping in results (M6, 2026-11-26)
+
+A virtualized table reads pages by offset ([ADR-0023](adr/0023-offset-reads.md)). On the same 200k × 2 comparison:
+
+| Read                                                 | Time     |
+| ---------------------------------------------------- | -------- |
+| Last 100 of 221,000 rows, path order                 | 12 ms    |
+| Last 100 of 221,000 rows, size order (index built)   | 12 ms    |
+| First page in a size order (builds that index)       | 110 ms   |
+| Last 100 of 196,000 identical rows, path or size     | 31–39 ms |
+| Tree root (22,001 children): first 100 and the count | 180 ms   |
+
+Walking all 221,000 rows by cursor in pages of 1,000, as `symbolon diff` does, takes 0.8 s; an early version that served both page forms from one SQL statement took 2.3 s, because the combined condition kept SQLite from seeking the index.
+
+Building both size indexes with every comparison added 0.28 s to the 2.1 s comparison, so they are built on the first size-ordered read instead. `just test-acceptance` fails if a last page takes 50 ms or more.
+
 ### Against the targets in the specification (§11)
 
 - **Walk 200k files in seconds on SSD:** met. Walking alone runs at about 540k entries/s, so 200k files take under half a second; a full eager first scan of 200k small files is about 6–7 s.

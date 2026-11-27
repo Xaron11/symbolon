@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use anyhow::Context as _;
 use std::sync::Arc;
 
-use symbolon_core::catalog::Catalog;
+use symbolon_core::catalog::{self, Catalog};
 use symbolon_core::source::AdbOptions;
 use symbolon_core::transport::android::SystemAdb;
 
@@ -44,16 +44,8 @@ fn open_catalog(global: &Global) -> anyhow::Result<Catalog> {
         Some(path) => path.clone(),
         None => default_catalog()?,
     };
-    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        // Directories created here hold a catalog of private paths: owner only on Unix.
-        let mut builder = std::fs::DirBuilder::new();
-        builder.recursive(true);
-        #[cfg(unix)]
-        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
-        builder
-            .create(parent)
-            .with_context(|| format!("cannot create {}", parent.display()))?;
-    }
+    catalog::create_catalog_dir(&path)
+        .with_context(|| format!("cannot create {}", path.parent().unwrap_or(&path).display()))?;
     let catalog = Catalog::open(&path)
         .with_context(|| format!("cannot open the catalog {}", path.display()))?
         .with_android(
@@ -66,9 +58,6 @@ fn open_catalog(global: &Global) -> anyhow::Result<Catalog> {
     Ok(catalog)
 }
 
-/// File name of the agent pushed to phones, as release archives ship it next to `symbolon`.
-const AGENT: &str = "symbolon-agent-aarch64-linux-musl";
-
 /// The agent to push to phones (ADR-0017): `SYMBOLON_AGENT`, else next to this executable,
 /// else in `../libexec/symbolon/` (Nix). Without one, phones are read with the fallback.
 fn find_agent() -> Option<PathBuf> {
@@ -76,8 +65,7 @@ fn find_agent() -> Option<PathBuf> {
         return Some(PathBuf::from(path));
     }
     let exe = std::env::current_exe().ok()?;
-    let dir = exe.parent()?;
-    [dir.join(AGENT), dir.join("../libexec/symbolon").join(AGENT)]
+    catalog::agent_candidates(exe.parent()?)
         .into_iter()
         .find(|path| path.is_file())
 }
@@ -85,5 +73,5 @@ fn find_agent() -> Option<PathBuf> {
 fn default_catalog() -> anyhow::Result<PathBuf> {
     let dir = dirs::data_local_dir()
         .context("no local data directory on this system; pass --catalog <PATH>")?;
-    Ok(dir.join("symbolon").join("catalog.db"))
+    Ok(catalog::default_catalog_path(&dir))
 }

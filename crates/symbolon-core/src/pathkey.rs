@@ -293,6 +293,24 @@ impl PathKey {
         &self.0
     }
 
+    /// The key for people to read: escapes (`%XX`) turned back into bytes, and bytes that are not
+    /// UTF-8 shown as `\u{FFFD}`. Lossy; never use it to find an entry again. A malformed escape
+    /// is shown as stored.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use symbolon_core::pathkey::PathKey;
+    ///
+    /// assert_eq!(PathKey::from_stored("100%25/dir%E9".into()).display(), "100%/dir\u{FFFD}");
+    /// ```
+    pub fn display(&self) -> String {
+        raw_from_escaped(&self.0).map_or_else(
+            || self.0.clone(),
+            |bytes| String::from_utf8_lossy(&bytes).into_owned(),
+        )
+    }
+
     /// The key of the parent directory; empty for entries directly under the root.
     pub fn parent(&self) -> &str {
         self.0.rsplit_once('/').map_or("", |(parent, _)| parent)
@@ -568,6 +586,19 @@ pub(crate) fn native_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn display_unescapes_lossily() {
+        use super::PathKey;
+        assert_eq!(PathKey::from_stored("100%25".into()).display(), "100%");
+        assert_eq!(
+            PathKey::from_stored("dir%E9/x".into()).display(),
+            "dir\u{FFFD}/x"
+        );
+        assert_eq!(PathKey::from_stored("été".into()).display(), "été");
+        // A malformed escape is shown as stored.
+        assert_eq!(PathKey::from_stored("a%Z".into()).display(), "a%Z");
+    }
+
     use proptest::prelude::*;
 
     use super::*;

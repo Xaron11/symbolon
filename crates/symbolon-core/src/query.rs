@@ -2,8 +2,10 @@
 //!
 //! A [`Query`] owns one read-only SQLite connection. In WAL mode it sees every batch a running
 //! scan has committed, so clients can browse partial results during a scan. Everything that can
-//! grow with a location is paginated with keyset cursors ([`Page`], [`PageOf`]): pages stay
-//! fast at any depth and do not skip or repeat rows when the scan inserts more.
+//! grow with a location is paginated ([`Page`], [`PageOf`]), by keyset cursor or by offset
+//! (ADR-0023). Cursor pages stay fast at any depth and do not skip or repeat rows when the scan
+//! inserts more; offset pages let a list jump anywhere, and a client re-reads counts while a
+//! scan is writing.
 
 use rusqlite::{Connection, OptionalExtension as _, params};
 
@@ -16,11 +18,14 @@ use crate::source::{EntryKind, WarningKind};
 /// Largest page [`Page::limit`] allows.
 pub const MAX_PAGE: u32 = 10_000;
 
-/// Which slice of a result to return.
+/// Which slice of a result to return: by cursor (continue after a known item) or by offset
+/// (jump to a position, as a scrolled list does).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Page {
     /// Continue after this cursor (from [`PageOf::next`]); `None` starts at the beginning.
     pub after: Option<Cursor>,
+    /// Skip this many items instead; never set together with [`Page::after`].
+    pub offset: Option<u64>,
     /// Maximum items, clamped to `1..=`[`MAX_PAGE`].
     pub limit: u32,
 }
@@ -28,15 +33,56 @@ pub struct Page {
 impl Page {
     /// The first `limit` items.
     pub fn first(limit: u32) -> Self {
-        Self { after: None, limit }
+        Self {
+            after: None,
+            offset: None,
+            limit,
+        }
     }
 
     /// The `limit` items after `cursor`.
     pub fn after(cursor: Cursor, limit: u32) -> Self {
         Self {
             after: Some(cursor),
+            offset: None,
             limit,
         }
+    }
+
+    /// The `limit` items from position `offset`. Offset pages return no [`PageOf::next`].
+    ///
+    /// Taken by `Comparison::rows`, `children` and `duplicates`, and by [`Query::children`],
+    /// [`Query::scans`], [`Query::warnings`] and [`Query::recent_scans`]; [`Query::search`] and
+    /// [`Query::duplicates`] reject it (ADR-0023).
+    pub fn at(offset: u64, limit: u32) -> Self {
+        Self {
+            after: None,
+            offset: Some(offset),
+            limit,
+        }
+    }
+
+    /// The offset as an SQL `OFFSET` (0 for cursor pages), or an error for a page with both.
+    pub(crate) fn skip(&self) -> Result<i64, CatalogError> {
+        Ok(self.checked_offset()?.unwrap_or(0).cast_signed())
+    }
+
+    /// An error for an offset page, in a result that is only read by cursor.
+    pub(crate) fn cursor_only(&self, what: &str) -> Result<(), CatalogError> {
+        match self.offset {
+            Some(_) => Err(CatalogError::Corrupt(format!("{what} are read by cursor"))),
+            None => Ok(()),
+        }
+    }
+
+    /// The offset to skip, or an error for a page that also has a cursor.
+    pub(crate) fn checked_offset(&self) -> Result<Option<u64>, CatalogError> {
+        if self.after.is_some() && self.offset.is_some() {
+            return Err(CatalogError::Corrupt(
+                "page has both cursor and offset".into(),
+            ));
+        }
+        Ok(self.offset)
     }
 
     fn effective_limit(&self) -> u32 {
@@ -138,6 +184,16 @@ pub struct ScanInfo {
     pub counts: ScanCounts,
     /// Error that failed the scan.
     pub error: Option<String>,
+}
+
+/// A scan in [`Query::recent_scans`], with the label of its location.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct RecentScan {
+    /// Label of the scanned location.
+    pub label: String,
+    /// The scan.
+    pub scan: ScanInfo,
 }
 
 /// A warning recorded by a scan.
@@ -266,46 +322,97 @@ impl Query {
             .transpose()
             .map_err(|_| CatalogError::Corrupt("invalid cursor".into()))?
             .unwrap_or(i64::MAX);
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT id, status, started_at, finished_at, files, dirs, symlinks, bytes, \
-             hashed_files, hashed_bytes, reused_hashes, warnings, error \
-             FROM scans WHERE location_id = ?1 AND id < ?2 ORDER BY id DESC LIMIT ?3",
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {SCAN_COLUMNS} \
+             FROM scans WHERE location_id = ?1 AND id < ?2 ORDER BY id DESC LIMIT ?3 OFFSET ?4"
+        ))?;
+        let rows = stmt.query_map(
+            params![location.id, after, page.effective_limit(), page.skip()?],
+            RawScan::from_row,
         )?;
-        let rows = stmt.query_map(params![location.id, after, page.effective_limit()], |row| {
-            let counts = ScanCounts {
-                files: row.get(4)?,
-                dirs: row.get(5)?,
-                symlinks: row.get(6)?,
-                bytes: row.get(7)?,
-                hashed_files: row.get(8)?,
-                hashed_bytes: row.get(9)?,
-                reused_hashes: row.get(10)?,
-                warnings: row.get(11)?,
-            };
+        let mut items = Vec::new();
+        for row in rows {
+            items.push(row?.into_info(location.id)?);
+        }
+        let next = next_cursor(&items, page, |scan| scan.id.get().to_string());
+        Ok(PageOf { items, next })
+    }
+
+    /// Number of scans of the location labelled `label`.
+    ///
+    /// # Errors
+    ///
+    /// [`CatalogError::LocationNotFound`], or a database error.
+    pub fn scan_count(&self, label: &str) -> Result<u64, CatalogError> {
+        let location = self.location(label)?;
+        Ok(self.conn.query_row(
+            "SELECT count(*) FROM scans WHERE location_id = ?1",
+            [location.id],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Scans of every location, newest first, by offset pages only ([`Page::at`]).
+    ///
+    /// # Errors
+    ///
+    /// A database error, or [`CatalogError::Corrupt`] for a cursor page or unreadable rows.
+    pub fn recent_scans(&self, page: &Page) -> Result<PageOf<RecentScan>, CatalogError> {
+        if page.offset.is_none() {
+            return Err(CatalogError::Corrupt(
+                "recent scans are read by offset".into(),
+            ));
+        }
+        let columns = SCAN_COLUMNS
+            .split(", ")
+            .map(|c| format!("s.{}", c.trim()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {columns}, s.location_id, l.label FROM scans s \
+             JOIN locations l ON l.id = s.location_id \
+             ORDER BY s.started_at DESC, s.id DESC LIMIT ?1 OFFSET ?2"
+        ))?;
+        let rows = stmt.query_map(params![page.effective_limit(), page.skip()?], |row| {
             Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, Option<i64>>(3)?,
-                counts,
-                row.get::<_, Option<String>>(12)?,
+                RawScan::from_row(row)?,
+                row.get::<_, i64>(13)?,
+                row.get::<_, String>(14)?,
             ))
         })?;
         let mut items = Vec::new();
         for row in rows {
-            let (id, status, started, finished, counts, error) = row?;
-            items.push(ScanInfo {
-                id: ScanId(id),
-                location_id: LocationId(location.id),
-                status: status.parse()?,
-                started_at: ms_to_system_time(started),
-                finished_at: finished.map(ms_to_system_time),
-                counts,
-                error,
+            let (raw, location_id, label) = row?;
+            items.push(RecentScan {
+                label,
+                scan: raw.into_info(location_id)?,
             });
         }
-        let next = next_cursor(&items, page, |scan| scan.id.get().to_string());
-        Ok(PageOf { items, next })
+        Ok(PageOf { items, next: None })
+    }
+
+    /// Number of scans of every location.
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn recent_scan_count(&self) -> Result<u64, CatalogError> {
+        Ok(self
+            .conn
+            .query_row("SELECT count(*) FROM scans", [], |row| row.get(0))?)
+    }
+
+    /// Number of warnings recorded by scan `scan` (0 for an unknown scan).
+    ///
+    /// # Errors
+    ///
+    /// A database error.
+    pub fn warning_count(&self, scan: ScanId) -> Result<u64, CatalogError> {
+        Ok(self.conn.query_row(
+            "SELECT count(*) FROM scan_warnings WHERE scan_id = ?1",
+            [scan.get()],
+            |row| row.get(0),
+        )?)
     }
 
     /// Warnings recorded by scan `scan`, in the order they were found.
@@ -341,16 +448,19 @@ impl Query {
         };
         let mut stmt = self.conn.prepare_cached(
             "SELECT id, rel_path_raw, kind, message FROM scan_warnings \
-             WHERE scan_id = ?1 AND id > ?2 ORDER BY id LIMIT ?3",
+             WHERE scan_id = ?1 AND id > ?2 ORDER BY id LIMIT ?3 OFFSET ?4",
         )?;
-        let rows = stmt.query_map(params![scan.get(), after, page.effective_limit()], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, Option<Vec<u8>>>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-            ))
-        })?;
+        let rows = stmt.query_map(
+            params![scan.get(), after, page.effective_limit(), page.skip()?],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<Vec<u8>>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            },
+        )?;
         let mut items = Vec::new();
         let mut last_id = 0;
         for row in rows {
@@ -403,10 +513,16 @@ impl Query {
         let after = page.after.as_ref().map_or("", |c| c.0.as_str());
         let mut stmt = self.conn.prepare_cached(&format!(
             "SELECT {ENTRY_COLUMNS} FROM entries WHERE location_id = ?1 AND parent_key = ?2 \
-             AND path_key > ?3 ORDER BY path_key LIMIT ?4"
+             AND path_key > ?3 ORDER BY path_key LIMIT ?4 OFFSET ?5"
         ))?;
         let rows = stmt.query_map(
-            params![location.id, parent, after, page.effective_limit()],
+            params![
+                location.id,
+                parent,
+                after,
+                page.effective_limit(),
+                page.skip()?
+            ],
             RawEntry::from_row,
         )?;
         let items = rows
@@ -414,6 +530,20 @@ impl Query {
             .collect::<Result<Vec<_>, _>>()?;
         let next = next_cursor(&items, page, |e| e.key.as_str().to_owned());
         Ok(PageOf { items, next })
+    }
+
+    /// Number of entries directly inside `parent` (a path key, `""` for the root).
+    ///
+    /// # Errors
+    ///
+    /// [`CatalogError::LocationNotFound`], or a database error.
+    pub fn child_count(&self, label: &str, parent: &str) -> Result<u64, CatalogError> {
+        let location = self.location(label)?;
+        Ok(self.conn.query_row(
+            "SELECT count(*) FROM entries WHERE location_id = ?1 AND parent_key = ?2",
+            params![location.id, parent],
+            |row| row.get(0),
+        )?)
     }
 
     /// Entries whose path contains `needle` (ASCII letters match case-insensitively), ordered by
@@ -428,6 +558,7 @@ impl Query {
         needle: &str,
         page: &Page,
     ) -> Result<PageOf<EntryInfo>, CatalogError> {
+        page.cursor_only("search results")?;
         let location = self.location(label)?;
         // Keys write `%` as `%25`; then escape LIKE's own wildcards.
         let pattern = format!(
@@ -465,6 +596,7 @@ impl Query {
         label: &str,
         page: &Page,
     ) -> Result<PageOf<DuplicateGroup>, CatalogError> {
+        page.cursor_only("duplicate groups")?;
         let location = self.location(label)?;
         let after = page
             .after
@@ -507,8 +639,56 @@ impl Query {
     }
 }
 
+/// The columns of `scans` a [`ScanInfo`] is built from, in [`RawScan::from_row`] order.
+const SCAN_COLUMNS: &str = "id, status, started_at, finished_at, files, dirs, symlinks, bytes, \
+    hashed_files, hashed_bytes, reused_hashes, warnings, error";
+
+/// A `scans` row as stored.
+struct RawScan {
+    id: i64,
+    status: String,
+    started: i64,
+    finished: Option<i64>,
+    counts: ScanCounts,
+    error: Option<String>,
+}
+
+impl RawScan {
+    fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            id: row.get(0)?,
+            status: row.get(1)?,
+            started: row.get(2)?,
+            finished: row.get(3)?,
+            counts: ScanCounts {
+                files: row.get(4)?,
+                dirs: row.get(5)?,
+                symlinks: row.get(6)?,
+                bytes: row.get(7)?,
+                hashed_files: row.get(8)?,
+                hashed_bytes: row.get(9)?,
+                reused_hashes: row.get(10)?,
+                warnings: row.get(11)?,
+            },
+            error: row.get(12)?,
+        })
+    }
+
+    fn into_info(self, location_id: i64) -> Result<ScanInfo, CatalogError> {
+        Ok(ScanInfo {
+            id: ScanId(self.id),
+            location_id: LocationId(location_id),
+            status: self.status.parse()?,
+            started_at: ms_to_system_time(self.started),
+            finished_at: self.finished.map(ms_to_system_time),
+            counts: self.counts,
+            error: self.error,
+        })
+    }
+}
+
 fn next_cursor<T>(items: &[T], page: &Page, key: impl Fn(&T) -> String) -> Option<Cursor> {
-    if items.len() < page.effective_limit() as usize {
+    if page.offset.is_some() || items.len() < page.effective_limit() as usize {
         return None;
     }
     items.last().map(|last| Cursor(key(last)))

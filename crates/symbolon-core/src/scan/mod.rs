@@ -113,6 +113,12 @@ pub enum ScanError {
 pub struct ScanId(pub(crate) i64);
 
 impl ScanId {
+    /// The id with the number `id`, as [`ScanId::get`] returned it (for clients that pass ids
+    /// through text or a UI).
+    pub const fn from_i64(id: i64) -> Self {
+        Self(id)
+    }
+
     /// The numeric id.
     pub const fn get(self) -> i64 {
         self.0

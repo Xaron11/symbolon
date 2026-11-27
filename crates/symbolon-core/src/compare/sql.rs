@@ -1,11 +1,12 @@
 //! SQL behind [`super::Comparison`]: temporary tables, loading, classification, reading.
 
 use rusqlite::functions::FunctionFlags;
-use rusqlite::{Connection, OptionalExtension as _, named_params, params};
+use rusqlite::{Connection, OptionalExtension as _, ToSql, named_params, params};
 
 use super::{
-    Category, Cell, CompareError, CompareOptions, DuplicateSet, DuplicateTotals, Row, RowFilter,
-    Side, SideInfo, SideSet, Summary, Totals, parse_row_cursor, row_cursor,
+    Category, Cell, CompareError, CompareOptions, Direction, DuplicateSet, DuplicateTotals,
+    ExtensionTotals, FolderTotals, Row, RowFilter, RowOrder, SIZE_BUCKETS, Side, SideInfo, SideSet,
+    SizeBucket, Summary, Totals, TreeChild, parse_row_cursor, row_cursor,
 };
 use crate::catalog::CatalogError;
 use crate::hash::{Digest, PartialDigest};
@@ -113,8 +114,16 @@ const DROP_FILE_INDEXES: &str = "
 const ROW_INDEXES: &str = "
     CREATE INDEX temp.cmp_rows_order ON cmp_rows (sort_key, id);
     CREATE INDEX temp.cmp_rows_digest ON cmp_rows (digest) WHERE digest IS NOT NULL;";
+/// Indexes for the size orders, built on the first page read in that order (most comparisons
+/// are never sorted by size) and dropped with the row indexes.
+const SIZE_ASC_INDEX: &str = "CREATE INDEX IF NOT EXISTS temp.cmp_rows_size_asc
+    ON cmp_rows (max_size IS NULL, max_size, sort_key, id)";
+const SIZE_DESC_INDEX: &str = "CREATE INDEX IF NOT EXISTS temp.cmp_rows_size_desc
+    ON cmp_rows (max_size IS NULL, max_size DESC, sort_key, id)";
 const DROP_ROW_INDEXES: &str = "
     DROP INDEX IF EXISTS temp.cmp_rows_order;
+    DROP INDEX IF EXISTS temp.cmp_rows_size_asc;
+    DROP INDEX IF EXISTS temp.cmp_rows_size_desc;
     DROP INDEX IF EXISTS temp.cmp_rows_digest;";
 
 /// Copies every side's files, symlinks and directories into `cmp_files` within one read
@@ -320,6 +329,21 @@ impl FilterParams {
     }
 }
 
+impl FilterParams {
+    /// The parameters of [`FILTER`], to extend with a query's own.
+    fn named(&self) -> Vec<(&'static str, &dyn ToSql)> {
+        vec![
+            (":categories", &self.categories),
+            (":ext", &self.extension),
+            (":min_size", &self.min_size),
+            (":max_size", &self.max_size),
+            (":prefix", &self.prefix),
+            (":presence", &self.presence),
+            (":kinds", &self.kinds),
+        ]
+    }
+}
+
 /// Row conditions shared by paging and summaries; every `NULL` parameter matches everything.
 const FILTER: &str = "
     (:categories = '' OR instr(:categories, ',' || category || ',') > 0)
@@ -337,28 +361,17 @@ pub(super) fn summary(conn: &Connection, filter: &FilterParams) -> Result<Summar
          FROM temp.cmp_rows WHERE {FILTER} GROUP BY category"
     ))?;
     let mut summary = Summary::default();
-    let rows = stmt.query_map(
-        named_params! {
-            ":categories": filter.categories,
-            ":ext": filter.extension,
-            ":min_size": filter.min_size,
-            ":max_size": filter.max_size,
-            ":prefix": filter.prefix,
-            ":presence": filter.presence,
-            ":kinds": filter.kinds,
-        },
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                Totals {
-                    rows: row.get(1)?,
-                    entries: row.get(2)?,
-                    bytes: row.get(3)?,
-                    assumed_rows: row.get(4)?,
-                },
-            ))
-        },
-    )?;
+    let rows = stmt.query_map(filter.named().as_slice(), |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            Totals {
+                rows: row.get(1)?,
+                entries: row.get(2)?,
+                bytes: row.get(3)?,
+                assumed_rows: row.get(4)?,
+            },
+        ))
+    })?;
     for row in rows {
         let (category, totals) = row?;
         summary.categories.insert(category.parse()?, totals);
@@ -366,12 +379,34 @@ pub(super) fn summary(conn: &Connection, filter: &FilterParams) -> Result<Summar
     Ok(summary)
 }
 
+/// `ORDER BY` terms of `order`; every order ends in a unique key so pages never overlap. Each
+/// matches an index term for term, so deep offsets skip index entries instead of sorting the
+/// table.
+fn order_by(order: RowOrder) -> &'static str {
+    match order {
+        RowOrder::Path(Direction::Asc) => "sort_key, id",
+        RowOrder::Path(Direction::Desc) => "sort_key DESC, id DESC",
+        RowOrder::Size(Direction::Asc) => "max_size IS NULL, max_size, sort_key, id",
+        RowOrder::Size(Direction::Desc) => "max_size IS NULL, max_size DESC, sort_key, id",
+    }
+}
+
 pub(super) fn rows(
     conn: &Connection,
     sides: &[SideInfo],
     filter: &FilterParams,
+    order: RowOrder,
     page: &Page,
 ) -> Result<PageOf<Row>, CompareError> {
+    let offset = page.checked_offset()?;
+    if offset.is_none() && order != RowOrder::default() {
+        return Err(CatalogError::Corrupt("cursor pages are path ordered".into()).into());
+    }
+    match order {
+        RowOrder::Size(Direction::Asc) => conn.execute_batch(SIZE_ASC_INDEX)?,
+        RowOrder::Size(Direction::Desc) => conn.execute_batch(SIZE_DESC_INDEX)?,
+        RowOrder::Path(_) => {}
+    }
     let (after_key, after_id) = page
         .after
         .as_ref()
@@ -379,38 +414,65 @@ pub(super) fn rows(
         .transpose()?
         .unwrap_or_else(|| (String::new(), 0));
     let limit = page.limit.clamp(1, crate::query::MAX_PAGE);
+    // Two texts: a keyset condition inside an OR keeps SQLite from seeking the index, which
+    // would make every cursor page scan from the start.
+    let position = if offset.is_some() {
+        "OFFSET :offset"
+    } else {
+        "OFFSET 0"
+    };
+    let keyset = if offset.is_some() {
+        ""
+    } else {
+        "(sort_key, id) > (:key, :id) AND"
+    };
     let mut stmt = conn.prepare_cached(&format!(
-        "SELECT id, sort_key, category, presence, assumed, size FROM temp.cmp_rows
-         WHERE (sort_key, id) > (:key, :id) AND {FILTER}
-         ORDER BY sort_key, id LIMIT :limit"
+        "SELECT {HEAD_COLUMNS} FROM temp.cmp_rows WHERE {keyset} {FILTER}
+         ORDER BY {} LIMIT :limit {position}",
+        order_by(order)
     ))?;
+    let offset_param = offset.map(u64::cast_signed);
+    let mut params = filter.named();
+    params.push((":limit", &limit));
+    if offset.is_some() {
+        params.push((":offset", &offset_param));
+    } else {
+        params.extend([(":key", &after_key as &dyn ToSql), (":id", &after_id)]);
+    }
     let heads = stmt
-        .query_map(
-            named_params! {
-                ":key": after_key,
-                ":id": after_id,
-                ":categories": filter.categories,
-                ":ext": filter.extension,
-                ":min_size": filter.min_size,
-                ":max_size": filter.max_size,
-                ":prefix": filter.prefix,
-                ":presence": filter.presence,
-                ":kinds": filter.kinds,
-                ":limit": limit,
-            },
-            |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)?,
-                    row.get::<_, bool>(4)?,
-                    row.get::<_, Option<u64>>(5)?,
-                ))
-            },
-        )?
+        .query_map(params.as_slice(), head)?
         .collect::<Result<Vec<_>, _>>()?;
+    let last = heads.last().map(|h| (h.1.clone(), h.0));
+    let items = assemble(conn, sides, heads)?;
+    let next = (offset.is_none() && items.len() == limit as usize)
+        .then(|| last.map(|(key, id)| row_cursor(&key, id)))
+        .flatten();
+    Ok(PageOf { items, next })
+}
 
+/// The columns of `cmp_rows` a [`Row`] is built from: id, key, category, presence, assumed,
+/// size.
+type Head = (i64, String, String, i64, bool, Option<u64>);
+
+const HEAD_COLUMNS: &str = "id, sort_key, category, presence, assumed, size";
+
+fn head(row: &rusqlite::Row<'_>) -> rusqlite::Result<Head> {
+    Ok((
+        row.get(0)?,
+        row.get(1)?,
+        row.get(2)?,
+        row.get(3)?,
+        row.get(4)?,
+        row.get(5)?,
+    ))
+}
+
+/// Builds the rows of `heads`, in their order, with their cells.
+fn assemble(
+    conn: &Connection,
+    sides: &[SideInfo],
+    heads: Vec<Head>,
+) -> Result<Vec<Row>, CompareError> {
     let mut move_cells = conn.prepare_cached(
         "SELECT side, raw, rel, kind, target, size, mtime_ns, partial, full FROM temp.cmp_files
          WHERE row_id = ?1 ORDER BY side, rel",
@@ -420,7 +482,6 @@ pub(super) fn rows(
          WHERE norm = ?1 AND row_id IS NULL ORDER BY side, rel",
     )?;
     let mut items = Vec::with_capacity(heads.len());
-    let mut last = None;
     for (id, key, category, presence, assumed, size) in heads {
         let category: Category = category.parse()?;
         let cells = if matches!(category, Category::Moved | Category::Renamed) {
@@ -430,7 +491,6 @@ pub(super) fn rows(
         }
         .map(|cell| cell?.into_cell(sides))
         .collect::<Result<Vec<_>, CompareError>>()?;
-        last = Some((key.clone(), id));
         items.push(Row {
             category,
             key,
@@ -440,10 +500,115 @@ pub(super) fn rows(
             cells,
         });
     }
-    let next = (items.len() == limit as usize)
-        .then(|| last.map(|(key, id)| row_cursor(&key, id)))
-        .flatten();
-    Ok(PageOf { items, next })
+    Ok(items)
+}
+
+pub(super) fn count(conn: &Connection, filter: &FilterParams) -> Result<u64, CompareError> {
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT count(*) FROM temp.cmp_rows WHERE {FILTER}"
+    ))?;
+    Ok(stmt.query_row(filter.named().as_slice(), |row| row.get(0))?)
+}
+
+/// The matching rows strictly beneath folder `:parent` (all rows for the root `''`), each
+/// split into the name of the child of `:parent` it lies in and whether it lies deeper.
+const CHILD_NAMES: &str = "
+    WITH beneath AS (
+        SELECT id, bytes, substr(sort_key, :skip) AS rest FROM temp.cmp_rows
+        WHERE (:parent = '' OR (sort_key > :parent || '/' AND sort_key < :parent || '0'))
+          AND {FILTER}
+    ), named AS (
+        SELECT id, bytes, instr(rest, '/') > 0 AS deeper,
+               CASE WHEN instr(rest, '/') > 0 THEN substr(rest, 1, instr(rest, '/') - 1)
+                    ELSE rest END AS name
+        FROM beneath
+    )";
+
+/// `substr` position where a child's name starts below `parent`; SQLite counts characters.
+fn skip(parent: &str) -> i64 {
+    if parent.is_empty() {
+        1
+    } else {
+        i64::try_from(parent.chars().count()).unwrap_or(i64::MAX - 1) + 2
+    }
+}
+
+pub(super) fn child_count(
+    conn: &Connection,
+    filter: &FilterParams,
+    parent: &str,
+) -> Result<u64, CompareError> {
+    let mut stmt = conn.prepare_cached(&format!(
+        "{} SELECT count(DISTINCT name) FROM named",
+        CHILD_NAMES.replace("{FILTER}", FILTER)
+    ))?;
+    let skip = skip(parent);
+    let mut params = filter.named();
+    params.extend([(":parent", &parent as &dyn ToSql), (":skip", &skip)]);
+    Ok(stmt.query_row(params.as_slice(), |row| row.get(0))?)
+}
+
+pub(super) fn children(
+    conn: &Connection,
+    sides: &[SideInfo],
+    filter: &FilterParams,
+    parent: &str,
+    page: &Page,
+) -> Result<PageOf<TreeChild>, CompareError> {
+    if page.after.is_some() {
+        return Err(CatalogError::Corrupt("tree children are read by offset".into()).into());
+    }
+    let offset = page.checked_offset()?.unwrap_or(0).cast_signed();
+    let limit = page.limit.clamp(1, crate::query::MAX_PAGE);
+    let mut stmt = conn.prepare_cached(&format!(
+        "{} SELECT name, max(CASE WHEN NOT deeper THEN id END), sum(deeper),
+                   sum(CASE WHEN deeper THEN bytes ELSE 0 END)
+            FROM named GROUP BY name ORDER BY name LIMIT :limit OFFSET :offset",
+        CHILD_NAMES.replace("{FILTER}", FILTER)
+    ))?;
+    let skip = skip(parent);
+    let mut params = filter.named();
+    params.extend([
+        (":parent", &parent as &dyn ToSql),
+        (":skip", &skip),
+        (":limit", &limit),
+        (":offset", &offset),
+    ]);
+    let found = stmt
+        .query_map(params.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, u64>(2)?,
+                row.get::<_, u64>(3)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut by_id = conn.prepare_cached(&format!(
+        "SELECT {HEAD_COLUMNS} FROM temp.cmp_rows WHERE id = ?1"
+    ))?;
+    let mut items = Vec::with_capacity(found.len());
+    for (name, row_id, rows, bytes) in found {
+        let row = match row_id {
+            Some(id) => assemble(conn, sides, vec![by_id.query_row([id], head)?])?.pop(),
+            None => None,
+        };
+        items.push(match row {
+            Some(row) if rows == 0 => TreeChild::Row(row),
+            row => TreeChild::Folder {
+                key: if parent.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{parent}/{name}")
+                },
+                display: PathKey::from_stored(name.clone()).display(),
+                name,
+                row,
+                matching: FolderTotals { rows, bytes },
+            },
+        });
+    }
+    Ok(PageOf { items, next: None })
 }
 
 pub(super) fn duplicates(
@@ -456,6 +621,7 @@ pub(super) fn duplicates(
     let info = sides
         .get(side)
         .ok_or_else(|| CatalogError::Corrupt(format!("side {side} out of range")))?;
+    let offset = page.checked_offset()?;
     let after = page
         .after
         .as_ref()
@@ -467,11 +633,12 @@ pub(super) fn duplicates(
         .prepare_cached(
             "SELECT full, max(size) FROM temp.cmp_files
              WHERE side = ?1 AND kind = 'file' AND full IS NOT NULL AND size > 0 AND full > ?2
-             GROUP BY full HAVING count(*) > 1 ORDER BY full LIMIT ?3",
+             GROUP BY full HAVING count(*) > 1 ORDER BY full LIMIT ?3 OFFSET ?4",
         )?
-        .query_map(params![side, after, limit], |row| {
-            Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, u64>(1)?))
-        })?
+        .query_map(
+            params![side, after, limit, offset.unwrap_or(0).cast_signed()],
+            |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, u64>(1)?)),
+        )?
         .collect::<Result<Vec<_>, _>>()?;
     let mut cells_stmt = conn.prepare_cached(
         "SELECT side, raw, rel, kind, target, size, mtime_ns, partial, full FROM temp.cmp_files
@@ -492,7 +659,7 @@ pub(super) fn duplicates(
             cells,
         });
     }
-    let next = (items.len() == limit as usize)
+    let next = (offset.is_none() && items.len() == limit as usize)
         .then(|| {
             items
                 .last()
@@ -500,6 +667,76 @@ pub(super) fn duplicates(
         })
         .flatten();
     Ok(PageOf { items, next })
+}
+
+pub(super) fn by_extension(
+    conn: &Connection,
+    filter: &FilterParams,
+    limit: u32,
+) -> Result<Vec<ExtensionTotals>, CompareError> {
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT ext, count(*), sum(bytes) FROM temp.cmp_rows
+         WHERE max_size IS NOT NULL AND {FILTER}
+         GROUP BY ext ORDER BY sum(bytes) DESC, ext"
+    ))?;
+    let mut totals = stmt
+        .query_map(filter.named().as_slice(), |row| {
+            Ok(ExtensionTotals {
+                extension: Some(row.get(0)?),
+                rows: row.get(1)?,
+                bytes: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let rest = totals.split_off(totals.len().min(limit as usize));
+    if !rest.is_empty() {
+        totals.push(ExtensionTotals {
+            extension: None,
+            rows: rest.iter().map(|t| t.rows).sum(),
+            bytes: rest.iter().map(|t| t.bytes).sum(),
+        });
+    }
+    Ok(totals)
+}
+
+pub(super) fn size_histogram(
+    conn: &Connection,
+    filter: &FilterParams,
+) -> Result<Vec<SizeBucket>, CompareError> {
+    // Bucket i holds sizes below SIZE_BUCKETS[i] and at or above the bucket before it.
+    let bucket = SIZE_BUCKETS
+        .iter()
+        .enumerate()
+        .filter_map(|(i, max)| max.map(|max| format!("WHEN max_size < {max} THEN {i} ")))
+        .collect::<String>();
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT CASE {bucket}ELSE {} END AS bucket, count(*), sum(bytes) FROM temp.cmp_rows
+         WHERE max_size IS NOT NULL AND {FILTER} GROUP BY bucket",
+        SIZE_BUCKETS.len() - 1
+    ))?;
+    let mut buckets: Vec<SizeBucket> = SIZE_BUCKETS
+        .iter()
+        .map(|&max_exclusive| SizeBucket {
+            max_exclusive,
+            rows: 0,
+            bytes: 0,
+        })
+        .collect();
+    let rows = stmt.query_map(filter.named().as_slice(), |row| {
+        Ok((
+            row.get::<_, usize>(0)?,
+            row.get::<_, u64>(1)?,
+            row.get::<_, u64>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (index, rows, bytes) = row?;
+        if let Some(bucket) = buckets.get_mut(index) {
+            bucket.rows = rows;
+            bucket.bytes = bytes;
+        }
+    }
+    Ok(buckets)
 }
 
 pub(super) fn duplicate_totals(
