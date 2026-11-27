@@ -4,6 +4,7 @@ import type {
 	ApiFilter,
 	CompareRowView,
 	EntryView,
+	RecentScanView,
 	RowOrder,
 	ScanBrief,
 	TreeNodeView,
@@ -100,5 +101,13 @@ export function scanWarnings(backend: Backend, scanId: number): DataSource<Warni
 	return {
 		count: () => backend.scans.warningCount(scanId),
 		rows: (offset, limit) => backend.scans.warnings(scanId, offset, limit)
+	};
+}
+
+/** Scans of every location, newest first, for a table. */
+export function recentScans(backend: Backend): DataSource<RecentScanView> {
+	return {
+		count: () => backend.scans.recentCount(),
+		rows: (offset, limit) => backend.scans.recent(offset, limit)
 	};
 }

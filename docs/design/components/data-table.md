@@ -25,7 +25,7 @@ Sticky header (sunken surface, small secondary text) with a sort button for sort
 
 ## Keyboard
 
-Focus the table with Tab; then the [list keys](../keyboard.md#in-tables-and-trees) apply: `j`/`k` or ↓/↑ move, `h`/`l` or ←/→ change the active column, `g g`/`G` or Home/End jump to the first or last row, `Ctrl+D`/`Ctrl+U` move half a page, PageUp/PageDown a page, Space or `x` select, Enter or `o` open, `s` sorts by the active column (ascending, descending, then the source's order), as does clicking a sortable header. Sorting clears the selection, which is by position. Clicking a row makes it active; focus stays on the table.
+Focus the table with Tab; then the [list keys](../keyboard.md#in-tables-and-trees) apply: `j`/`k` or ↓/↑ move, `h`/`l` or ←/→ change the active column, `g g`/`G` or Home/End jump to the first or last row, `Ctrl+D`/`Ctrl+U` move half a page, PageUp/PageDown a page, Space or `x` select, Enter or `o` open, `s` sorts by the active column (ascending, descending, then the source's order), as does clicking a sortable header. Sorting clears the selection, which is by position. Clicking a row makes it active and double-clicking opens it; focus stays on the table.
 
 ## Accessibility
 
