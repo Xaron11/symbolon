@@ -57,9 +57,16 @@ export function sourceGlobs(dir: string, theme: Theme, paths: path.PlatformPath 
 	];
 }
 
-/** `file` relative to the tokens directory `dir`, with `/` on every platform. */
-export function tokenFile(dir: string, file: string, paths: path.PlatformPath = path): string {
-	return paths.relative(dir, file).split(paths.sep).join('/');
+/**
+ * Which group a token file belongs to, by how its path ends; Style Dictionary reports paths
+ * differently per platform (`D:\\…`, `/D:/…`), so the directory part is not compared.
+ */
+export function tokenGroup(file: string): 'primitive' | 'component' | 'scale' | 'theme' {
+	const normal = file.replaceAll('\\', '/');
+	if (/(^|\/)primitive\/[^/]+\.json$/.test(normal)) return 'primitive';
+	if (/(^|\/)component\.json$/.test(normal)) return 'component';
+	if (/(^|\/)semantic\/scale\.json$/.test(normal)) return 'scale';
+	return 'theme';
 }
 
 async function resolve(theme: Theme): Promise<Resolved & { theme: Token[] }> {
@@ -74,15 +81,15 @@ async function resolve(theme: Theme): Promise<Resolved & { theme: Token[] }> {
 	const component: Token[] = [];
 	const themed: Token[] = [];
 	for (const token of allTokens) {
-		const file = tokenFile(TOKENS, token.filePath);
+		const group = tokenGroup(token.filePath);
 		const entry: Token = {
 			name: token.path.join('.'),
 			value: cssValue(token.$value, token.$type),
 			description: token.$description ?? ''
 		};
-		if (file.startsWith('primitive')) continue;
-		if (file === 'component.json') component.push(entry);
-		else if (file === 'semantic/scale.json') scale.push(entry);
+		if (group === 'primitive') continue;
+		if (group === 'component') component.push(entry);
+		else if (group === 'scale') scale.push(entry);
 		else themed.push(entry);
 	}
 	return { scale, component, theme: themed, themes: { light: [], dark: [] } };
