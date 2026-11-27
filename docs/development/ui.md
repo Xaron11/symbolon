@@ -7,12 +7,17 @@ The desktop app's interface lives in `crates/symbolon-app/ui` (SvelteKit, Svelte
 | Task                              | Command (in `crates/symbolon-app/ui` unless noted)    |
 | --------------------------------- | ----------------------------------------------------- |
 | Desktop app with hot reload       | `just app-dev` (repository root)                      |
+| Same, drivable by agents          | `just app-dev-mcp` (repository root; see below)       |
 | Interface alone in a browser      | `pnpm dev`                                            |
 | Rebuild tokens after editing JSON | `pnpm tokens` (`dev`, `build`, `lint`, `test` run it) |
 | Regenerate the keyboard page      | `pnpm keymap-doc`                                     |
 | Regenerate the command bindings   | `just bindings` (repository root)                     |
 | Lints and type checks             | `just lint-ui` (repository root)                      |
 | Tests                             | `just test-ui` (repository root)                      |
+
+## Letting an agent see the app
+
+`just app-dev-mcp` starts the dev app with the [MCP bridge](../adr/0025-agent-inspection-bridge.md). An agent with the Tauri MCP server (`@hypothesi/tauri-mcp-server`, the same version as the `tauri-plugin-mcp-bridge` crate) can then take screenshots, read the accessibility tree, click, type and read console logs in the real window. For Claude Code, register the server with `claude mcp add tauri -- npx -y @hypothesi/tauri-mcp-server@0.13.2`, then restart it. The bridge listens on 127.0.0.1 only, but any local process can drive the app while it runs.
 
 ## The gallery
 

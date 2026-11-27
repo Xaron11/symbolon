@@ -32,6 +32,10 @@ check-agent:
 app-dev: ui-install
     cd crates/symbolon-app && cargo tauri dev
 
+# Desktop app that agents can screenshot and drive through the Tauri MCP server (ADR-0025).
+app-dev-mcp: ui-install
+    cd crates/symbolon-app && cargo tauri dev --features mcp-bridge --config '{"app":{"withGlobalTauri":true}}'
+
 app-build: ui-install
     cd crates/symbolon-app && cargo tauri build --no-bundle
 
