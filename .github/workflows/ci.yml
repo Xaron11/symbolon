@@ -77,17 +77,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Deletes the older Nix caches on main (purge below).
+      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+      # A matched key is never saved again, and every flake or lockfile change adds a new one; main
+      # deletes the older ones, or the repository soon passes its 10 GB cache limit.
       - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
         with:
           primary-key: nix-ci-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
           restore-prefixes-first-match: nix-ci-${{ runner.os }}-
           gc-max-store-size-linux: 4G
           save: ${{ env.SAVE_CACHE }}
+          purge: ${{ env.SAVE_CACHE }}
+          purge-prefixes: nix-ci-${{ runner.os }}-
+          purge-created: 0
+          purge-primary-key: never
       - name: pre-commit hooks on all files
         # zizmor uses the token for online audits (impostor commits, known-vulnerable actions).
         env:
@@ -145,6 +153,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: test
+          # A matched key is never saved again, and the recipes decide what gets built: without this,
+          # a recipe that builds more recompiles the difference on every run.
+          key: ${{ hashFiles('justfile') }}
           save-if: ${{ env.SAVE_CACHE }}
       - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         with:
@@ -230,6 +241,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Deletes the older Nix caches on main (purge below).
+      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -239,8 +252,14 @@ jobs:
         with:
           primary-key: nix-build-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'Cargo.lock') }}
           restore-prefixes-first-match: nix-build-${{ runner.os }}-
-          gc-max-store-size-linux: 4G
+          # Build outputs are not GC roots: below the store's size after a build, the GC drops the
+          # dependency derivations and every run rebuilds them.
+          gc-max-store-size-linux: 8G
           save: ${{ env.SAVE_CACHE }}
+          purge: ${{ env.SAVE_CACHE }}
+          purge-prefixes: nix-build-${{ runner.os }}-
+          purge-created: 0
+          purge-primary-key: never
       - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         with:
           tool: just@1.59.0
@@ -253,6 +272,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Deletes the older Nix caches on main (purge below).
+      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -264,6 +285,10 @@ jobs:
           restore-prefixes-first-match: nix-android-${{ runner.os }}-
           gc-max-store-size-linux: 4G
           save: ${{ env.SAVE_CACHE }}
+          purge: ${{ env.SAVE_CACHE }}
+          purge-prefixes: nix-android-${{ runner.os }}-
+          purge-created: 0
+          purge-primary-key: never
       - name: Restore build cache
         id: target-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

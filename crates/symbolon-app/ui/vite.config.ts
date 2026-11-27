@@ -31,7 +31,11 @@ export default defineConfig(({ command }) => ({
 					name: 'ui',
 					include: ['src/**/*.test.ts'],
 					environment: 'jsdom',
-					setupFiles: ['src/test/setup.ts']
+					setupFiles: ['src/test/setup.ts'],
+					// A fresh jsdom and dependency imports per file cost more than the tests themselves. Files
+					// share them instead, so a test that changes globals or a dependency's state must undo it.
+					pool: 'threads',
+					isolate: false
 				}
 			}
 		]
