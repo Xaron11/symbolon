@@ -239,6 +239,7 @@
             // {
               cargoArtifacts = depsOnly appArgs;
               doInstallCargoArtifacts = false;
+              CARGO_LOG = "cargo::core::compiler::fingerprint=info";
               buildAndTestSubdir = "crates/symbolon-app";
               pnpmRoot = uiRoot;
               pnpmDeps = pkgs.fetchPnpmDeps {
