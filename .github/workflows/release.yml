@@ -70,10 +70,8 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            exe: symbolon
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            exe: symbolon.exe
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,38 +81,22 @@ jobs:
         env:
           SHA: ${{ needs.verify.outputs.sha }}
         run: '[[ "$(git rev-parse HEAD)" == "$SHA" ]] || { echo "::error::$TAG moved after it was verified"; exit 1; }'
-      - env:
-          TARGET: ${{ matrix.target }}
-        run: rustup toolchain install && rustup target add "$TARGET"
-      - env:
-          TARGET: ${{ matrix.target }}
-        run: cargo build --release --locked -p symbolon-cli --target "$TARGET"
+      - uses: ./.github/actions/setup-rust
+        with:
+          tauri-libs: "false"
+      # Where `just android-scanner` puts it, so the archive picks it up as in a local build.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: agent-binary
-          path: agent
-      - name: Package
+          path: target/aarch64-unknown-linux-musl/release-agent
+      - name: Build and package
         env:
           TARGET: ${{ matrix.target }}
-          EXE: ${{ matrix.exe }}
-        run: |
-          name="symbolon-${TAG}-${TARGET}"
-          mkdir "$name"
-          cp "target/${TARGET}/release/${EXE}" LICENSE-MIT LICENSE-APACHE README.md "$name/"
-          # Artifacts lose the executable bit; it matters only on the phone, where it is set.
-          cp agent/symbolon-agent "$name/symbolon-agent-aarch64-linux-musl"
-          chmod 755 "$name/symbolon-agent-aarch64-linux-musl"
-          "target/${TARGET}/release/${EXE}" man --out "$name/man"
-          mkdir "$name/completions"
-          for shell in bash zsh fish elvish powershell; do
-            "target/${TARGET}/release/${EXE}" completions "$shell" > "$name/completions/symbolon.$shell"
-          done
-          echo "Corresponding source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG}" > "$name/SOURCE.txt"
-          if [[ "$RUNNER_OS" == "Windows" ]]; then 7z a "$name.zip" "$name"; else tar czf "$name.tar.gz" "$name"; fi
+        run: just dist-cli "$TARGET" "$TAG"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cli-${{ matrix.target }}
-          path: symbolon-*.*z*
+          path: dist/symbolon-*
 
   android-agent:
     needs: verify
@@ -131,18 +113,11 @@ jobs:
           SHA: ${{ needs.verify.outputs.sha }}
         run: '[[ "$(git rev-parse HEAD)" == "$SHA" ]] || { echo "::error::$TAG moved after it was verified"; exit 1; }'
       - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
-      - run: nix develop .#android -c just android-scanner check-agent
-      - name: Package
-        run: |
-          name="symbolon-agent-${TAG}-aarch64-linux-musl"
-          mkdir "$name"
-          cp target/aarch64-unknown-linux-musl/release-agent/symbolon-agent LICENSE-MIT LICENSE-APACHE "$name/"
-          echo "Corresponding source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG}" > "$name/SOURCE.txt"
-          tar czf "$name.tar.gz" "$name"
+      - run: nix develop .#android -c just android-scanner check-agent dist-agent "$TAG"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-agent
-          path: symbolon-agent-*.tar.gz
+          path: dist/symbolon-agent-*.tar.gz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agent-binary
@@ -191,18 +166,14 @@ jobs:
           merge-multiple: true
       - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         with:
-          tool: git-cliff@2.14.2
+          tool: git-cliff@2.14.2,just@1.59.0
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
       - name: Checksums and notes
         run: |
-          (cd dist && sha256sum -- * > SHA256SUMS)
-          {
-            git cliff --current --strip all
-            echo
-            echo "Built from source tag [${TAG}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG}) under MIT OR Apache-2.0. Verify downloads with \`sha256sum -c SHA256SUMS\`."
-          } > "$RUNNER_TEMP/notes.md"
+          just dist-checksums
+          just release-notes "$TAG" > "$RUNNER_TEMP/notes.md"
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}

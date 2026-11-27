@@ -21,7 +21,7 @@ Tokens live in `design/tokens/` as [DTCG](https://www.designtokens.org/) JSON:
 | Semantic  | `semantic/light.json`, `semantic/dark.json`: colors and shadows by meaning; `semantic/scale.json`: spacing, radii, type, motion | Yes                |
 | Component | `component.json`: sizes of specific parts                                                                                       | Yes                |
 
-`pnpm tokens` in `crates/symbolon-app/ui` builds them into CSS variables (`--sy-…`), a typed TS module and the [token reference](tokens.md). The app's `dev`, `build`, `check`, `lint` and `test` scripts run it first.
+`just tokens` builds them into CSS variables (`--sy-…`), a typed TS module and the [token reference](tokens.md). The app's `dev`, `build`, `check`, `lint` and `test` scripts run it first.
 
 ## Themes
 

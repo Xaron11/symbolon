@@ -25,13 +25,15 @@ Entering the shell installs the git hooks (pre-commit, commit-msg, pre-push); se
 | Command                            | What it does                                                           |
 | ---------------------------------- | ---------------------------------------------------------------------- |
 | `just fmt`                         | Format every file (Rust, Nix, TOML, Markdown, YAML, JSON, TS, Svelte). |
-| `just lint`                        | Everything CI lints: hooks, clippy, rustdoc, unused deps, frontend.    |
+| `just check`                       | Everything CI checks: lints, tests, frontend build, licenses, docs.    |
+| `just lint`                        | Hooks, clippy, rustdoc, unused deps, frontend lints.                   |
 | `just test` / `just test-ui`       | Rust tests (nextest + doctests) / frontend tests (vitest).             |
 | `just coverage --html`             | Coverage report in `target/llvm-cov/html`.                             |
 | `just docs` / `just docs-serve`    | Build this book and the API reference / serve both with live reload.   |
-| `just deny`                        | License and advisory checks for Rust and npm dependencies.             |
+| `just deny` / `just deny-ui`       | License and advisory checks for Rust / npm dependencies.               |
 | `just app-dev`                     | Run the desktop app with hot reload.                                   |
 | `just android-scanner check-agent` | Cross-compile the Android agent and check it is static.                |
+| `just nix-check`                   | Flake checks and the Nix packages of the CLI and the app (slow).       |
 | `nix build`                        | Build the CLI package.                                                 |
 
 ## Making a change

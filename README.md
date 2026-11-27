@@ -38,7 +38,7 @@ Requires [Nix](https://nixos.org) with flakes. Everything else, including the pi
 ```sh
 direnv allow          # or: nix develop
 just                  # list recipes
-just fmt lint test    # format, lint and test everything (as CI does)
+just fmt check        # format, then everything CI checks
 just app-dev          # desktop app with hot reload
 just android-scanner  # cross-compile the Android agent (aarch64, static musl)
 nix build             # CLI package

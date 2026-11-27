@@ -69,7 +69,7 @@ jobs:
           if grep -qE '^crates/symbolon-app/(ui/(package\.json|pnpm-lock\.yaml)|tauri\.conf\.json|Cargo\.toml)$' <<< "$changed"; then
             nix=true
           fi
-          if grep -qE '^crates/symbolon-agent/' <<< "$changed"; then agent=true; fi
+          if grep -qE '^(crates/symbolon-agent/|scripts/check-agent\.sh$)' <<< "$changed"; then agent=true; fi
           { echo "nix=$nix"; echo "agent=$agent"; } | tee -a "$GITHUB_OUTPUT"
 
   hooks:
@@ -88,12 +88,11 @@ jobs:
           restore-prefixes-first-match: nix-ci-${{ runner.os }}-
           gc-max-store-size-linux: 4G
           save: ${{ env.SAVE_CACHE }}
-      - run: nix develop .#ci -c just ui-install
       - name: pre-commit hooks on all files
         # zizmor uses the token for online audits (impostor commits, known-vulnerable actions).
         env:
           GH_TOKEN: ${{ github.token }}
-        run: nix develop .#ci -c pre-commit run --all-files --show-diff-on-failure
+        run: nix develop .#ci -c just hooks
 
   clippy:
     name: clippy (${{ matrix.os }})
@@ -103,12 +102,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            packages: --workspace
-          # Windows covers core and cli until the Windows milestone (M8).
-          - os: windows-latest
-            packages: -p symbolon-core -p symbolon-cli
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -118,29 +112,19 @@ jobs:
         with:
           shared-key: clippy
           save-if: ${{ env.SAVE_CACHE }}
-      - run: cargo clippy ${{ matrix.packages }} --all-targets --locked
-      # symbolon-core must also build with its optional features off (ADR-0006).
-      - name: clippy (core, no default features)
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         if: runner.os == 'Linux'
-        run: cargo clippy -p symbolon-core --no-default-features --all-targets --locked
-      - name: rustdoc
-        if: runner.os == 'Linux'
-        env:
-          RUSTDOCFLAGS: -D warnings
-        run: cargo doc --workspace --no-deps --locked
+        with:
+          tool: cargo-shear
+      # Linux also lints core without default features, builds rustdoc and looks for unused
+      # dependencies; Windows runs clippy for the crates it covers.
+      - run: just lint-rust
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: runner.os == 'Linux'
         with:
           name: rustdoc
           path: target/doc
           retention-days: 7
-      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
-        if: runner.os == 'Linux'
-        with:
-          tool: cargo-shear
-      - name: unused dependencies
-        if: runner.os == 'Linux'
-        run: cargo shear
 
   test:
     name: test (${{ matrix.os }})
@@ -150,12 +134,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows covers core and cli until the Windows milestone (M8), as in clippy.
-        include:
-          - os: ubuntu-latest
-            packages: --workspace
-          - os: windows-latest
-            packages: -p symbolon-core -p symbolon-cli
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -171,28 +150,16 @@ jobs:
         with:
           tool: cargo-nextest,cargo-llvm-cov
       # Linux runs the suite once, instrumented, and reports coverage from that run.
-      - name: tests with coverage
+      - run: just test-ci
+      - name: Coverage summary
         if: runner.os == 'Linux'
         run: |
-          # Ignored tests run here too (the 100k-file acceptance test), except the fixture writer.
-          cargo llvm-cov nextest ${{ matrix.packages }} --locked --profile ci --no-tests=warn \
-            --run-ignored all -E 'not test(=write_fixture)'
           {
             echo '### Coverage'
             echo '```'
-            cargo llvm-cov report --summary-only
+            just coverage-report --summary-only
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      # Each property-test case creates a catalog, and file creation is slow on Windows runners
-      # (~0.5 s per case). The model tests check SQL, not the platform; Linux runs all 200 cases.
-      - name: tests
-        if: runner.os != 'Linux'
-        env:
-          PROPTEST_CASES: "32"
-        run: cargo nextest run ${{ matrix.packages }} --locked --profile ci --no-tests=warn
-      # Only library crates have doctests.
-      - name: doctests
-        run: cargo test -p symbolon-core --locked --doc
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -205,9 +172,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    defaults:
-      run:
-        working-directory: crates/symbolon-app/ui
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -223,6 +187,7 @@ jobs:
           package-manager-cache: false
       - name: Locate pnpm store
         id: pnpm-store
+        working-directory: crates/symbolon-app/ui
         run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
       - name: Restore pnpm store
         id: pnpm-cache
@@ -231,12 +196,10 @@ jobs:
           path: ${{ steps.pnpm-store.outputs.path }}
           key: pnpm-store-${{ runner.os }}-${{ hashFiles('crates/symbolon-app/ui/pnpm-lock.yaml') }}
           restore-keys: pnpm-store-${{ runner.os }}-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm check
-      - run: pnpm test
-      - run: pnpm build
-      - run: pnpm license-check
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        with:
+          tool: just@1.59.0
+      - run: just lint-ui test-ui ui-build deny-ui
       - name: Save pnpm store
         if: env.SAVE_CACHE == 'true' && steps.pnpm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -252,11 +215,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: rustup toolchain install
+      - uses: ./.github/actions/setup-rust
+        with:
+          tauri-libs: "false"
       - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         with:
           tool: cargo-deny
-      - run: cargo deny check
+      - run: just deny
 
   nix:
     name: nix (flake check, CLI and app packages)
@@ -276,7 +241,10 @@ jobs:
           restore-prefixes-first-match: nix-build-${{ runner.os }}-
           gc-max-store-size-linux: 4G
           save: ${{ env.SAVE_CACHE }}
-      - run: nix flake check
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        with:
+          tool: just@1.59.0
+      - run: just nix-check
 
   android-agent:
     name: android agent (cross-build, static check)

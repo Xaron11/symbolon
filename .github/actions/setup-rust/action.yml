@@ -1,5 +1,5 @@
 name: Set up Rust
-description: Install the toolchain from rust-toolchain.toml and, on Linux, the Tauri system libraries.
+description: Install the toolchain from rust-toolchain.toml, just, and on Linux the Tauri system libraries.
 
 inputs:
   components:
@@ -31,3 +31,7 @@ runs:
           read -ra components <<< "$COMPONENTS"
           rustup component add "${components[@]}"
         fi
+    # Every job runs its work through just recipes; the version matches the dev shell's.
+    - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+      with:
+        tool: just@1.59.0

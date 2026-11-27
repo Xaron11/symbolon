@@ -17,15 +17,27 @@ The next version is derived from the Conventional Commits since the last tag: `f
 4. The release workflow then:
    - verifies the tag signature against the allowed signers on `main`;
    - checks that the tag matches the workspace version;
-   - builds the Android agent once, checks that it is static and suits 16 KiB-page kernels, and builds the CLI for Linux and Windows with the agent next to it in each archive. Every job first checks that the tag still points at the verified commit;
+   - builds the Android agent once, checks that it is static and suits 16 KiB-page kernels, builds the CLI for Linux and Windows with the agent next to it in each archive, and builds the desktop packages (AppImage, `.deb`, Windows installer) with the agent inside ([ADR-0026](../adr/0026-desktop-app-distribution.md)). Every job first checks that the tag still points at the verified commit;
    - attests the build provenance of every archive;
    - publishes a GitHub release with `SHA256SUMS` and the changelog section.
 
    `0.x` releases are marked pre-release. Releases are immutable: once published, assets and the tag cannot change.
 
-If the release workflow fails after the tag exists (for example because of a bug in the workflow itself), fix it on `main` and re-run it for the existing tag: `gh workflow run release.yml -f tag=vX.Y.Z`. The run uses the workflow from `main`, builds the tagged source and verifies the tag exactly as a push would. Do not delete or move a published tag.
+If the release workflow fails after the tag exists because of a bug in the workflow file itself, fix it on `main` and re-run it for the existing tag: `gh workflow run release.yml -f tag=vX.Y.Z`. The run uses the workflow from `main`, builds the tagged source and verifies the tag exactly as a push would. The builds and packaging are `just` recipes and scripts, which come from the tagged commit; a bug there needs a fix on `main` and a new patch release. Do not delete or move a published tag.
 
 Only repository admins can create `v*` tags, and the signing key must be listed in `.github/allowed_signers`. Never create tags or releases another way.
+
+## Trying the packaging locally
+
+The release jobs run the same recipes you can run in the dev shell, each writing into `dist/` (git-ignored):
+
+```sh
+just android-scanner                                  # the agent the packages carry
+just dist-cli x86_64-unknown-linux-gnu                # dist/symbolon-dev-x86_64-unknown-linux-gnu.tar.gz
+just dist-agent                                       # dist/symbolon-agent-dev-aarch64-linux-musl.tar.gz
+just dist-app appimage,deb dev true                   # AppImage and .deb with the agent inside
+just release-notes v0.9.0                             # the notes the next release would get
+```
 
 ## Verifying a download
 
