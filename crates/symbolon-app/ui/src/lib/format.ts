@@ -14,3 +14,22 @@ export function formatBytes(bytes: number): string {
 	const digits = unit === 0 || value >= 100 ? 0 : 1;
 	return `${value.toFixed(digits)} ${UNITS[unit] ?? 'B'}`;
 }
+
+const relative = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
+const STEPS: readonly [Intl.RelativeTimeFormatUnit, number][] = [
+	['year', 365 * 86_400_000],
+	['month', 30 * 86_400_000],
+	['week', 7 * 86_400_000],
+	['day', 86_400_000],
+	['hour', 3_600_000],
+	['minute', 60_000]
+];
+
+/** How long ago `ms` (since the epoch) was at `now`, e.g. "3 hours ago" or "yesterday". */
+export function formatAgo(ms: number, now: number = Date.now()): string {
+	const elapsed = Math.max(0, now - ms);
+	for (const [unit, size] of STEPS) {
+		if (elapsed >= size) return relative.format(-Math.floor(elapsed / size), unit);
+	}
+	return 'just now';
+}

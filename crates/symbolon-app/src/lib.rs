@@ -29,6 +29,7 @@ const EXIT_WAIT: Duration = Duration::from_secs(3);
 pub fn run() -> Result<(), tauri::Error> {
     let builder = bindings::builder();
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(|app| {
             let state = AppState::open_default().map_err(|e| e.message)?;

@@ -1,6 +1,14 @@
 import type { DataSource, SortSpec, TreeSource } from '../data/source';
 import type { Backend } from './backend';
-import type { ApiFilter, CompareRowView, EntryView, RowOrder, TreeNodeView } from './types';
+import type {
+	ApiFilter,
+	CompareRowView,
+	EntryView,
+	RowOrder,
+	ScanBrief,
+	TreeNodeView,
+	WarningView
+} from './types';
 
 /** Tells subscribers that something changed: fed by a comparison's verification updates. */
 export interface ChangeHub {
@@ -76,5 +84,21 @@ export function catalogTree(backend: Backend, label: string): TreeSource<EntryVi
 			backend.browse.subscribe(label, () => {
 				onChange();
 			})
+	};
+}
+
+/** The scans of location `label`, newest first, for a table. */
+export function locationScans(backend: Backend, label: string): DataSource<ScanBrief> {
+	return {
+		count: () => backend.scans.countOfLocation(label),
+		rows: (offset, limit) => backend.scans.ofLocation(label, offset, limit)
+	};
+}
+
+/** The warnings of scan `scanId`, in the order they were found, for a table. */
+export function scanWarnings(backend: Backend, scanId: number): DataSource<WarningView> {
+	return {
+		count: () => backend.scans.warningCount(scanId),
+		rows: (offset, limit) => backend.scans.warnings(scanId, offset, limit)
 	};
 }

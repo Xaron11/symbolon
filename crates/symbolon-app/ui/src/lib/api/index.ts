@@ -15,7 +15,9 @@ export {
 	comparisonRows,
 	comparisonTree,
 	createChangeHub,
+	locationScans,
 	rowOrder,
+	scanWarnings,
 	type ChangeHub
 } from './sources';
 export type * from './types';

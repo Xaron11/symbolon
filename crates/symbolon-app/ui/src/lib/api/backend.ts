@@ -29,6 +29,10 @@ import type {
  * commands now, HTTP later, memory in tests. Every method rejects with an `ApiError`.
  */
 export interface Backend {
+	readonly system: {
+		/** Asks for a folder with the system's picker; undefined when cancelled. */
+		pickFolder(): Promise<string | undefined>;
+	};
 	readonly locations: {
 		list(): Promise<LocationView[]>;
 		add(request: NewLocationRequest): Promise<LocationView>;

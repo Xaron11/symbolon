@@ -123,3 +123,21 @@ describe('tauriBackend releases what it opened', () => {
 		expect(seen).toEqual(['compare_close_all']);
 	});
 });
+
+describe('tauriBackend system', () => {
+	it('pickFolder opens a directory picker and returns its path', async () => {
+		let seen: [string, unknown] | undefined;
+		mockIPC((cmd, payload) => {
+			seen = [cmd, payload];
+			return '/home/me/Photos';
+		});
+		await expect(createTauriBackend().system.pickFolder()).resolves.toBe('/home/me/Photos');
+		expect(seen?.[0]).toBe('plugin:dialog|open');
+		expect(seen?.[1]).toMatchObject({ options: { directory: true, multiple: false } });
+	});
+
+	it('pickFolder returns undefined when cancelled', async () => {
+		mockIPC(() => null);
+		await expect(createTauriBackend().system.pickFolder()).resolves.toBeUndefined();
+	});
+});

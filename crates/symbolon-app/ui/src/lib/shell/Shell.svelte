@@ -14,6 +14,8 @@
 	import { createDispatcher } from '../keyboard/dispatcher';
 	import { provideGlobalActions } from '../keyboard/global';
 	import { KEYMAP, type Action } from '../keyboard/keymap';
+	import ScanStatus from '../scans/ScanStatus.svelte';
+	import type { ScanState } from '../scans/scans.svelte';
 	import { browserStorage } from '../storage';
 	import { SECTIONS, sectionOf } from './sections';
 	import { createSidebar } from './sidebar.svelte';
@@ -22,10 +24,12 @@
 		pathname: string;
 		/** Opens a route; the app passes SvelteKit's `goto`. */
 		navigate: (href: string) => void;
+		/** Running scans, for the status bar; none when left out. */
+		scans?: ScanState;
 		children: Snippet;
 	}
 
-	let { pathname, navigate, children }: Props = $props();
+	let { pathname, navigate, scans, children }: Props = $props();
 	const sidebarState = createSidebar(browserStorage());
 	let paletteOpen = $state(false);
 	let helpOpen = $state(false);
@@ -41,6 +45,14 @@
 				navigate(s.href);
 			}
 		})),
+		{
+			id: 'location.add',
+			label: 'Add location',
+			group: 'Locations',
+			run: () => {
+				navigate('/locations?add');
+			}
+		},
 		{
 			id: 'sidebar',
 			label: 'Toggle sidebar',
@@ -105,7 +117,7 @@
 		<Toolbar title={section?.label ?? 'Symbolon'} onpalette={() => (paletteOpen = true)} />
 	{/snippet}
 	{#snippet status()}
-		<StatusBar>No scans running</StatusBar>
+		<StatusBar><ScanStatus running={scans?.running ?? []} /></StatusBar>
 	{/snippet}
 	{@render children()}
 </AppShell>
