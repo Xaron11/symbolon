@@ -133,8 +133,9 @@ docs-serve: docs-api
 # Build everything and check every internal link and anchor.
 docs-check: docs docs-links
 
+# The 404 page links by absolute site paths (book.toml site-url), which only resolve once published.
 docs-links:
-    lychee --offline --include-fragments --no-progress --root-dir "$PWD/target/book" --exclude-path target/book/api 'target/book/**/*.html'
+    lychee --offline --include-fragments --no-progress --root-dir "$PWD/target/book" --exclude-path target/book/api --exclude-path target/book/404.html 'target/book/**/*.html'
 
 # --- release (see docs/adr/0007-development-workflow.md) ---------------------
 

@@ -2,7 +2,7 @@
 
 Shows a comparison category ([Concepts](../../concepts.md#comparison-categories)) wherever one appears: rows, filters, legends.
 
-**Anatomy:** category icon in the category color, label in the primary text color, optional count in monospace, on the category tint, rounded and without a border: it states a category and is not a control. Filters that toggle categories are outlined buttons instead ([drill-down](drill-down.md)).
+**Anatomy:** category icon in the category color, label in the primary text color, optional count in monospace, on the category tint, rounded and without a border: it states a category and is not a control. Filters that toggle categories are outlined buttons instead ([drill-down](../screens/drill-down.md)).
 
 | Category   | Icon             | Color tokens                                           |
 | ---------- | ---------------- | ------------------------------------------------------ |

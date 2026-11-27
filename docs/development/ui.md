@@ -16,6 +16,8 @@ The desktop app's interface lives in `crates/symbolon-app/ui` (SvelteKit, Svelte
 | Lints and type checks             | `just lint-ui` (repository root)                      |
 | Tests                             | `just test-ui` (repository root)                      |
 
+ESLint caches its results in `node_modules/.cache/eslint/`, so a lint after a small change takes seconds instead of half a minute. A cached file is not linted again when only a type it imports changes; CI lints without a cache and catches that. Delete the directory to lint everything locally.
+
 ## Demo data
 
 `just demo` writes two generated locations, Laptop and Backup, to `target/demo/` and scans them into `target/demo/catalog.db`. Their comparison has identical, different, only-in, moved and renamed files, duplicates, and several extensions and sizes. Start the app on it with `SYMBOLON_CATALOG=target/demo/catalog.db just app-dev` (or `app-dev-mcp`). `just demo 200000` makes a large comparison instead (about 40 s); running `just demo` again replaces the data.
@@ -47,5 +49,7 @@ Component and screen tests render against `createMemoryBackend(seed)`, which rec
 3. Create `src/lib/components/<Name>/` with `<Name>.svelte` (first line: `<!-- Spec: docs/design/components/<page>.md -->`), `index.ts` and `<Name>.test.ts`. Build interactive parts on Bits UI; icons come from Lucide.
 4. Test behaviour through roles and keys (Testing Library), and run `expectNoAxeViolations` on it.
 5. Add it to the gallery.
+
+Screens and dialogs follow the same pattern with their pages in `docs/design/screens/` and their code in `src/lib/<area>/`.
 
 Keyboard shortcuts go in `src/lib/keyboard/keymap.ts` only; the dispatcher, shortcut help, command palette and [keyboard page](../design/keyboard.md) all read it.

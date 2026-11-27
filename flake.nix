@@ -141,10 +141,13 @@
             check-merge-conflicts.enable = true;
             detect-private-keys.enable = true;
             convco.enable = true;
+            # Each pre-push check runs only when the pushed commits touch what it covers; CI runs
+            # everything regardless.
             pre-push-rust = {
               enable = true;
               name = "clippy, tests, unused dependencies";
               entry = "just lint-rust test";
+              files = ''^(crates/(?!symbolon-app/ui/)|crates/symbolon-app/ui/src/lib/api/bindings\.ts$|Cargo\.(toml|lock)$|rust-toolchain\.toml$|clippy\.toml$|justfile$|flake\.(nix|lock)$)'';
               pass_filenames = false;
               stages = [ "pre-push" ];
             };
@@ -152,6 +155,7 @@
               enable = true;
               name = "frontend lint, typecheck, tests";
               entry = "just lint-ui test-ui";
+              files = ''^(crates/symbolon-app/ui/|design/|docs/design/|justfile$|flake\.(nix|lock)$)'';
               pass_filenames = false;
               stages = [ "pre-push" ];
             };

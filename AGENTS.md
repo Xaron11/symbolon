@@ -33,7 +33,7 @@ Everything comes from the Nix dev shell (`direnv allow` or `nix develop`), which
 | Android agent                   | `just android-scanner check-agent`               |
 | Docs (book + API, link check)   | `just docs-check` (`just docs-serve` to preview) |
 
-Before you say a change is done: `just fmt lint test` (plus `just test-ui` for frontend changes, `just docs-check` for docs changes) must pass. The pre-push hook runs the same checks.
+Before you say a change is done: `just fmt lint test` (plus `just test-ui` for frontend changes, `just docs-check` for docs changes) must pass. The pre-push hook runs the same checks for the parts a push touches; CI runs all of them.
 
 Language servers for every file type come from the dev shell; see `docs/development/editor.md`. The book in `docs/` (mdBook) explains concepts and architecture; start there when the code alone does not tell you why.
 

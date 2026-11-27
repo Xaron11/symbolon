@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/location-table.md -->
+<!-- Spec: docs/design/screens/location-table.md -->
 <script lang="ts">
 	import { FolderPlus } from '@lucide/svelte';
 	import { untrack } from 'svelte';

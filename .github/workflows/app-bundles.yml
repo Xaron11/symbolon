@@ -71,8 +71,27 @@ jobs:
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
         working-directory: crates/symbolon-app/ui
-      # The version the dev shell uses; release builds avoid caches.
-      - run: cargo install tauri-cli --version 2.12.6 --locked
+      # The version the dev shell uses. Tauri's prebuilt binary, pinned by hash, saves compiling it
+      # (6-10 minutes per job); release builds avoid caches, so nothing else could keep it.
+      - name: Tauri CLI
+        env:
+          VERSION: 2.12.6
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              asset=cargo-tauri-x86_64-unknown-linux-gnu.tgz
+              sha=057983293b14d88b29331f96b2e57ce9780f887e7a0b76e255844924f83118dc ;;
+            Windows)
+              asset=cargo-tauri-x86_64-pc-windows-msvc.zip
+              sha=39636fa68bc00f13dd610fb57688f292e93742978cc35395f2f1be7c540b88a1 ;;
+          esac
+          dir="$RUNNER_TEMP/tauri-cli"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$dir/$asset" \
+            "https://github.com/tauri-apps/tauri/releases/download/tauri-cli-v$VERSION/$asset"
+          echo "$sha  $dir/$asset" | sha256sum -c -
+          if [[ "$asset" == *.zip ]]; then 7z x -bd -o"$dir" "$dir/$asset" >/dev/null; else tar -xzf "$dir/$asset" -C "$dir"; fi
+          echo "$dir" >> "$GITHUB_PATH"
       - if: inputs.agent
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

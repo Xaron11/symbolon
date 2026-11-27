@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/compare-screen.md -->
+<!-- Spec: docs/design/screens/compare-screen.md -->
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
 	import { backend, toApiError, type CompareRequest, type LocationView } from '../api/index.ts';

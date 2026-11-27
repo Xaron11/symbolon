@@ -150,11 +150,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # symbolon-app has no tests until M6; clippy --all-targets already compiles it. Leaving it
-        # out spares this job the Tauri/GTK build and the webkitgtk install.
+        # Windows covers core and cli until the Windows milestone (M8), as in clippy.
         include:
           - os: ubuntu-latest
-            packages: -p symbolon-core -p symbolon-cli -p symbolon-agent
+            packages: --workspace
           - os: windows-latest
             packages: -p symbolon-core -p symbolon-cli
     steps:
@@ -164,7 +163,6 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           components: llvm-tools-preview
-          tauri-libs: "false"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: test
@@ -340,6 +338,11 @@ jobs:
           name: docs-site
           path: target/book
           retention-days: 14
+      - name: Upload the site for GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: target/book
 
   ci-ok:
     name: ci-ok
@@ -355,3 +358,23 @@ jobs:
         run: |
           echo "results: $RESULTS"
           for r in $RESULTS; do [[ "$r" == success || "$r" == skipped ]] || exit 1; done
+
+  # Publishes the book and API reference from main once every other job passed (ADR-0008).
+  pages:
+    name: pages (publish docs)
+    needs: ci-ok
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    # An older deployment never overwrites a newer one mid-way.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

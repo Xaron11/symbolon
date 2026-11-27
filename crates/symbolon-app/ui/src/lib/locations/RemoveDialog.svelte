@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/add-location-dialog.md -->
+<!-- Spec: docs/design/screens/add-location-dialog.md -->
 <script lang="ts">
 	import { backend, toApiError } from '../api/index.ts';
 	import Alert from '../components/Alert/Alert.svelte';
