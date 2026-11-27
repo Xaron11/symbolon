@@ -138,5 +138,37 @@
       "$type": "dimension",
       "$description": "Widest a form in a view gets, such as the comparison picker"
     }
+  },
+  "chart": {
+    "height": {
+      "$value": "220px",
+      "$type": "dimension",
+      "$description": "Plot height of a dashboard chart, so charts side by side line up"
+    }
+  },
+  "stat": {
+    "tile": {
+      "min-width": {
+        "$value": "104px",
+        "$type": "dimension",
+        "$description": "Least width of a stat tile; six fit beside the expanded sidebar at 960px"
+      }
+    }
+  },
+  "detail": {
+    "width": {
+      "$value": "360px",
+      "$type": "dimension",
+      "$description": "Width of the side panel that shows one row's details"
+    }
+  },
+  "picker": {
+    "options": {
+      "width": {
+        "$value": "320px",
+        "$type": "dimension",
+        "$description": "Width of the comparison options beside the location cards"
+      }
+    }
   }
 }

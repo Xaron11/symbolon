@@ -14,13 +14,28 @@
 		/** Read once; give the tree a new `{#key}` to show another source. */
 		source: TreeSource<Node>;
 		label: (node: Node) => string;
+		/** Secondary text at the end of an item, such as a count or a status. */
+		aside?: (node: Node) => string | undefined;
+		/** What an empty tree means, e.g. "Nothing matches the filters." */
+		empty?: string;
+		/** Shrink to the items when they need less than the space given. */
+		fit?: boolean;
 		icon?: (node: Node) => IconComponent | undefined;
 		onopen?: (node: Node) => void;
 		/** Accessible name of the tree. */
 		name: string;
 	}
 
-	let { source, label, icon, onopen, name }: Props = $props();
+	let {
+		source,
+		label,
+		aside,
+		empty = 'Nothing here.',
+		fit = false,
+		icon,
+		onopen,
+		name
+	}: Props = $props();
 
 	const rowHeight = parseFloat(component['table.row.height']);
 	const overscan = 10;
@@ -140,73 +155,118 @@
 	);
 </script>
 
+<!-- Messages sit beside the tree: a tree may only hold its items. -->
 <div
-	bind:this={view}
-	class="sy-tree"
-	role="tree"
-	aria-label={name}
-	aria-activedescendant={active >= first && active <= last && items[active]
-		? `${id}-n${String(active)}`
+	class="frame"
+	style:height={fit
+		? `calc(${String(Math.max(1, items.length) * rowHeight)}px + 2 * var(--sy-border-width-default))`
 		: undefined}
-	tabindex="0"
-	onkeydown={(event) => {
-		dispatch(event);
-	}}
 >
 	<div
-		class="body"
-		bind:this={scroller}
-		bind:clientHeight={height}
-		onscroll={() => {
-			requestAnimationFrame(() => {
-				scrollTop = scroller?.scrollTop ?? 0;
-			});
+		bind:this={view}
+		class="sy-tree"
+		role="tree"
+		aria-label={name}
+		aria-activedescendant={active >= first && active <= last && items[active]
+			? `${id}-n${String(active)}`
+			: undefined}
+		tabindex="0"
+		onkeydown={(event) => {
+			dispatch(event);
 		}}
 	>
-		<div class="spacer" role="presentation" style:height="{String(items.length * rowHeight)}px">
-			{#each shown as item, i (item.key)}
-				{@const index = first + i}
-				{@const Icon = icon?.(item.node)}
-				<!-- Items are reached through the tree (aria-activedescendant), not focused themselves;
-				     clicking one makes it active and keeps focus on the tree. -->
-				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_interactive_supports_focus -->
-				<div
-					id="{id}-n{index}"
-					class="item"
-					class:active={index === active}
-					role="treeitem"
-					aria-level={item.level}
-					aria-setsize={item.setSize}
-					aria-posinset={item.posInSet}
-					aria-expanded={item.hasChildren ? item.expanded : undefined}
-					aria-selected={index === active}
-					style:transform="translateY({String(index * rowHeight)}px)"
-					style:--depth={item.level - 1}
-					onclick={() => {
-						active = index;
-						view?.focus();
-					}}
-				>
-					<span
-						class="chevron"
-						class:open={item.expanded}
-						aria-hidden="true"
-						onclick={() => void tree.toggle(item.key)}
+		<div
+			class="body"
+			bind:this={scroller}
+			bind:clientHeight={height}
+			onscroll={() => {
+				requestAnimationFrame(() => {
+					scrollTop = scroller?.scrollTop ?? 0;
+				});
+			}}
+		>
+			<div class="spacer" role="presentation" style:height="{String(items.length * rowHeight)}px">
+				{#each shown as item, i (item.key)}
+					{@const index = first + i}
+					{@const Icon = icon?.(item.node)}
+					<!-- Items are reached through the tree (aria-activedescendant), not focused themselves;
+					     clicking one makes it active and keeps focus on the tree. -->
+					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_interactive_supports_focus -->
+					<div
+						id="{id}-n{index}"
+						class="item"
+						class:active={index === active}
+						role="treeitem"
+						aria-level={item.level}
+						aria-setsize={item.setSize}
+						aria-posinset={item.posInSet}
+						aria-expanded={item.hasChildren ? item.expanded : undefined}
+						aria-selected={index === active}
+						style:transform="translateY({String(index * rowHeight)}px)"
+						style:--depth={item.level - 1}
+						onclick={() => {
+							active = index;
+							view?.focus();
+							// The whole row opens and closes a folder, not only its chevron.
+							if (item.hasChildren) void tree.toggle(item.key);
+						}}
+						ondblclick={() => {
+							// Folders open and close on click; files open on a double-click, as in tables.
+							if (!item.hasChildren) onopen?.(item.node);
+						}}
 					>
-						{#if item.hasChildren}<ChevronRight />{/if}
-					</span>
-					{#if Icon}<Icon aria-hidden="true" />{/if}
-					<span class="label" title={label(item.node)}>{label(item.node)}</span>
-				</div>
-			{/each}
+						<span class="chevron" class:open={item.expanded} aria-hidden="true">
+							{#if item.hasChildren}<ChevronRight />{/if}
+						</span>
+						{#if Icon}<Icon aria-hidden="true" />{/if}
+						<span class="label" title={label(item.node)}>{label(item.node)}</span>
+						{#if aside}{@const side = aside(item.node)}{#if side}<span class="aside">
+									{side}
+								</span>{/if}{/if}
+					</div>
+				{/each}
+			</div>
 		</div>
 	</div>
+	{#if tree.loading}
+		<p class="message" role="status">Loading…</p>
+	{:else if items.length === 0 && !tree.error}
+		<p class="message">{empty}</p>
+	{/if}
 	{#if tree.error}
 		<p class="error" role="alert">Could not read folders: {tree.error.message}</p>
 	{/if}
 </div>
 
 <style>
+	/* A fitted tree asks for its items' height; a column flex parent with a max-height caps it. */
+	.frame {
+		position: relative;
+		flex-shrink: 1;
+		height: 100%;
+		min-height: 0;
+	}
+
+	.aside {
+		flex: none;
+		margin-left: auto;
+		padding-left: var(--sy-space-12);
+		color: var(--sy-color-text-muted);
+		font-size: var(--sy-font-size-small);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.message {
+		position: absolute;
+		top: var(--sy-border-width-default);
+		right: 0;
+		left: 0;
+		margin: 0;
+		padding: var(--sy-space-12);
+		color: var(--sy-color-text-muted);
+		font-size: var(--sy-font-size-small);
+	}
+
 	.sy-tree {
 		height: 100%;
 		min-height: 0;
@@ -245,7 +305,7 @@
 		background: var(--sy-color-surface-hover);
 	}
 
-	.sy-tree:focus-visible .item.active {
+	.sy-tree:focus .item.active {
 		border-left-color: var(--sy-color-accent-default);
 		background: var(--sy-color-surface-selected);
 	}

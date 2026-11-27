@@ -27,7 +27,7 @@
         "$description": "Pressed rows and controls"
       },
       "selected": {
-        "$value": "{primitive.color.blue.950}",
+        "$value": "{primitive.color.neutral.800}",
         "$description": "Selected rows and items"
       }
     },
@@ -78,7 +78,7 @@
       "$description": "Focus ring"
     },
     "scrim": {
-      "$value": "rgb(2 6 23 / 0.7)",
+      "$value": "rgb(0 0 0 / 0.7)",
       "$description": "Backdrop behind modal dialogs and sheets"
     }
   },
@@ -142,15 +142,15 @@
     },
     "renamed": {
       "fg": {
-        "$value": "{primitive.color.violet.500}",
+        "$value": "{primitive.color.cyan.400}",
         "$description": "Renamed: icon and tint (labels use text colors)"
       },
       "bg": {
-        "$value": "{primitive.color.violet.950}",
+        "$value": "{primitive.color.cyan.950}",
         "$description": "Renamed: chip and row tint"
       },
       "border": {
-        "$value": "{primitive.color.violet.900}",
+        "$value": "{primitive.color.cyan.900}",
         "$description": "Renamed: chip outline"
       }
     },
@@ -233,11 +233,11 @@
         "$description": "Info: icon and text"
       },
       "bg": {
-        "$value": "{primitive.color.blue.950}",
+        "$value": "{primitive.color.neutral.900}",
         "$description": "Info: chip and row tint"
       },
       "border": {
-        "$value": "{primitive.color.blue.900}",
+        "$value": "{primitive.color.neutral.700}",
         "$description": "Info: chip outline"
       }
     }

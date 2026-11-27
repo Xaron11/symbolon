@@ -12,12 +12,26 @@
 	}
 
 	let { open = $bindable(false), title, description, children, footer }: Props = $props();
+	let content = $state<HTMLElement | null>(null);
 </script>
 
 <Dialog.Root bind:open>
 	<Dialog.Portal>
 		<Dialog.Overlay class="sy-scrim" />
-		<Dialog.Content class="sy-dialog">
+		<!-- Forms open in their first field; dialogs without one keep the default focus. -->
+		<Dialog.Content
+			class="sy-dialog"
+			bind:ref={content}
+			onOpenAutoFocus={(event: Event) => {
+				const field = content?.querySelector<HTMLElement>(
+					'.sy-dialog-body input:not([type="checkbox"]):not([type="radio"]):not(:disabled)'
+				);
+				if (field) {
+					event.preventDefault();
+					field.focus();
+				}
+			}}
+		>
 			<Dialog.Title class="sy-dialog-title">{title}</Dialog.Title>
 			{#if description}
 				<Dialog.Description class="sy-dialog-description">{description}</Dialog.Description>

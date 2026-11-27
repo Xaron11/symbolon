@@ -51,6 +51,7 @@ export function createTauriBackend(): Backend {
 			cancel: (label) => done(commands.scanCancel(label)),
 			recent: (offset, limit) => call(commands.scansRecent(offset, limit)),
 			recentCount: () => call(commands.scansRecentCount()),
+			get: async (scanId) => (await call(commands.scanGet(scanId))) ?? undefined,
 			ofLocation: (label, offset, limit) => call(commands.locationScans(label, offset, limit)),
 			countOfLocation: (label) => call(commands.locationScanCount(label)),
 			warnings: (scanId, offset, limit) => call(commands.scanWarnings(scanId, offset, limit)),

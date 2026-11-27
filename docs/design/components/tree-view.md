@@ -12,13 +12,15 @@ A source whose nodes can change (a location being scanned) offers `subscribe(onC
 
 ## Anatomy
 
-Rows of `table.row.height`, indented by `tree.indent` per level; a chevron for folders (rotated when open), an optional icon, the name on one line with an ellipsis and in full as its tooltip. Only the visible rows exist, so a folder with tens of thousands of entries scrolls smoothly.
+Rows of `table.row.height`, indented by `tree.indent` per level; a chevron for folders (rotated when open), an optional icon, the name on one line with an ellipsis and in full as its tooltip, and an optional `aside` at the end in small muted text (a file's size, a folder's count, what a comparison row says). Only the visible rows exist, so a folder with tens of thousands of entries scrolls smoothly.
 
-**States:** hovered row · active row (accent bar and selected tint while the tree has focus).
+With `fit` the tree asks for its rows' height, so a short tree stays short; inside a column flex container with a max-height it stops there and scrolls.
+
+**States:** hovered row · active row (accent bar and selected tint while the tree has focus) · "Loading…" until the first level arrives · `empty` text ("Nothing matches the filters.") when there is nothing to show. The messages sit beside the tree, not in it.
 
 ## Keyboard
 
-Focus the tree with Tab; then the [list keys](../keyboard.md#in-tables-and-trees) apply: `j`/`k` or ↓/↑ move; `l` or → expands a closed folder, or in an open one moves to its first child; `h` or ← collapses an open folder, or moves to the parent; `g g`/`G`, `Ctrl+D`/`Ctrl+U` and PageUp/PageDown move as in tables; Enter or `o` opens the item. Clicking a chevron toggles its folder.
+Focus the tree with Tab; then the [list keys](../keyboard.md#in-tables-and-trees) apply: `j`/`k` or ↓/↑ move; `l` or → expands a closed folder, or in an open one moves to its first child; `h` or ← collapses an open folder, or moves to the parent; `g g`/`G`, `Ctrl+D`/`Ctrl+U` and PageUp/PageDown move as in tables; Enter or `o` opens the item. Clicking a folder (its row or its chevron) opens or closes it; double-clicking a file opens it, as Enter does; clicking any row also makes it active.
 
 ## Accessibility
 

@@ -21,6 +21,16 @@ body {
 	-webkit-font-smoothing: antialiased;
 }
 
+/* Links in running text; navigation and table links set their own colors. */
+a {
+	color: var(--sy-color-accent-default);
+	text-underline-offset: var(--sy-space-2);
+}
+
+a:hover {
+	color: var(--sy-color-accent-hover);
+}
+
 :focus-visible {
 	outline: var(--sy-focus-ring-width) solid var(--sy-color-focus);
 	outline-offset: var(--sy-focus-ring-offset);

@@ -163,3 +163,12 @@ describe('createTreeState refresh, while it reads', () => {
 		expect(state.visible.map((v) => v.key)).toEqual(['a', 'a/x', 'a/y', 'a/y/z', 'b.txt']);
 	});
 });
+
+describe('createTreeState loading', () => {
+	it('is loading until the roots arrive', async () => {
+		const state = createTreeState(tree());
+		expect(state.loading).toBe(true);
+		await settle();
+		expect(state.loading).toBe(false);
+	});
+});

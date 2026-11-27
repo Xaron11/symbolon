@@ -581,7 +581,7 @@ pub(super) fn children(
     let limit = page.limit.clamp(1, crate::query::MAX_PAGE);
     let mut stmt = conn.prepare_cached(&format!(
         "{} SELECT name, max(CASE WHEN NOT deeper THEN id END), sum(deeper),
-                   sum(CASE WHEN deeper THEN bytes ELSE 0 END)
+                   sum(CASE WHEN deeper THEN bytes ELSE 0 END), min(id)
             FROM named GROUP BY name ORDER BY name LIMIT :limit OFFSET :offset",
         CHILD_NAMES.replace("{FILTER}", FILTER)
     ))?;
@@ -600,14 +600,27 @@ pub(super) fn children(
                 row.get::<_, Option<i64>>(1)?,
                 row.get::<_, u64>(2)?,
                 row.get::<_, u64>(3)?,
+                row.get::<_, i64>(4)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut by_id = conn.prepare_cached(&format!(
         "SELECT {HEAD_COLUMNS} FROM temp.cmp_rows WHERE id = ?1"
     ))?;
+    // Names are grouped by their normalized key; a file beneath gives the name as written.
+    // Normalization keeps separators, so its segment at this depth is the folder's.
+    let mut written = conn.prepare_cached(
+        "SELECT rel FROM temp.cmp_files
+         WHERE norm = (SELECT sort_key FROM temp.cmp_rows WHERE id = ?1)
+         ORDER BY side, rel LIMIT 1",
+    )?;
+    let depth = if parent.is_empty() {
+        0
+    } else {
+        parent.split('/').count()
+    };
     let mut items = Vec::with_capacity(found.len());
-    for (name, row_id, rows, bytes) in found {
+    for (name, row_id, rows, bytes, sample) in found {
         let row = match row_id {
             Some(id) => assemble(conn, sides, vec![by_id.query_row([id], head)?])?.pop(),
             None => None,
@@ -620,7 +633,14 @@ pub(super) fn children(
                 } else {
                     format!("{parent}/{name}")
                 },
-                display: PathKey::from_stored(name.clone()).display(),
+                display: PathKey::from_stored(
+                    written
+                        .query_row([sample], |r| r.get::<_, String>(0))
+                        .optional()?
+                        .and_then(|rel| rel.split('/').nth(depth).map(str::to_owned))
+                        .unwrap_or_else(|| name.clone()),
+                )
+                .display(),
                 name,
                 row,
                 matching: FolderTotals { rows, bytes },

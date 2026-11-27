@@ -8,6 +8,8 @@
 		placeholder?: string;
 		/** Shown under the field and linked to it with `aria-describedby`. */
 		error?: string;
+		/** A short help line under the field (replaced by `error` when there is one). */
+		hint?: string;
 		disabled?: boolean;
 		class?: string;
 	}
@@ -18,6 +20,7 @@
 		type = 'text',
 		placeholder,
 		error,
+		hint,
 		disabled = false,
 		class: className
 	}: Props = $props();
@@ -33,9 +36,10 @@
 		{placeholder}
 		{disabled}
 		aria-invalid={error ? 'true' : undefined}
-		aria-describedby={error ? `${id}-error` : undefined}
+		aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
 	/>
-	{#if error}<p id="{id}-error" class="error">{error}</p>{/if}
+	{#if error}<p id="{id}-error" class="error">{error}</p>
+	{:else if hint}<p id="{id}-hint" class="hint">{hint}</p>{/if}
 </div>
 
 <style>
@@ -58,6 +62,12 @@
 		background: var(--sy-color-surface-sunken);
 		color: var(--sy-color-text-primary);
 		font: inherit;
+	}
+
+	.hint {
+		margin: 0;
+		color: var(--sy-color-text-muted);
+		font-size: var(--sy-font-size-small);
 	}
 
 	input::placeholder {

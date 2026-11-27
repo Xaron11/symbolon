@@ -56,6 +56,8 @@ export interface Backend {
 		resume(label: string): Promise<void>;
 		cancel(label: string): Promise<void>;
 		recent(offset: number, limit: number): Promise<RecentScanView[]>;
+		/** One scan with its location's label; undefined when there is none. */
+		get(scanId: number): Promise<RecentScanView | undefined>;
 		recentCount(): Promise<number>;
 		ofLocation(label: string, offset: number, limit: number): Promise<ScanBrief[]>;
 		countOfLocation(label: string): Promise<number>;

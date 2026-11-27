@@ -538,6 +538,36 @@ fn recent_scans_merge_locations_newest_first() {
 }
 
 #[test]
+fn recent_scans_mark_each_locations_latest_and_read_one_by_id() {
+    let fx = Fixture::new(HashPolicy::Lazy);
+    fx.write("f", b"x");
+    let other = fx.root.with_file_name("other");
+    fs::create_dir(&other).unwrap();
+    fx.catalog
+        .add_location(NewLocation::local("other", &other))
+        .unwrap();
+    fx.scan();
+    Scanner::start(&fx.catalog, "other", ScanOptions::default())
+        .unwrap()
+        .wait()
+        .unwrap();
+    fx.scan();
+    let q = fx.query();
+    let recent = offset_pages(5, |page| q.recent_scans(page).unwrap());
+    let marks: Vec<(&str, bool)> = recent
+        .iter()
+        .map(|r| (r.label.as_str(), r.latest))
+        .collect();
+    assert_eq!(marks, [("loc", true), ("other", true), ("loc", false)]);
+
+    let older = &recent[2];
+    let found = q.scan(older.scan.id).unwrap().unwrap();
+    assert_eq!((found.label.as_str(), found.latest), ("loc", false));
+    assert_eq!(found.scan, older.scan);
+    assert!(q.scan(ScanId::from_i64(9999)).unwrap().is_none());
+}
+
+#[test]
 fn scan_id_round_trips() {
     let fx = Fixture::new(HashPolicy::Lazy);
     fx.scan();

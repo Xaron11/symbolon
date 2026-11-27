@@ -1,6 +1,6 @@
 <!-- Spec: docs/design/components/drill-down.md -->
 <script lang="ts">
-	import { File, Folder } from '@lucide/svelte';
+	import { File, Folder, Link } from '@lucide/svelte';
 	import {
 		backend,
 		comparisonRows,
@@ -11,7 +11,7 @@
 	import DataTable, { type Column } from '../components/DataTable/DataTable.svelte';
 	import TreeView from '../components/TreeView/TreeView.svelte';
 	import { formatBytes } from '../format';
-	import { rowPath, rowSummary } from './categories';
+	import { category, rowPath, rowSummary } from './categories';
 	import FilterChips from './FilterChips.svelte';
 	import RowDetail from './RowDetail.svelte';
 	import type { CompareSession } from './session.svelte';
@@ -53,7 +53,8 @@
 			id: 'category',
 			header: 'Category',
 			cell: (r: CompareRowView) => rowSummary(r, session.sides),
-			width: 200
+			marker: (r: CompareRowView) => `var(--sy-category-${category(r.category).tokenKey}-fg)`,
+			width: 170
 		},
 		{
 			id: 'size',
@@ -61,7 +62,7 @@
 			cell: (r: CompareRowView) => (r.size === null ? '' : formatBytes(r.size)),
 			mono: true,
 			align: 'end',
-			width: 110,
+			width: 90,
 			sortable: true
 		},
 		...session.sides.map((side, i) => ({
@@ -70,17 +71,24 @@
 			cell: (r: CompareRowView) => sizeOn(r, i),
 			mono: true,
 			align: 'end' as const,
-			width: 120
+			width: 100
 		})),
-		{ id: 'modified', header: 'Modified', cell: modified, mono: true, width: 120 }
+		{ id: 'modified', header: 'Modified', cell: modified, mono: true, width: 100 }
 	]);
 
-	const nodeLabel = (node: TreeNodeView) =>
+	const nodeAside = (node: TreeNodeView) =>
 		node.folder
-			? `${node.name} — ${count.format(node.matchingRows)} · ${formatBytes(node.matchingBytes)}`
+			? `${count.format(node.matchingRows)} files · ${formatBytes(node.matchingBytes)}`
 			: node.row
-				? `${node.name} — ${rowSummary(node.row, session.sides)}`
-				: node.name;
+				? rowSummary(node.row, session.sides)
+				: undefined;
+	// A folder that is itself a row (an empty folder on one side) is still a folder.
+	const nodeIcon = (node: TreeNodeView) =>
+		node.folder || node.row?.cells.some((c) => c.kind === 'Dir')
+			? Folder
+			: node.row?.cells.every((c) => c.kind === 'Symlink')
+				? Link
+				: File;
 </script>
 
 <section class="sy-drill-down" aria-label="Rows">
@@ -120,14 +128,20 @@
 							source={comparisonRows(api, session.id, session.filter, session.changes)}
 							{columns}
 							label="Rows"
+							empty="Nothing matches the filters."
 							onopen={(row: CompareRowView) => (selected = row)}
+							onactive={(row: CompareRowView) => {
+								if (selected) selected = row;
+							}}
 						/>
 					{:else}
 						<TreeView
 							source={comparisonTree(api, session.id, session.filter, session.changes)}
 							name="Rows by folder"
-							label={nodeLabel}
-							icon={(node: TreeNodeView) => (node.folder ? Folder : File)}
+							label={(node: TreeNodeView) => node.name}
+							aside={nodeAside}
+							empty="Nothing matches the filters."
+							icon={nodeIcon}
 							onopen={(node: TreeNodeView) => {
 								if (node.row) selected = node.row;
 							}}
@@ -149,24 +163,36 @@
 		gap: var(--sy-space-12);
 	}
 
+	/* A segmented control: one outlined group, the chosen segment raised. */
 	.switch {
-		display: flex;
-		gap: var(--sy-space-4);
+		display: inline-flex;
+		align-self: flex-start;
+		padding: var(--sy-space-2);
+		border: var(--sy-border-width-default) solid var(--sy-color-border-strong);
+		border-radius: var(--sy-control-radius);
+		background: var(--sy-color-surface-sunken);
 	}
 
 	.switch button {
-		padding: var(--sy-space-4) var(--sy-space-12);
-		border: var(--sy-border-width-default) solid var(--sy-color-border-strong);
-		border-radius: var(--sy-control-radius);
-		background: var(--sy-color-surface-base);
-		color: var(--sy-color-text-primary);
+		height: calc(var(--sy-control-height-sm) - 2 * var(--sy-space-2));
+		padding: 0 var(--sy-space-12);
+		border: 0;
+		border-radius: var(--sy-radius-sm);
+		background: none;
+		color: var(--sy-color-text-secondary);
 		font: inherit;
+		font-size: var(--sy-font-size-small);
 		cursor: pointer;
 	}
 
+	.switch button:hover {
+		color: var(--sy-color-text-primary);
+	}
+
 	.switch button[aria-checked='true'] {
-		border-color: var(--sy-color-accent-default);
-		background: var(--sy-color-surface-selected);
+		background: var(--sy-color-surface-raised);
+		color: var(--sy-color-text-primary);
+		font-weight: var(--sy-font-weight-medium);
 	}
 
 	.body {
@@ -175,12 +201,18 @@
 		gap: var(--sy-space-12);
 	}
 
+	/* The panel keeps its width; the list gives way and scrolls sideways if it must. */
 	.body.with-detail {
-		grid-template-columns: 2fr 1fr;
+		grid-template-columns: minmax(0, 1fr) var(--sy-detail-width);
 	}
 
 	.pane {
 		height: var(--sy-pane-height);
 		min-height: 0;
+	}
+
+	/* As tall as the list beside it; long details scroll inside. */
+	.body > :global(.sy-row-detail) {
+		height: var(--sy-pane-height);
 	}
 </style>

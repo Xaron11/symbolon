@@ -186,7 +186,12 @@
 				{ value: 'android', label: 'Android device', content: androidFields }
 			]}
 		/>
-		<Input label="Label" bind:value={label} {...errors.label ? { error: errors.label } : {}} />
+		<Input
+			label="Label"
+			hint="Defaults to the folder's name."
+			bind:value={label}
+			{...errors.label ? { error: errors.label } : {}}
+		/>
 		<Select
 			label="When to hash files"
 			bind:value={policy}
@@ -195,16 +200,25 @@
 				{ value: 'Eager', label: 'During every scan' }
 			]}
 		/>
-		<Select
-			label="Hash algorithm"
-			bind:value={algo}
-			options={[
-				{ value: 'default', label: 'BLAKE3 (default)' },
-				{ value: 'xxh3', label: 'XXH3' },
-				{ value: 'sha256', label: 'SHA-256' }
-			]}
-		/>
-		<Input label="Ignore patterns (comma-separated, optional)" bind:value={patterns} />
+		<details class="advanced">
+			<summary>Advanced</summary>
+			<div class="advanced-body">
+				<Select
+					label="Hash algorithm"
+					bind:value={algo}
+					options={[
+						{ value: 'default', label: 'BLAKE3 (default)' },
+						{ value: 'xxh3', label: 'XXH3' },
+						{ value: 'sha256', label: 'SHA-256' }
+					]}
+				/>
+				<Input
+					label="Ignore patterns"
+					hint="Comma-separated, in .gitignore syntax, such as *.tmp, node_modules/"
+					bind:value={patterns}
+				/>
+			</div>
+		</details>
 		{#if formError}<Alert tone="error" title="Could not add the location">{formError}</Alert>{/if}
 	</form>
 	{#snippet footer()}
@@ -225,6 +239,19 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--sy-space-12);
+	}
+
+	.advanced summary {
+		color: var(--sy-color-text-secondary);
+		font-size: var(--sy-font-size-small);
+		cursor: pointer;
+	}
+
+	.advanced-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--sy-space-12);
+		margin-top: var(--sy-space-12);
 	}
 
 	.row {

@@ -51,3 +51,17 @@ describe('Button', () => {
 		expect(onclick).not.toHaveBeenCalled();
 	});
 });
+
+describe('Button as a link', () => {
+	it('renders a link styled as a button when it goes somewhere', () => {
+		render(Button, {
+			href: '/locations/Photos',
+			variant: 'secondary',
+			children: text('Open Photos')
+		});
+		const link = screen.getByRole('link', { name: 'Open Photos' });
+		expect(link.getAttribute('href')).toBe('/locations/Photos');
+		expect(link.classList.contains('sy-button')).toBe(true);
+		expect(screen.queryByRole('button')).toBeNull();
+	});
+});

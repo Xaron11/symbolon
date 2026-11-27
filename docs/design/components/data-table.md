@@ -21,7 +21,9 @@ A source whose rows can change (a comparison being verified) offers `subscribe(o
 
 Sticky header (sunken surface, small secondary text) with a sort button for sortable columns; rows of `table.row.height` on the base surface; cells on one line, truncated with an ellipsis. The full value is in the cell's text (read by assistive technology) and its tooltip. Columns can be monospace (paths, hashes, sizes) and end-aligned (numbers); columns without a width share the remaining space but never shrink below `table.column.min`; header and rows always share the same columns, so a long value is cut, never widening its row; tables wider than their space scroll horizontally.
 
-**States:** hovered row (hover tint) · selected rows (selected tint) · active row (accent bar on its leading edge while the table has focus) · active cell (focus-colored outline).
+**States:** hovered row (hover tint) · selected rows (selected tint) · current row (selected tint once someone clicked a row or used the keys, whether or not the table has focus; plus the accent bar on its leading edge while it has focus; clicks and keys mark it the same way) · active cell (focus-colored outline, only after moving between columns with `h`/`l`; a click hides it again).
+
+**Options:** a column can put a dot before its text (`marker`, a CSS color such as a category's) and a flat badge after it (`badge`, such as "Latest"). With `openOnClick` the rows lead somewhere (a scan, a location): one click opens a row, and rows show a pointer; otherwise a click marks the row and a double-click opens it. `onactive` reports each move to another row, so a details panel can follow it. `empty` says what an empty table means ("Nothing matches the filters."); until the first count arrives it says "Loading…". With `fit` the table is only as tall as its rows, up to the space it is given, for short lists such as the scan history. These messages sit beside the grid, not in it, since a grid may only hold rows.
 
 ## Keyboard
 

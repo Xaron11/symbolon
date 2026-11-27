@@ -1,34 +1,38 @@
 <!-- Spec: docs/design/components/compare-screen.md -->
 <script lang="ts">
-	import { backend } from '../api/index.ts';
 	import Alert from '../components/Alert/Alert.svelte';
+	import Button from '../components/Button/Button.svelte';
 	import Spinner from '../components/Spinner/Spinner.svelte';
 	import { explain } from '../locations/status';
 	import Dashboard from './Dashboard.svelte';
 	import DrillDown from './DrillDown.svelte';
 	import Duplicates from './Duplicates.svelte';
-	import { createCompareSession } from './session.svelte';
+	import { openComparison } from './open.svelte';
 	import { fromQuery } from './url';
 	import VerifyLine from './VerifyLine.svelte';
 
 	interface Props {
 		/** The comparison's URL query (see `url.ts`). */
-		query: Pick<URLSearchParams, 'get' | 'has'>;
+		query: Pick<URLSearchParams, 'get' | 'has' | 'toString'>;
+		/** Opens a route: the picker for a new comparison. */
+		navigate: (href: string) => void;
 	}
 
-	let { query }: Props = $props();
-	const api = backend();
+	let { query, navigate }: Props = $props();
+	const open = openComparison();
 	// svelte-ignore state_referenced_locally
 	const request = fromQuery(query);
-	const session = request instanceof Error ? undefined : createCompareSession(api, request);
+	// It stays open when people leave, so coming back shows it as they left it.
+	const session =
+		request instanceof Error
+			? undefined
+			: // svelte-ignore state_referenced_locally
+				open.session(query.toString(), request);
 
-	$effect(() => {
-		if (!session) return;
-		void session.open();
-		return () => {
-			session.close();
-		};
-	});
+	function startOver() {
+		open.close();
+		navigate('/compare');
+	}
 </script>
 
 {#if request instanceof Error}
@@ -50,11 +54,14 @@
 						.map((s) => (s.subpath ? `${s.label}:${s.subpath}` : s.label))
 						.join(' and ')}
 				</h2>
-				<VerifyLine
-					verify={session.verify}
-					oncancel={() => void session.cancelVerify()}
-					onverify={() => void session.verifyAgain()}
-				/>
+				<div class="actions">
+					<VerifyLine
+						verify={session.verify}
+						oncancel={() => void session.cancelVerify()}
+						onverify={() => void session.verifyAgain()}
+					/>
+					<Button size="sm" variant="secondary" onclick={startOver}>New comparison</Button>
+				</div>
 			</header>
 			<Dashboard {session} />
 			<DrillDown {session} />
@@ -75,6 +82,12 @@
 		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
+		gap: var(--sy-space-12);
+	}
+
+	.actions {
+		display: flex;
+		align-items: center;
 		gap: var(--sy-space-12);
 	}
 

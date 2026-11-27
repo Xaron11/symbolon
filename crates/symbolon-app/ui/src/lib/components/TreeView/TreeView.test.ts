@@ -121,3 +121,63 @@ describe('TreeView live updates', () => {
 		});
 	});
 });
+
+describe('TreeView extras', () => {
+	it('shows an aside beside each label', async () => {
+		await tree({
+			aside: (n: MemoryNode) => (n.children ? `${String(n.children.length)} items` : undefined)
+		});
+		expect(screen.getByText('2 items')).toBeTruthy();
+	});
+
+	it('says it is loading, then what an empty tree means', async () => {
+		render(TreeView<MemoryNode>, {
+			source: memoryTree([]),
+			label: (n: MemoryNode) => n.label,
+			name: 'Files',
+			empty: 'Nothing matches the filters.'
+		});
+		expect(screen.getByRole('status').textContent).toContain('Loading');
+		expect(await screen.findByText('Nothing matches the filters.')).toBeTruthy();
+	});
+});
+
+describe('TreeView clicks', () => {
+	it('opens and closes a folder when its row is clicked, not only its chevron', async () => {
+		const user = userEvent.setup();
+		await tree();
+		await user.click(screen.getByText('photos'));
+		expect(await screen.findByText('2024')).toBeTruthy();
+		await user.click(screen.getByText('photos'));
+		await waitFor(() => {
+			expect(screen.queryByText('2024')).toBeNull();
+		});
+	});
+
+	it('toggles once when the chevron itself is clicked', async () => {
+		const user = userEvent.setup();
+		await tree();
+		const folder = screen.getByText('photos').closest('[role=treeitem]');
+		const chevron = folder?.querySelector('.chevron');
+		if (!chevron) throw new Error('no chevron');
+		await user.click(chevron);
+		expect(await screen.findByText('2024')).toBeTruthy();
+	});
+});
+
+describe('TreeView fit', () => {
+	it('is only as tall as its items when asked to fit them', async () => {
+		const { view } = await tree({ fit: true });
+		expect(view.parentElement?.style.height).toContain('calc(');
+	});
+});
+
+describe('TreeView double-click', () => {
+	it('opens a leaf on double-click', async () => {
+		const user = userEvent.setup();
+		const onopen = vi.fn();
+		await tree({ onopen });
+		await user.dblClick(screen.getByText('notes.txt'));
+		expect(onopen).toHaveBeenCalledWith(expect.objectContaining({ key: 'notes.txt' }));
+	});
+});

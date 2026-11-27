@@ -2,7 +2,7 @@
 
 Adds a folder or a phone to the catalog. Rename and remove use the same dialog layout.
 
-**Anatomy:** tabs **Folder** and **Android device**, then the fields shared by both: Label, When to hash files ("When a comparison needs it" or "During every scan"), Hash algorithm (BLAKE3 by default, XXH3, SHA-256) and optional ignore patterns, comma-separated. Footer: Cancel and **Add**.
+**Anatomy:** tabs **Folder** and **Android device**, then the fields shared by both: Label (hint: "Defaults to the folder's name."), When to hash files ("When a comparison needs it" or "During every scan"), and a closed **Advanced** section with Hash algorithm (BLAKE3 by default, XXH3, SHA-256) and Ignore patterns (comma-separated, .gitignore syntax). The dialog opens with focus in the path field. Footer: Cancel and **Add**.
 
 - **Folder:** a path field with **Choose…**, which opens the system's folder picker.
 - **Android device:** the phones adb sees, as radio buttons with model and serial; phones that are not ready are disabled and show adb's hint (for example to allow USB debugging); **Look again** reads the list again, as does opening the tab; then the path on the phone.

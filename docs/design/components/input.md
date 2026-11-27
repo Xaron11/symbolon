@@ -2,7 +2,7 @@
 
 A single-line text field.
 
-**Anatomy:** visible label above the field, the field (sunken surface, strong border), optional error message below.
+**Anatomy:** visible label above the field, the field (sunken surface, strong border), optional hint below (a short help line, linked with `aria-describedby`), replaced by the error message when there is one.
 
 **Types:** `text`, `search`.
 

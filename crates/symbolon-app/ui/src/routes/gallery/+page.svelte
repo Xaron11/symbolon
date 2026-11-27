@@ -195,7 +195,7 @@
 					{ value: 'files', label: 'Files', content: filesPanel }
 				]}
 			/>
-			<CompositionBar label="Comparison of laptop and backup" {segments} />
+			<CompositionBar label="Comparison of laptop and backup" {segments} showTable />
 		</div>
 	{/snippet}
 	{@render both('Navigation and summary', navigation)}

@@ -105,6 +105,9 @@
 	<LocationTable
 		{locations}
 		scanning={scanState.running.map((u) => u.label)}
+		onopen={(label: string) => {
+			navigate(`/locations/${encodeURIComponent(label)}`);
+		}}
 		onscan={(label: string) => void act(() => scanState.start(label))}
 		onrename={(label: string) => (renaming = label)}
 		onpolicy={(label: string, policy: HashPolicy) =>

@@ -9,7 +9,8 @@
 	interface Props {
 		/** The location to rename; the dialog is open while it is set. */
 		label?: string | undefined;
-		onrenamed: () => void;
+		/** Called with the new label. */
+		onrenamed: (to: string) => void;
 	}
 
 	let { label = $bindable(), onrenamed }: Props = $props();
@@ -33,9 +34,10 @@
 			return;
 		}
 		try {
-			await api.locations.rename(label, next.trim());
+			const to = next.trim();
+			await api.locations.rename(label, to);
 			label = undefined;
-			onrenamed();
+			onrenamed(to);
 		} catch (e) {
 			error = explain(toApiError(e));
 		}

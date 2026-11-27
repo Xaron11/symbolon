@@ -155,8 +155,42 @@ describe('LocationsView', () => {
 		backend.emitScan('Photos', { type: 'Started', label: 'Photos', scanId: 1 });
 		const link = await screen.findByRole('link', { name: 'Scanning Photos' });
 		expect(link.getAttribute('href')).toBe('/scans');
-		expect(screen.queryByRole('button', { name: 'Scan Photos' })).toBeNull();
+		const busy = screen.getByRole('button', { name: 'Scan Photos' });
+		expect(busy.getAttribute('aria-busy')).toBe('true');
 		expect(screen.getByRole('button', { name: 'Scan Stick' })).toBeTruthy();
+	});
+
+	it('links the last scan to its page', async () => {
+		view([
+			location('Photos', {
+				lastScan: {
+					scanId: 3,
+					status: 'Completed',
+					startedMs: Date.now() - 3 * HOUR,
+					finishedMs: Date.now() - 3 * HOUR,
+					files: 1,
+					bytes: 1,
+					warnings: 0,
+					error: null
+				}
+			})
+		]);
+		const link = await screen.findByRole('link', { name: '3 hours ago' });
+		expect(link.getAttribute('href')).toBe('/scans/3');
+	});
+
+	it('opens a location from anywhere on its row, but not from its buttons', async () => {
+		const user = userEvent.setup({ pointerEventsCheck: 0 });
+		const { navigate, backend } = view([location('P')]);
+		const row = (await screen.findByRole('link', { name: 'P' })).closest('tr') as HTMLElement;
+		await user.click(within(row).getByText('When compared'));
+		expect(navigate).toHaveBeenCalledWith('/locations/P');
+		navigate.mockClear();
+		await user.click(within(row).getByRole('button', { name: 'Scan P' }));
+		await waitFor(() => {
+			expect(backend.calls.some((c) => c.method === 'scans.start')).toBe(true);
+		});
+		expect(navigate).not.toHaveBeenCalled();
 	});
 
 	it('renames, changes the hash policy and removes from the row menu', async () => {
@@ -234,6 +268,23 @@ describe('LocationsView', () => {
 });
 
 describe('LocationsView add dialog', () => {
+	it('starts in the path field and keeps rarely changed options under Advanced', async () => {
+		view([], { openAdd: true });
+		const dialog = await screen.findByRole('dialog', { name: 'Add location' });
+		await waitFor(() => {
+			expect(document.activeElement).toBe(within(dialog).getByLabelText('Folder path'));
+		});
+		const advanced = within(dialog).getByText('Advanced').closest('details');
+		expect(advanced?.open).toBe(false);
+		expect(advanced?.contains(within(dialog).getByText('Hash algorithm'))).toBe(true);
+		expect(
+			within(dialog).getByRole('textbox', {
+				name: 'Label',
+				description: "Defaults to the folder's name."
+			})
+		).toBeTruthy();
+	});
+
 	it('submits once while an add is in flight', async () => {
 		const user = userEvent.setup();
 		const { backend } = view([location('Old')]);

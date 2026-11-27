@@ -26,6 +26,7 @@ const CATEGORIES = [
 	'different',
 	'only-in',
 	'moved',
+	'renamed',
 	'collision',
 	'unverified'
 ] as const;
@@ -67,13 +68,25 @@ describe.each(THEMES)('%s theme', (theme) => {
 		expect(failing).toEqual([]);
 	});
 
-	// Only the accent and selection carry hue; a tinted gray reads as a color (slate looked navy).
-	it('surfaces, borders and text are pure gray', () => {
-		const neutral = tokenNames.filter(
-			(name) => /^color\.(surface|border|text)\./.test(name) && name !== 'color.surface.selected'
+	// Only the accent carries hue; a tinted gray reads as a color (slate looked navy).
+	it('surfaces, borders, text and the scrim are pure gray', () => {
+		const neutral = tokenNames.filter((name) =>
+			/^color\.((surface|border|text)\.|scrim$)/.test(name)
 		);
 		const tinted = neutral.filter((name) => oklch(color(themes[theme][name])).c > 0.002);
 		expect(tinted).toEqual([]);
+	});
+
+	// Dark blue fills read as navy next to the neutral surfaces.
+	it('blue marks only actions, focus and info text', () => {
+		const allowed = /^(color\.accent\.|color\.focus$|color\.text\.on-accent$|status\.info\.fg$)/;
+		const blue = tokenNames.filter((name) => {
+			const value = themes[theme][name];
+			if (!/^(#|rgb)/.test(value)) return false;
+			const { c, h } = oklch(color(value));
+			return c > 0.02 && h !== undefined && h > 235 && h < 275 && !allowed.test(name);
+		});
+		expect(blue).toEqual([]);
 	});
 
 	it('on-accent text has 4.5:1 on the accent in every state', () => {
@@ -83,6 +96,19 @@ describe.each(THEMES)('%s theme', (theme) => {
 			'color.accent.active'
 		] as const) {
 			expect(contrast(theme, 'color.text.on-accent', bg), bg).toBeGreaterThanOrEqual(4.5);
+		}
+	});
+
+	it('links (accent text) have 4.5:1 on the surfaces they sit on', () => {
+		for (const bg of [
+			'color.surface.canvas',
+			'color.surface.base',
+			'color.surface.raised',
+			'status.error.bg',
+			'status.warning.bg',
+			'status.info.bg'
+		] as const) {
+			expect(contrast(theme, 'color.accent.default', bg), bg).toBeGreaterThanOrEqual(4.5);
 		}
 	});
 

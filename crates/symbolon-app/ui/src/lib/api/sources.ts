@@ -3,6 +3,7 @@ import type { Backend } from './backend';
 import type {
 	ApiFilter,
 	CompareRowView,
+	DuplicateSetView,
 	EntryView,
 	RecentScanView,
 	RowOrder,
@@ -109,5 +110,46 @@ export function recentScans(backend: Backend): DataSource<RecentScanView> {
 	return {
 		count: () => backend.scans.recentCount(),
 		rows: (offset, limit) => backend.scans.recent(offset, limit)
+	};
+}
+
+/** A duplicate group of one side, or one of its copies. */
+export type DuplicateNode =
+	| { kind: 'group'; set: DuplicateSetView }
+	| { kind: 'copy'; digest: string; index: number; path: string };
+
+/**
+ * The duplicate groups of side `side` as a tree: groups by page from the backend, each with its
+ * copies as children; read again after every verification round.
+ */
+export function duplicateGroups(
+	backend: Backend,
+	id: number,
+	side: number,
+	changes?: ChangeHub
+): TreeSource<DuplicateNode> {
+	return {
+		rootCount: async () => (await backend.compare.duplicateTotals(id))[side]?.groups ?? 0,
+		roots: async (offset, limit) =>
+			(await backend.compare.duplicates(id, side, offset, limit)).map((set) => ({
+				kind: 'group' as const,
+				set
+			})),
+		childCount: (node) => Promise.resolve(node.kind === 'group' ? node.set.cells.length : 0),
+		children: (node, offset, limit) =>
+			Promise.resolve(
+				node.kind === 'group'
+					? node.set.cells.slice(offset, offset + limit).map((cell, i) => ({
+							kind: 'copy' as const,
+							digest: node.set.digestShort,
+							index: offset + i,
+							path: cell.path
+						}))
+					: []
+			),
+		key: (node) =>
+			node.kind === 'group' ? node.set.digestShort : `${node.digest}/${String(node.index)}`,
+		hasChildren: (node) => node.kind === 'group',
+		...(changes && { subscribe: (onChange: () => void) => changes.subscribe(onChange) })
 	};
 }

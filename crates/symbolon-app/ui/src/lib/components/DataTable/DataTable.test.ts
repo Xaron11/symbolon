@@ -131,6 +131,29 @@ describe('DataTable', () => {
 	});
 });
 
+describe('DataTable current row', () => {
+	it('keeps the chosen row marked after focus leaves, but marks none before a choice', async () => {
+		const user = userEvent.setup();
+		const { grid } = await table(files(5));
+		expect(grid.querySelector('.row.marked')).toBeNull();
+		await user.click(screen.getByText('file2.jpg'));
+		grid.blur();
+		expect(grid.querySelector('.row.marked')?.textContent).toContain('file2.jpg');
+	});
+
+	it('outlines a cell only after moving between columns', async () => {
+		const user = userEvent.setup();
+		const { grid } = await table(files(5));
+		await user.click(screen.getByText('file2.jpg'));
+		await user.keyboard('j');
+		expect(grid.querySelector('.cell.current')).toBeNull();
+		await user.keyboard('l');
+		expect(grid.querySelector('.cell.current')?.textContent.trim()).toBe('30');
+		await user.click(screen.getByText('file1.jpg'));
+		expect(grid.querySelector('.cell.current')).toBeNull();
+	});
+});
+
 describe('DataTable live updates', () => {
 	it('selection clears and the active row stays on the list when it shrinks', async () => {
 		const user = userEvent.setup();
@@ -167,5 +190,32 @@ describe('DataTable opening rows', () => {
 		const cell = await within(grid).findByText('file2.jpg');
 		await user.dblClick(cell);
 		expect(onopen).toHaveBeenCalledWith({ name: 'file2.jpg', size: 20 }, 2);
+	});
+});
+
+describe('DataTable states', () => {
+	it('says what an empty table means', async () => {
+		render(DataTable<File>, {
+			source: memorySource([], () => () => 0),
+			columns,
+			label: 'Files',
+			empty: 'No scans yet.'
+		});
+		expect(await screen.findByText('No scans yet.')).toBeTruthy();
+	});
+
+	it('is only as tall as its rows when asked to fit them', async () => {
+		const { grid } = await table(files(2), { fit: true });
+		expect(grid.parentElement?.style.height).toContain('min(100%');
+	});
+});
+
+describe('DataTable as a list of links', () => {
+	it('opens a row on a single click when rows lead somewhere', async () => {
+		const user = userEvent.setup();
+		const onopen = vi.fn();
+		await table(files(3), { onopen, openOnClick: true });
+		await user.click(screen.getByText('file1.jpg'));
+		expect(onopen).toHaveBeenCalledWith({ name: 'file1.jpg', size: 10 }, 1);
 	});
 });

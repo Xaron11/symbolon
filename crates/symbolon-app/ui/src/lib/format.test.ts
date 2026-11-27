@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatAgo, formatBytes } from './format';
+import { byteStep, formatAgo, formatBytes } from './format';
 
 describe('formatBytes', () => {
 	it.each([
@@ -27,5 +27,19 @@ describe('formatAgo', () => {
 		expect(formatAgo(now - 3 * 3_600_000, now)).toBe('3 hours ago');
 		expect(formatAgo(now - 86_400_000, now)).toBe('yesterday');
 		expect(formatAgo(now - 40 * 86_400_000, now)).toBe('last month');
+	});
+});
+
+describe('byteStep', () => {
+	it('steps by 1, 2 or 5 of a binary unit', () => {
+		const MiB = 1024 ** 2;
+		expect(byteStep(334 * MiB)).toBe(100 * MiB);
+		expect(byteStep(40 * MiB)).toBe(10 * MiB);
+		expect(byteStep(5000)).toBe(1024);
+		expect(byteStep(3 * 1024 ** 3)).toBe(1024 ** 3);
+	});
+
+	it('gives a step for empty charts', () => {
+		expect(byteStep(0)).toBe(1);
 	});
 });

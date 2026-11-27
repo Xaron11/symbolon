@@ -7,7 +7,8 @@ import {
 	type MemoryBackend,
 	type MemorySeed
 } from '#lib/api/index.ts';
-import { createScanState } from '#lib/scans/scans.svelte.ts';
+import { createOpenComparison, type OpenComparison } from '#lib/compare/open.svelte.ts';
+import { createScanState, type ScanState } from '#lib/scans/scans.svelte.ts';
 import WithBackend from './WithBackend.svelte';
 
 /** A location as the bridge reports it, with `overrides`. */
@@ -30,13 +31,26 @@ export function renderWithBackend<P extends Record<string, unknown>>(
 	component: Component<P>,
 	props: P,
 	seed: MemorySeed = {},
-	prepare?: (backend: MemoryBackend) => void
+	prepare?: (backend: MemoryBackend, open: OpenComparison) => void
 ) {
 	const backend = createMemoryBackend(seed);
-	prepare?.(backend);
+	const open = createOpenComparison(backend);
+	prepare?.(backend, open);
 	const scans = createScanState(backend);
 	const result = render(WithBackend<P>, {
-		props: { backend, scans, component, viewProps: props }
+		props: { backend, scans, open, component, viewProps: props }
 	});
-	return { ...result, backend, scans };
+	return { ...result, backend, scans, open };
+}
+
+/** Renders `component` again over the same backend and app state, as after navigating back. */
+export function renderAgain<P extends Record<string, unknown>>(
+	component: Component<P>,
+	props: P,
+	context: { backend: MemoryBackend; scans: ScanState; open: OpenComparison }
+) {
+	const { backend, scans, open } = context;
+	return render(WithBackend<P>, {
+		props: { backend, scans, open, component, viewProps: props }
+	});
 }
