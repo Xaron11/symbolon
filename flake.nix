@@ -211,9 +211,6 @@
             CARGO_BUILD_TARGET = pkgs.stdenv.hostPlatform.rust.rustcTarget;
             CARGO_PROFILE_RELEASE_STRIP = "false";
           };
-        in
-        rec {
-          default = symbolon;
           symbolon = craneLib.buildPackage (
             cliArgs
             // {
@@ -269,6 +266,10 @@
               };
             }
           );
+        in
+        {
+          inherit symbolon symbolon-app;
+          default = symbolon;
         }
       );
 
