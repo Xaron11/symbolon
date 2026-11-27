@@ -3,3 +3,7 @@ allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
   - '@lucide/svelte@1.81.0'
+# style-dictionary's glob 13 and its minimatch 10 have advisories (GHSA-3g3m-2fjr-6pw4,
+# minimatch < 11.0.1); glob 14 keeps the API it uses. Drop once style-dictionary moves to glob 14.
+overrides:
+  '@bundled-es-modules/glob>glob': ^14.0.6
