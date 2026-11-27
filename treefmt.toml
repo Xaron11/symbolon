@@ -25,6 +25,11 @@ command = "shfmt"
 options = ["--write"]
 includes = ["*.sh"]
 
+[formatter.just]
+command = "just"
+options = ["--unstable", "--fmt", "--justfile"]
+includes = ["justfile"]
+
 [formatter.taplo]
 command = "taplo"
 options = ["format"]
