@@ -27,6 +27,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0021](0021-gui-clients.md)                             | One Svelte codebase for every GUI client                                           |
 | [0022](0022-design-system.md)                           | Design system: tokens, components and keyboard                                     |
 | [0023](0023-offset-reads.md)                            | Offset reads, sort orders and a tree for results                                   |
+| [0024](0024-app-core-bridge.md)                         | The app–core bridge                                                                |
 
 ## Writing a new ADR
 

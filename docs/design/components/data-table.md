@@ -13,6 +13,10 @@ A table reads its rows through a data source; the desktop app's bridge implement
 
 The contract is offset-based, not cursor-based, so the table can jump anywhere (dragging the scrollbar, `G` for the last row) without reading earlier pages ([ADR-0022](../../adr/0022-design-system.md)). The table asks for whole pages (200 rows) around the viewport once scrolling has paused for 30 ms, so dragging the scrollbar reads only where it stops; pages already read show at once. It keeps at most 10 pages, never dropping the ones in view, and ignores answers for pages no longer in view or for an older sort. A failed read shows an inline error with Retry.
 
+## Live updates
+
+A source whose rows can change (a comparison being verified) offers `subscribe(onChange)`. On a change the table re-reads its count and the rows in view and drops its other cached pages. The scroll position and the active row stay; if the list shrank, the view and the active row move to its end. Rows on screen stay until their fresh page arrives, and answers from before the change are dropped. Selection is cleared, since it is by position. The table unsubscribes when it is removed.
+
 ## Anatomy
 
 Sticky header (sunken surface, small secondary text) with a sort button for sortable columns; rows of `table.row.height` on the base surface; cells on one line, truncated with an ellipsis. The full value is in the cell's text (read by assistive technology) and its tooltip. Columns can be monospace (paths, hashes, sizes) and end-aligned (numbers); columns without a width share the remaining space but never shrink below `table.column.min`; header and rows always share the same columns, so a long value is cut, never widening its row; tables wider than their space scroll horizontally.

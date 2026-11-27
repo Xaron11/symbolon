@@ -41,6 +41,20 @@
 	const shown = $derived(items.slice(first, last + 1));
 	const visibleRows = $derived(Math.max(1, Math.floor(height / rowHeight)));
 
+	// A source that changes (a location being scanned) is re-read with its open folders kept.
+	$effect(() =>
+		source.subscribe?.(() => {
+			const key = items[active]?.key;
+			void tree.refresh().then(() => {
+				const index = tree.visible.findIndex((v) => v.key === key);
+				if (index >= 0) active = index;
+			});
+		})
+	);
+	$effect(() => {
+		if (items.length > 0 && active > items.length - 1) active = items.length - 1;
+	});
+
 	function moveTo(index: number) {
 		if (items.length === 0) return;
 		active = Math.min(items.length - 1, Math.max(0, index));

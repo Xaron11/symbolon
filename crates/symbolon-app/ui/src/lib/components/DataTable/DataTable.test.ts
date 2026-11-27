@@ -130,3 +130,31 @@ describe('DataTable', () => {
 		expect(document.activeElement).toBe(grid);
 	});
 });
+
+describe('DataTable live updates', () => {
+	it('selection clears and the active row stays on the list when it shrinks', async () => {
+		const user = userEvent.setup();
+		const { grid, source } = await table(files(500));
+		grid.focus();
+		await user.keyboard('{Shift>}G{/Shift}');
+		await user.keyboard(' ');
+		await waitFor(() => {
+			expect(grid.querySelectorAll('[aria-selected=true]')).toHaveLength(1);
+		});
+		source.replace(files(120));
+		await waitFor(() => {
+			expect(grid.getAttribute('aria-rowcount')).toBe('121');
+		});
+		await waitFor(() => {
+			expect(activeRow(grid)?.getAttribute('aria-rowindex')).toBe('121');
+		});
+		expect(grid.querySelectorAll('[aria-selected=true]')).toHaveLength(0);
+	});
+
+	it('unsubscribes on destroy', async () => {
+		const { source, unmount } = await table(files(10));
+		expect(source.subscribers).toBe(1);
+		unmount();
+		expect(source.subscribers).toBe(0);
+	});
+});

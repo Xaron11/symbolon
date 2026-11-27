@@ -85,6 +85,25 @@ sequenceDiagram
 
 Files are hashed on the phone, so only the index crosses USB. If the agent cannot run, a fallback hashes with the phone's own `sha256sum`, guarding against its silent short reads ([ADR-0003](adr/0003-android-agent-musl-spike.md)). The transport sits behind an `AndroidTransport` trait _(planned, M5)_, which tests replace with a mock.
 
+## The desktop app
+
+The app is a thin client of both halves ([ADR-0024](adr/0024-app-core-bridge.md)). Screens talk to a `Backend` interface; its Tauri implementation calls commands that run methods of one long-lived `AppState` on a blocking pool.
+
+```mermaid
+flowchart LR
+    screens["Screens (Svelte)"] --> api["API layer<br/>Backend, data sources"]
+    api -- "commands (bindings.ts)" --> commands["#[tauri::command]<br/>one line each"]
+    commands --> state["AppState<br/>catalog, scan registry,<br/>comparison registry"]
+    state --> core[symbolon-core]
+    state -. "channels: scan progress,<br/>verification, browse notices" .-> api
+```
+
+- **Locations and browsing** are direct `Catalog` and `Query` calls.
+- **Scans** run as in the CLI; a forwarding thread passes their events to the window's channels, throttled, and keeps the latest one for windows that attach later.
+- **Comparisons** stay built for as long as a screen shows them. They appear at once from the catalog and are verified in the background; each hashing round refreshes them and tells the screen.
+
+The TypeScript types and command functions in `ui/src/lib/api/bindings.ts` are generated from the Rust signatures (tauri-specta) and checked for drift by `just test`.
+
 ## Catalog
 
 One SQLite database (WAL mode, `rusqlite` with bundled SQLite) holds locations, scans and entries. The schema is a versioned public contract with forward-only migrations ([Catalog schema](schema.md)). Paths are stored as raw bytes plus a normalized key ([ADR-0004](adr/0004-raw-path-encoding.md)).

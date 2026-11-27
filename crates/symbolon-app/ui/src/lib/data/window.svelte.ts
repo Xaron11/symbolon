@@ -1,4 +1,4 @@
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type { DataSource, SortSpec } from './source';
 
 /** The visible slice of a virtualized list and how to move it. */
@@ -15,6 +15,11 @@ export interface RowWindow<Row> {
 	setViewport(scrollTop: number, height: number): void;
 	setSort(sort: SortSpec | undefined): void;
 	retry(): void;
+	/**
+	 * Re-reads the count and the rows in view after the source changed. Rows on screen stay
+	 * until their fresh page arrives; answers from before the refresh are dropped.
+	 */
+	refresh(): void;
 }
 
 /**
@@ -57,6 +62,8 @@ export function createRowWindow<Row>(
 	let first = $state(0);
 	let last = $state(-1);
 	const pages = new SvelteMap<number, readonly Row[]>();
+	// Pages read before the last refresh: shown until replaced, never served from cache.
+	const stale = new SvelteSet<number>();
 	// Page → generation of the request in flight for it.
 	const loading = new SvelteMap<number, number>();
 	let generation = 0;
@@ -86,14 +93,16 @@ export function createRowWindow<Row>(
 	// missing pages waits for the viewport to settle.
 	function place() {
 		if (count === undefined) return;
-		first = Math.max(0, Math.floor(viewport.top / rowHeight) - overscan);
-		last = Math.min(count - 1, Math.ceil((viewport.top + viewport.height) / rowHeight) + overscan);
+		// A list that shrank under the viewport shows its end, as the scroller will.
+		const top = Math.min(viewport.top, Math.max(0, count * rowHeight - viewport.height));
+		first = Math.max(0, Math.floor(top / rowHeight) - overscan);
+		last = Math.min(count - 1, Math.ceil((top + viewport.height) / rowHeight) + overscan);
 	}
 
 	function load() {
 		if (count === undefined || last < first) return;
 		for (let page = Math.floor(first / pageSize); page <= Math.floor(last / pageSize); page++) {
-			if (pages.has(page)) {
+			if (pages.has(page) && !stale.has(page)) {
 				// Mark as recently used.
 				const rows = pages.get(page) ?? [];
 				pages.delete(page);
@@ -111,6 +120,7 @@ export function createRowWindow<Row>(
 					done();
 					const range = needed();
 					if (requested !== generation || page < range.from || page > range.to) return;
+					stale.delete(page);
 					pages.set(page, rows);
 					for (const old of pages.keys()) {
 						if (pages.size <= maxPages) break;
@@ -128,6 +138,7 @@ export function createRowWindow<Row>(
 	function reset() {
 		generation++;
 		pages.clear();
+		stale.clear();
 		loading.clear();
 	}
 
@@ -167,6 +178,12 @@ export function createRowWindow<Row>(
 			reset();
 			if (count === undefined) readCount();
 			else schedule();
+		},
+		refresh() {
+			generation++;
+			loading.clear();
+			for (const page of pages.keys()) stale.add(page);
+			readCount();
 		}
 	};
 }

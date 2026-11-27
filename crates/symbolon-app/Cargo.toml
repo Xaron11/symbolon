@@ -19,8 +19,16 @@ path = "src/main.rs"
 tauri-build.workspace = true
 
 [dependencies]
+dirs.workspace = true
+serde.workspace = true
+specta.workspace = true
+specta-typescript.workspace = true
 symbolon-core.workspace = true
-tauri.workspace = true
+tauri = { workspace = true, features = ["specta"] }
+tauri-specta.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

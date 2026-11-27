@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { memoryTree } from './memory';
+import { describe, expect, it, vi } from 'vitest';
+import { memoryTree, type MemoryNode } from './memory';
 import { createTreeState } from './tree.svelte';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -67,5 +67,99 @@ describe('createTreeState', () => {
 		state.collapse('a');
 		await loading;
 		expect(state.visible.map((v) => v.key)).toEqual(['a', 'b.txt']);
+	});
+});
+
+describe('createTreeState refresh', () => {
+	it('tree refresh keeps expanded folders that still exist', async () => {
+		const source = tree();
+		const state = createTreeState(source);
+		await settle();
+		await state.expand('a');
+		await state.expand('a/y');
+		source.replace([
+			{
+				key: 'a',
+				label: 'a',
+				children: [
+					{ key: 'a/w', label: 'w' },
+					{ key: 'a/x', label: 'x' }
+				]
+			},
+			{ key: 'c.txt', label: 'c.txt' }
+		]);
+		await state.refresh();
+		expect(state.visible.map((v) => v.node.key)).toEqual(['a', 'a/w', 'a/x', 'c.txt']);
+		expect(state.visible[0]?.expanded).toBe(true);
+	});
+});
+
+/** `tree()`, with every read delayed until `release()`. */
+function slowTree() {
+	const inner = tree();
+	const waiting: (() => void)[] = [];
+	const later = <T>(value: Promise<T>) =>
+		new Promise<T>((resolve) => waiting.push(() => void value.then(resolve)));
+	let slow = false;
+	const source = {
+		...inner,
+		rootCount: () => (slow ? later(inner.rootCount()) : inner.rootCount()),
+		roots: (o: number, l: number) => (slow ? later(inner.roots(o, l)) : inner.roots(o, l)),
+		childCount: (n: MemoryNode) => (slow ? later(inner.childCount(n)) : inner.childCount(n)),
+		children: (n: MemoryNode, o: number, l: number) =>
+			slow ? later(inner.children(n, o, l)) : inner.children(n, o, l)
+	};
+	return {
+		source,
+		inner,
+		slowDown: () => (slow = true),
+		release: async () => {
+			while (waiting.length > 0) {
+				waiting.splice(0).forEach((go) => {
+					go();
+				});
+				await settle();
+			}
+		}
+	};
+}
+
+describe('createTreeState refresh, while it reads', () => {
+	it('keeps showing the open tree until the new one is read', async () => {
+		const t = slowTree();
+		const state = createTreeState(t.source);
+		await settle();
+		await state.expand('a');
+		const before = state.visible.map((v) => v.key);
+		t.slowDown();
+		const refreshed = state.refresh();
+		await settle();
+		expect(state.visible.map((v) => v.key)).toEqual(before);
+		await t.release();
+		await refreshed;
+		expect(state.visible.map((v) => v.key)).toEqual(before);
+	});
+
+	it('coalesces refreshes that arrive while one runs', async () => {
+		const t = slowTree();
+		const state = createTreeState(t.source);
+		await settle();
+		const rootCount = vi.spyOn(t.source, 'rootCount');
+		t.slowDown();
+		const all = Promise.all([state.refresh(), state.refresh(), state.refresh()]);
+		await t.release();
+		await all;
+		expect(rootCount).toHaveBeenCalledTimes(2);
+	});
+
+	it('reopens folders whatever order they were opened in', async () => {
+		const state = createTreeState(tree());
+		await settle();
+		await state.expand('a');
+		await state.expand('a/y');
+		state.collapse('a');
+		await state.expand('a');
+		await state.refresh();
+		expect(state.visible.map((v) => v.key)).toEqual(['a', 'a/x', 'a/y', 'a/y/z', 'b.txt']);
 	});
 });
