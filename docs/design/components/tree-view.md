@@ -18,7 +18,7 @@ Rows of `table.row.height`, indented by `tree.indent` per level; a chevron for f
 
 ## Keyboard
 
-Focus the tree with Tab; then the [list keys](../keyboard.md#in-tables-and-trees) apply: `j`/`k` or ↓/↑ move; `l` or → expands a closed folder, or in an open one moves to its first child; `h` or ← collapses an open folder, or moves to the parent; `g g`/`G`, `Ctrl+D`/`Ctrl+U` and PageUp/PageDown move as in tables; Enter or `o` opens the item. Clicking a chevron toggles its folder.
+Focus the tree with Tab; then the [list keys](../keyboard.md#in-tables-and-trees) apply: `j`/`k` or ↓/↑ move; `l` or → expands a closed folder, or in an open one moves to its first child; `h` or ← collapses an open folder, or moves to the parent; `g g`/`G`, `Ctrl+D`/`Ctrl+U` and PageUp/PageDown move as in tables; Enter or `o` opens the item. Clicking a folder (its row or its chevron) opens or closes it; clicking any row also makes it active.
 
 ## Accessibility
 

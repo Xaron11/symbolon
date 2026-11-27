@@ -153,7 +153,7 @@ describe('drill-down', () => {
 		await waitFor(() => {
 			expect(within(grid).getByText('Only in Backup')).toBeTruthy();
 		});
-		expect(within(grid).getByText('Moved Photos → Backup')).toBeTruthy();
+		expect(within(grid).getByText('Moved: Photos → Backup')).toBeTruthy();
 		expect(within(grid).getByText('old/a.jpg → new/a.jpg')).toBeTruthy();
 		await user.click(screen.getByRole('radio', { name: 'Tree' }));
 		const tree = await screen.findByRole('tree', { name: 'Rows by folder' });

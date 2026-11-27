@@ -191,14 +191,11 @@
 						onclick={() => {
 							active = index;
 							view?.focus();
+							// The whole row opens and closes a folder, not only its chevron.
+							if (item.hasChildren) void tree.toggle(item.key);
 						}}
 					>
-						<span
-							class="chevron"
-							class:open={item.expanded}
-							aria-hidden="true"
-							onclick={() => void tree.toggle(item.key)}
-						>
+						<span class="chevron" class:open={item.expanded} aria-hidden="true">
 							{#if item.hasChildren}<ChevronRight />{/if}
 						</span>
 						{#if Icon}<Icon aria-hidden="true" />{/if}

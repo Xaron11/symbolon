@@ -141,3 +141,26 @@ describe('TreeView extras', () => {
 		expect(await screen.findByText('Nothing matches the filters.')).toBeTruthy();
 	});
 });
+
+describe('TreeView clicks', () => {
+	it('opens and closes a folder when its row is clicked, not only its chevron', async () => {
+		const user = userEvent.setup();
+		await tree();
+		await user.click(screen.getByText('photos'));
+		expect(await screen.findByText('2024')).toBeTruthy();
+		await user.click(screen.getByText('photos'));
+		await waitFor(() => {
+			expect(screen.queryByText('2024')).toBeNull();
+		});
+	});
+
+	it('toggles once when the chevron itself is clicked', async () => {
+		const user = userEvent.setup();
+		await tree();
+		const folder = screen.getByText('photos').closest('[role=treeitem]');
+		const chevron = folder?.querySelector('.chevron');
+		if (!chevron) throw new Error('no chevron');
+		await user.click(chevron);
+		expect(await screen.findByText('2024')).toBeTruthy();
+	});
+});

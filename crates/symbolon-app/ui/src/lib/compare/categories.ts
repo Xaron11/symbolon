@@ -50,13 +50,13 @@ export function sideNames(indices: readonly number[], sides: readonly SideReques
 /** Whether rows of `name` hold one file at different paths: moves and renames. */
 export const isMove = (name: CategoryName) => name === 'moved' || name === 'renamed';
 
-/** What a row says, naming the sides it concerns: "Only in Backup", "Moved Photos → Backup". */
+/** What a row says, naming the sides it concerns: "Only in Backup", "Moved: Photos → Backup". */
 export function rowSummary(row: CompareRowView, sides: readonly SideRequest[]): string {
 	const label = category(row.category).label;
 	if (row.category === 'only_in') return `${label} ${sideNames(row.presence, sides)}`;
 	if (isMove(row.category)) {
 		const names = row.presence.map((i) => sides[i]?.label ?? `side ${String(i + 1)}`);
-		return `${label} ${names.join(' → ')}`;
+		return `${label}: ${names.join(' → ')}`;
 	}
 	return label;
 }
