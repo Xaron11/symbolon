@@ -18,6 +18,15 @@ use tauri::Manager as _;
 
 use crate::state::AppState;
 
+#[cfg(all(feature = "mcp-bridge", not(debug_assertions)))]
+compile_error!("the mcp-bridge feature is for debug builds only (ADR-0025)");
+
+/// Grants the MCP bridge its commands; added only when the feature is on, since a static
+/// capability naming an absent plugin fails the build.
+#[cfg(feature = "mcp-bridge")]
+const MCP_CAPABILITY: &str =
+    r#"{"identifier":"mcp-bridge","windows":["main"],"permissions":["mcp-bridge:default"]}"#;
+
 /// How long quitting waits for running scans to stop.
 const EXIT_WAIT: Duration = Duration::from_secs(3);
 
@@ -28,10 +37,16 @@ const EXIT_WAIT: Duration = Duration::from_secs(3);
 /// Returns an error if the webview runtime fails to start.
 pub fn run() -> Result<(), tauri::Error> {
     let builder = bindings::builder();
-    let app = tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
+    let app = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    #[cfg(feature = "mcp-bridge")]
+    let app = app.plugin(tauri_plugin_mcp_bridge::init_with_config(
+        tauri_plugin_mcp_bridge::Config::localhost_only(),
+    ));
+    let app = app
         .invoke_handler(builder.invoke_handler())
         .setup(|app| {
+            #[cfg(feature = "mcp-bridge")]
+            app.add_capability(MCP_CAPABILITY)?;
             let state = AppState::open_default().map_err(|e| e.message)?;
             app.manage(Arc::new(state));
             Ok(())

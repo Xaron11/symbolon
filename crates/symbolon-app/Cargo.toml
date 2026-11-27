@@ -26,7 +26,12 @@ specta-typescript.workspace = true
 symbolon-core.workspace = true
 tauri = { workspace = true, features = ["specta"] }
 tauri-plugin-dialog.workspace = true
+tauri-plugin-mcp-bridge = { workspace = true, optional = true }
 tauri-specta.workspace = true
+
+[features]
+# Lets agents screenshot and drive a dev build over a localhost socket (ADR-0025).
+mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]
 
 [dev-dependencies]
 tempfile.workspace = true

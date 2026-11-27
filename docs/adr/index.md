@@ -28,6 +28,7 @@ An architecture decision record (ADR) captures one significant decision: the con
 | [0022](0022-design-system.md)                           | Design system: tokens, components and keyboard                                     |
 | [0023](0023-offset-reads.md)                            | Offset reads, sort orders and a tree for results                                   |
 | [0024](0024-app-core-bridge.md)                         | The app–core bridge                                                                |
+| [0025](0025-agent-inspection-bridge.md)                 | A debug-only bridge for agents to see the app                                      |
 
 ## Writing a new ADR
 
