@@ -162,16 +162,6 @@
         let
           inherit (pkgs) lib;
           craneLib = (crane.mkLib pkgs).overrideToolchain (p: rustFor p [ ]);
-          # Dependencies are cached per lockfile. Only `cargo build`: crane's default also checks
-          # and builds every test and bench target, which no package uses.
-          depsOnly =
-            args:
-            craneLib.buildDepsOnly (
-              args
-              // {
-                buildPhaseCargoCommand = "cargoWithProfile build ${args.cargoExtraArgs}";
-              }
-            );
           license = with lib.licenses; [
             mit
             asl20
@@ -187,43 +177,21 @@
             doCheck = false;
           };
 
-          uiRoot = "crates/symbolon-app/ui";
-          env = pkgs.rust.envVars;
-          triple = lib.toUpper (builtins.replaceStrings [ "-" ] [ "_" ] env.rustHostPlatformSpec);
-          appArgs = {
-            pname = "symbolon-app";
-            inherit version;
-            src = lib.fileset.toSource {
-              root = ./.;
-              fileset = lib.fileset.unions [
-                ./Cargo.toml
-                ./Cargo.lock
-                ./crates
-                ./design
-                # The token build writes this page; its directory must exist.
-                ./docs/design/tokens.md
-              ];
-            };
-            strictDeps = true;
-            # `cargo tauri build` turns this feature on.
-            cargoExtraArgs = "--locked -p symbolon-app --features tauri/custom-protocol";
-            doCheck = false;
-            nativeBuildInputs = [ pkgs.pkg-config ];
-            buildInputs = tauriLibs pkgs;
-            # cargo-tauri.hook's environment, so the cached dependencies match it: Cargo rebuilds
-            # everything when the linker or the target differs.
-            "CC_${triple}" = env.ccForHost;
-            "CXX_${triple}" = env.cxxForHost;
-            "CARGO_TARGET_${triple}_LINKER" = env.ccForHost;
-            CARGO_BUILD_TARGET = env.rustHostPlatformSpec;
-            HOST_CC = env.ccForBuild;
-            HOST_CXX = env.cxxForBuild;
-            CARGO_PROFILE_RELEASE_STRIP = "false";
+          # The desktop app: Tauri's own build (frontend, then Rust) through nixpkgs' hooks, with
+          # the toolchain from rust-toolchain.toml.
+          rustPlatform = pkgs.makeRustPlatform {
+            cargo = rustFor pkgs [ ];
+            rustc = rustFor pkgs [ ];
           };
+          uiRoot = "crates/symbolon-app/ui";
           symbolon = craneLib.buildPackage (
             cliArgs
             // {
-              cargoArtifacts = depsOnly cliArgs;
+              # Dependencies are cached per lockfile. Only `cargo build`: crane's default also checks
+              # and builds every test and bench target, which the package does not use.
+              cargoArtifacts = craneLib.buildDepsOnly (
+                cliArgs // { buildPhaseCargoCommand = "cargoWithProfile build ${cliArgs.cargoExtraArgs}"; }
+              );
               nativeBuildInputs = [ pkgs.installShellFiles ];
               postInstall = lib.optionalString (pkgs.stdenv.buildPlatform.canExecute pkgs.stdenv.hostPlatform) ''
                 $out/bin/symbolon man --out man
@@ -240,41 +208,47 @@
               };
             }
           );
-          # Tauri's own build (frontend, then Rust, then the .deb it installs from) through
-          # nixpkgs' cargo-tauri.hook, on crane's cached dependencies.
-          symbolon-app = craneLib.mkCargoDerivation (
-            appArgs
-            // {
-              cargoArtifacts = depsOnly appArgs;
-              doInstallCargoArtifacts = false;
-              buildAndTestSubdir = "crates/symbolon-app";
-              pnpmRoot = uiRoot;
-              pnpmDeps = pkgs.fetchPnpmDeps {
-                inherit (appArgs) pname version src;
-                sourceRoot = "${appArgs.src.name}/${uiRoot}";
-                fetcherVersion = 5;
-                hash = "sha256-/5GEZR7+cST/YuutYQ8cWkU/Y/XF1vrztQs8vJj1CCc=";
-              };
-              nativeBuildInputs =
-                appArgs.nativeBuildInputs
-                ++ (with pkgs; [
-                  cargo-tauri.hook
-                  nodejs_24
-                  pnpm
-                  pnpmConfigHook
-                  wrapGAppsHook3
-                ]);
-              buildPhaseCargoCommand = "";
-              buildPhase = "tauriBuildHook";
-              installPhase = "tauriInstallHook";
-              meta = {
-                description = "Desktop app to compare file locations and see how exactly they differ";
-                inherit license;
-                mainProgram = "symbolon-app";
-                platforms = lib.platforms.linux;
-              };
-            }
-          );
+          symbolon-app = rustPlatform.buildRustPackage (finalAttrs: {
+            pname = "symbolon-app";
+            inherit version;
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = lib.fileset.unions [
+                ./Cargo.toml
+                ./Cargo.lock
+                ./crates
+                ./design
+                # The token build writes this page; its directory must exist.
+                ./docs/design/tokens.md
+              ];
+            };
+            cargoLock.lockFile = ./Cargo.lock;
+            buildAndTestSubdir = "crates/symbolon-app";
+            pnpmRoot = uiRoot;
+            pnpmDeps = pkgs.fetchPnpmDeps {
+              inherit (finalAttrs) pname version src;
+              sourceRoot = "${finalAttrs.src.name}/${uiRoot}";
+              fetcherVersion = 5;
+              hash = "sha256-/5GEZR7+cST/YuutYQ8cWkU/Y/XF1vrztQs8vJj1CCc=";
+            };
+            nativeBuildInputs = with pkgs; [
+              cargo-tauri.hook
+              nodejs_24
+              pnpm
+              pnpmConfigHook
+              pkg-config
+              wrapGAppsHook3
+            ];
+            buildInputs = tauriLibs pkgs;
+            # Tests run under nextest in CI and `just test`.
+            doCheck = false;
+            meta = {
+              description = "Desktop app to compare file locations and see how exactly they differ";
+              inherit license;
+              mainProgram = "symbolon-app";
+              platforms = lib.platforms.linux;
+            };
+          });
         in
         {
           inherit symbolon symbolon-app;
