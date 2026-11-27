@@ -17,7 +17,7 @@ flowchart LR
 
 ## Two halves: `Scanner` and `Query`
 
-Core exposes two independent APIs over one catalog:
+Core exposes two independent APIs over one catalog (all types are in the [API reference](development/api.md)):
 
 ```mermaid
 flowchart LR
@@ -37,10 +37,10 @@ flowchart LR
     readers -- "results" --> client
 ```
 
-- **`Scanner`** scans one location, writes entries in short transactions and streams events over a channel. It supports cancel and pause.
-- **`Query`** is read-only. It uses separate SQLite connections in WAL mode, so it can browse partial results while a scan is still writing.
-- **`Comparison`** compares two or more sides (locations or subpaths) from the catalog. It copies the compared entries into temporary tables on its own connection, classifies them with SQL, and serves a summary, rows by cursor or by offset in path or size order, a folder tree with totals, and counts by extension and size; `resolve` hashes on demand what decides a row ([ADR-0010](adr/0010-comparison-engine.md), [ADR-0023](adr/0023-offset-reads.md)).
-- **`Catalog::export` / `Catalog::import`** move one location between catalogs as a `.symbolon` file; imported locations compare like any other but are never scanned ([ADR-0005](adr/0005-export-format-and-import-conflicts.md), [ADR-0013](adr/0013-imported-locations.md)).
+- **[`Scanner`](api/symbolon_core/scan/struct.Scanner.html)** scans one location, writes entries in short transactions and streams events over a channel. It supports cancel and pause.
+- **[`Query`](api/symbolon_core/query/struct.Query.html)** is read-only. It uses separate SQLite connections in WAL mode, so it can browse partial results while a scan is still writing.
+- **[`Comparison`](api/symbolon_core/compare/struct.Comparison.html)** compares two or more sides (locations or subpaths) from the catalog. It copies the compared entries into temporary tables on its own connection, classifies them with SQL, and serves a summary, rows by cursor or by offset in path or size order, a folder tree with totals, and counts by extension and size; `resolve` hashes on demand what decides a row ([ADR-0010](adr/0010-comparison-engine.md), [ADR-0023](adr/0023-offset-reads.md)).
+- **[`Catalog::export`](api/symbolon_core/catalog/struct.Catalog.html#method.export) / [`Catalog::import`](api/symbolon_core/catalog/struct.Catalog.html#method.import)** move one location between catalogs as a `.symbolon` file; imported locations compare like any other but are never scanned ([ADR-0005](adr/0005-export-format-and-import-conflicts.md), [ADR-0013](adr/0013-imported-locations.md)).
 
 Only one scan of a location runs at a time, across processes, enforced by an OS file lock ([ADR-0012](adr/0012-scan-lock.md)). The `symbolon` CLI is a thin client of these APIs: it parses arguments, calls core, and renders tables, JSON or CSV ([ADR-0011](adr/0011-cli-conventions.md), [Command-line usage](cli.md)).
 
@@ -87,7 +87,7 @@ Files are hashed on the phone, so only the index crosses USB. If the agent canno
 
 ## The desktop app
 
-The app is a thin client of both halves ([ADR-0024](adr/0024-app-core-bridge.md)). Screens talk to a `Backend` interface; its Tauri implementation calls commands that run methods of one long-lived `AppState` on a blocking pool.
+The app is a thin client of both halves ([ADR-0024](adr/0024-app-core-bridge.md)). Screens talk to a `Backend` interface; its Tauri implementation calls commands that run methods of one long-lived [`AppState`](api/symbolon_app/state/struct.AppState.html) on a blocking pool.
 
 ```mermaid
 flowchart LR

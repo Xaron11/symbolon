@@ -19,17 +19,15 @@ nextest profiles live in `.config/nextest.toml`; `just test-ci` uses `--profile 
 
 | Kind                 | Where                                                         | Tools                                   |
 | -------------------- | ------------------------------------------------------------- | --------------------------------------- |
-| Unit                 | `#[cfg(test)] mod tests` next to the code                     | std, `pretty_assertions` where useful   |
+| Unit                 | `#[cfg(test)] mod tests` next to the code                     | std                                     |
 | Property             | Same module or `tests/`; invariants of compare, pathkey, hash | `proptest`                              |
 | Integration (core)   | `crates/symbolon-core/tests/`, generated trees in tempdirs    | `tempfile`                              |
-| CLI end-to-end       | `crates/symbolon-cli/tests/`                                  | `assert_cmd`, `insta` snapshots         |
+| CLI end-to-end       | `crates/symbolon-cli/tests/`                                  | the built binary, `insta` snapshots     |
 | Schema migrations    | `crates/symbolon-core/tests/migrations.rs` + fixtures         | one SQLite fixture per released version |
 | Android logic        | Against a mock `AndroidTransport`; no device needed           | —                                       |
 | Frontend             | `*.test.ts` next to the code                                  | vitest                                  |
 | Benchmarks           | `crates/*/benches/`                                           | criterion                               |
 | Real device (manual) | `just android-probe`; record results in the PR or an ADR      | —                                       |
-
-These crates are added as dev-dependencies when the first test needs them (M1).
 
 ## Rules
 

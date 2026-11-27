@@ -1,3 +1,5 @@
+# rustfmt run on single files (treefmt, editors) cannot read the edition from Cargo.toml.
+edition = "2024"
 style_edition = "2024"
 newline_style = "Unix"
 use_field_init_shorthand = true

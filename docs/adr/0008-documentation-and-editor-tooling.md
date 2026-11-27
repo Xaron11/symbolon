@@ -11,7 +11,7 @@ The project needs documentation that stays correct as code lands (API docs, conc
 
 ### Documentation
 
-- **API:** rustdoc for every crate. `missing_docs` across the workspace, rustdoc lints (`broken_intra_doc_links`, `private_intra_doc_links`, `invalid_rust_codeblocks`, …) and clippy's doc lints (`missing_errors_doc`, `missing_panics_doc`, `doc_markdown`). CI builds rustdoc with `-D warnings`; examples are doctests.
+- **API:** rustdoc for every crate, published with private items: its readers are contributors, and the binaries and the app keep almost everything private. `missing_docs` across the workspace, rustdoc lints (`broken_intra_doc_links`, `private_intra_doc_links`, `invalid_rust_codeblocks`, …) and clippy's doc lints (`missing_errors_doc`, `missing_panics_doc`, `doc_markdown`). CI builds rustdoc with `-D warnings`; examples are doctests.
 - **Frontend:** TSDoc on exported code in `ui/src/lib` and `ui/scripts`, enforced by `eslint-plugin-jsdoc` (`require-jsdoc` for public items; parameter and return tags not required, types carry that).
 - **Book:** mdBook with `docs/` as its source, so existing documents (spec, ADRs, schema, testing) are chapters without duplication. Mermaid diagrams via `mdbook-mermaid` (the JS assets are generated at build time and git-ignored). The rustdoc output is copied into the book under `api/`.
 - **Checks:** lychee checks every internal link and anchor in the built HTML (offline); rumdl lints Markdown structure in pre-commit (MD013 line length disabled, Prettier owns wrapping).
