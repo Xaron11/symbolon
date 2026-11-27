@@ -203,7 +203,8 @@
               ];
             };
             strictDeps = true;
-            cargoExtraArgs = "--locked -p symbolon-app";
+            # `cargo tauri build` turns this feature on.
+            cargoExtraArgs = "--locked -p symbolon-app --features tauri/custom-protocol";
             doCheck = false;
             nativeBuildInputs = [ pkgs.pkg-config ];
             buildInputs = tauriLibs pkgs;

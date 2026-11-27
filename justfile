@@ -129,10 +129,10 @@ deny:
 deny-ui: ui-install
     pnpm --dir {{ ui }} license-check
 
-# Flake checks and the Nix packages of the CLI and the app (slow).
+# Flake checks and the Nix packages of the CLI and the app (slow), e.g. `just nix-check -L` for build logs.
 [group('check')]
-nix-check:
-    nix flake check
+nix-check *args:
+    nix flake check {{ args }}
 
 # --- test ----------------------------------------------------------------------
 
