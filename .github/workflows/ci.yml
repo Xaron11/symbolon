@@ -265,7 +265,8 @@ jobs:
       - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         with:
           tool: just@1.59.0
-      - run: just nix-check
+      # Full build logs: by default Nix shows only the last lines of a failed build.
+      - run: just nix-check -L
 
   android-agent:
     name: android agent (cross-build, static check)
