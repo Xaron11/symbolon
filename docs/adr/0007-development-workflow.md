@@ -35,6 +35,7 @@ After M0 the project needs a workflow that scales past a single bootstrap sessio
 - **Speed:** Nix jobs use lean dev shells (`.#ci` for hooks and docs, `.#android` for the agent) instead of the full developer shell, so they download and cache well under half as much. CI builds without debug info (`CARGO_PROFILE_DEV_DEBUG=0`). The agent's `target/` is cached with `actions/cache`, saved from `main` only.
 - **Selective jobs:** a `changes` job decides per pull request whether the slow `nix` (flake check, CLI package) and `android-agent` jobs are needed: only when the flake, Cargo manifests or lockfiles, the toolchain, the `justfile`, the CI workflow, or non-Rust files of the packaged crates change (plain `.rs` changes are already built by clippy and test). Pushes to `main` always run both, so caches stay warm and nothing slips into a release. `ci-ok` accepts `skipped` for these jobs.
 - **Dependency updates:** Dependabot (cargo, npm, GitHub Actions, nix) weekly, grouped, with a 7-day cooldown. `just update-flake` is the manual fallback for `flake.lock`.
+- **Docs site:** on `main`, once `ci-ok` passes, the `pages` job publishes the site the `docs` job built to GitHub Pages ([ADR-0008](0008-documentation-and-editor-tooling.md)). It is not part of `ci-ok`, so pull requests never wait for it.
 
 ### Versioning and releases
 
