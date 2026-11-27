@@ -188,6 +188,8 @@
           };
 
           uiRoot = "crates/symbolon-app/ui";
+          env = pkgs.rust.envVars;
+          triple = lib.toUpper (builtins.replaceStrings [ "-" ] [ "_" ] env.rustHostPlatformSpec);
           appArgs = {
             pname = "symbolon-app";
             inherit version;
@@ -208,8 +210,14 @@
             doCheck = false;
             nativeBuildInputs = [ pkgs.pkg-config ];
             buildInputs = tauriLibs pkgs;
-            # As cargo-tauri.hook builds, so the cached dependencies match.
-            CARGO_BUILD_TARGET = pkgs.stdenv.hostPlatform.rust.rustcTarget;
+            # cargo-tauri.hook's environment, so the cached dependencies match it: Cargo rebuilds
+            # everything when the linker or the target differs.
+            "CC_${triple}" = env.ccForHost;
+            "CXX_${triple}" = env.cxxForHost;
+            "CARGO_TARGET_${triple}_LINKER" = env.ccForHost;
+            CARGO_BUILD_TARGET = env.rustHostPlatformSpec;
+            HOST_CC = env.ccForBuild;
+            HOST_CXX = env.cxxForBuild;
             CARGO_PROFILE_RELEASE_STRIP = "false";
           };
           symbolon = craneLib.buildPackage (
@@ -239,7 +247,6 @@
             // {
               cargoArtifacts = depsOnly appArgs;
               doInstallCargoArtifacts = false;
-              CARGO_LOG = "cargo::core::compiler::fingerprint=info";
               buildAndTestSubdir = "crates/symbolon-app";
               pnpmRoot = uiRoot;
               pnpmDeps = pkgs.fetchPnpmDeps {
