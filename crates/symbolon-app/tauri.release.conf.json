@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "../../agent/symbolon-agent": "symbolon-agent-aarch64-linux-musl"
+    }
+  }
+}

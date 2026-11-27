@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { buildTokens, DOCS_PATH } from './build-tokens';
+import { buildTokens, DOCS_PATH, sourceGlobs, tokenGroup } from './build-tokens';
 
 let out: string;
 let docs: string;
@@ -64,5 +64,25 @@ describe('buildTokens', () => {
 
 	it('keeps docs/design/tokens.md current', () => {
 		expect(readFileSync(docs, 'utf8')).toBe(readFileSync(DOCS_PATH, 'utf8'));
+	});
+});
+
+describe('token paths on Windows', () => {
+	const dir = 'D:\\a\\symbolon\\design\\tokens';
+
+	it('builds source globs with forward slashes, which globs need', () => {
+		expect(sourceGlobs(dir, 'dark', path.win32)).toEqual([
+			'D:/a/symbolon/design/tokens/primitive/*.json',
+			'D:/a/symbolon/design/tokens/semantic/scale.json',
+			'D:/a/symbolon/design/tokens/semantic/dark.json',
+			'D:/a/symbolon/design/tokens/component.json'
+		]);
+	});
+
+	it('groups token files by name, however their path is written', () => {
+		expect(tokenGroup('D:\\a\\design\\tokens\\semantic\\scale.json')).toBe('scale');
+		expect(tokenGroup('/D:/a/design/tokens/component.json')).toBe('component');
+		expect(tokenGroup('D:/a/design/tokens/primitive/color.json')).toBe('primitive');
+		expect(tokenGroup('/repo/design/tokens/semantic/dark.json')).toBe('theme');
 	});
 });

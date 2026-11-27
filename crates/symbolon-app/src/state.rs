@@ -1,6 +1,6 @@
 //! What the bridge keeps between commands.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use symbolon_core::catalog::{self, Catalog};
@@ -42,8 +42,9 @@ impl AppState {
     }
 
     /// Opens the catalog the CLI uses: `SYMBOLON_CATALOG`, else the default path; phones are
-    /// read with the agent from `SYMBOLON_AGENT` or next to this executable (ADR-0017).
-    pub(crate) fn open_default() -> Result<Self, ApiError> {
+    /// read with the agent from `SYMBOLON_AGENT`, next to this executable (ADR-0017), or in the
+    /// installed app's `resources` (ADR-0026).
+    pub(crate) fn open_default(resources: Option<&Path>) -> Result<Self, ApiError> {
         let path = match std::env::var_os("SYMBOLON_CATALOG") {
             Some(path) => PathBuf::from(path),
             None => catalog::default_catalog_path(&dirs::data_local_dir().ok_or_else(|| {
@@ -59,20 +60,36 @@ impl AppState {
         let transport: Arc<dyn AndroidTransport> = Arc::new(SystemAdb::new());
         let catalog = Catalog::open(&path)?.with_android(
             Arc::clone(&transport),
-            find_agent(),
+            locate_agent(
+                std::env::var_os("SYMBOLON_AGENT").map(PathBuf::from),
+                std::env::current_exe()
+                    .ok()
+                    .as_deref()
+                    .and_then(Path::parent),
+                resources,
+            ),
             AdbOptions::default(),
         );
         Ok(Self::new(catalog, transport))
     }
 }
 
-fn find_agent() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("SYMBOLON_AGENT") {
-        return Some(PathBuf::from(path));
+/// The agent to push to phones: `chosen` (from `SYMBOLON_AGENT`) if set, else the first that
+/// exists of the places next to the executable in `exe_dir` and the bundle's `resources`, where
+/// the packaged app keeps it (`/usr/lib/Symbolon` in the Linux packages).
+fn locate_agent(
+    chosen: Option<PathBuf>,
+    exe_dir: Option<&Path>,
+    resources: Option<&Path>,
+) -> Option<PathBuf> {
+    if chosen.is_some() {
+        return chosen;
     }
-    let exe = std::env::current_exe().ok()?;
-    catalog::agent_candidates(exe.parent()?)
+    exe_dir
+        .map(catalog::agent_candidates)
         .into_iter()
+        .flatten()
+        .chain(resources.map(|dir| dir.join(catalog::AGENT_FILE_NAME)))
         .find(|path| path.is_file())
 }
 
@@ -136,5 +153,42 @@ pub(crate) mod testing {
             AdbOptions::default(),
         );
         (AppState::new(catalog, transport), plugged)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use symbolon_core::catalog::AGENT_FILE_NAME;
+
+    use super::*;
+
+    #[test]
+    fn agent_is_found_next_to_the_app_then_in_its_resources() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("bin");
+        let resources = dir.path().join("lib/Symbolon");
+        fs::create_dir_all(&exe).unwrap();
+        fs::create_dir_all(&resources).unwrap();
+        assert_eq!(locate_agent(None, Some(&exe), Some(&resources)), None);
+
+        fs::write(resources.join(AGENT_FILE_NAME), "agent").unwrap();
+        assert_eq!(
+            locate_agent(None, Some(&exe), Some(&resources)),
+            Some(resources.join(AGENT_FILE_NAME))
+        );
+
+        fs::write(exe.join(AGENT_FILE_NAME), "agent").unwrap();
+        assert_eq!(
+            locate_agent(None, Some(&exe), Some(&resources)),
+            Some(exe.join(AGENT_FILE_NAME))
+        );
+
+        let chosen = PathBuf::from("/elsewhere/agent");
+        assert_eq!(
+            locate_agent(Some(chosen.clone()), Some(&exe), Some(&resources)),
+            Some(chosen)
+        );
     }
 }

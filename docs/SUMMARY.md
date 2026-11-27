@@ -6,6 +6,7 @@
 
 - [Concepts](concepts.md)
 - [Command-line usage](cli.md)
+- [Desktop app](desktop-app.md)
 
 # Design
 
@@ -82,6 +83,7 @@
   - [0023 Offset reads, sort orders and a tree for results](adr/0023-offset-reads.md)
   - [0024 The app–core bridge](adr/0024-app-core-bridge.md)
   - [0025 A debug-only bridge for agents to see the app](adr/0025-agent-inspection-bridge.md)
+  - [0026 Shipping the desktop app](adr/0026-desktop-app-distribution.md)
 
 # Development
 

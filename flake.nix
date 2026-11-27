@@ -164,6 +164,25 @@
             cargoExtraArgs = "--locked -p symbolon-cli";
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+          # The desktop app: Tauri's own build (frontend, then Rust) through nixpkgs' hooks, with
+          # the toolchain from rust-toolchain.toml.
+          rustPlatform = pkgs.makeRustPlatform {
+            cargo = rustFor pkgs [ ];
+            rustc = rustFor pkgs [ ];
+          };
+          uiRoot = "crates/symbolon-app/ui";
+          appSrc = pkgs.lib.fileset.toSource {
+            root = ./.;
+            fileset = pkgs.lib.fileset.unions [
+              ./Cargo.toml
+              ./Cargo.lock
+              ./crates
+              ./design
+              # The token build writes this page; its directory must exist.
+              ./docs/design/tokens.md
+            ];
+          };
         in
         {
           default = self.packages.${pkgs.stdenv.hostPlatform.system}.symbolon;
@@ -192,11 +211,45 @@
               };
             }
           );
+          symbolon-app = rustPlatform.buildRustPackage (finalAttrs: {
+            pname = "symbolon-app";
+            inherit (commonArgs) version;
+            src = appSrc;
+            cargoLock.lockFile = ./Cargo.lock;
+            buildAndTestSubdir = "crates/symbolon-app";
+            pnpmRoot = uiRoot;
+            pnpmDeps = pkgs.fetchPnpmDeps {
+              inherit (finalAttrs) pname version src;
+              sourceRoot = "${finalAttrs.src.name}/${uiRoot}";
+              fetcherVersion = 5;
+              hash = "sha256-LAHz3Qu//oOuKdD59O/vWAgq11QZPgww5/1SSthdLKI=";
+            };
+            nativeBuildInputs = with pkgs; [
+              cargo-tauri.hook
+              nodejs_24
+              pnpm
+              pnpmConfigHook
+              pkg-config
+              wrapGAppsHook3
+            ];
+            buildInputs = tauriLibs pkgs;
+            # Tests run under nextest in CI and `just test`.
+            doCheck = false;
+            meta = {
+              description = "Desktop app to compare file locations and see how exactly they differ";
+              license = with pkgs.lib.licenses; [
+                mit
+                asl20
+              ];
+              mainProgram = "symbolon-app";
+              platforms = pkgs.lib.platforms.linux;
+            };
+          });
         }
       );
 
       checks = forAllSystems (pkgs: {
-        inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) symbolon;
+        inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) symbolon symbolon-app;
       });
 
       devShells = forAllSystems (

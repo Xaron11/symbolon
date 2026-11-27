@@ -65,6 +65,10 @@ jobs:
           if grep -E '^crates/symbolon-(core|cli)/' <<< "$changed" | grep -vE '\.rs$|/(tests|benches)/' | grep -q .; then
             nix=true
           fi
+          # The app package also pins the frontend's dependencies by hash and runs Tauri's build.
+          if grep -qE '^crates/symbolon-app/(ui/(package\.json|pnpm-lock\.yaml)|tauri\.conf\.json|Cargo\.toml)$' <<< "$changed"; then
+            nix=true
+          fi
           if grep -qE '^crates/symbolon-agent/' <<< "$changed"; then agent=true; fi
           { echo "nix=$nix"; echo "agent=$agent"; } | tee -a "$GITHUB_OUTPUT"
 
@@ -257,7 +261,7 @@ jobs:
       - run: cargo deny check
 
   nix:
-    name: nix (flake check, CLI package)
+    name: nix (flake check, CLI and app packages)
     needs: changes
     if: needs.changes.outputs.nix == 'true'
     runs-on: ubuntu-latest
