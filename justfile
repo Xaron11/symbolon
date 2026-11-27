@@ -137,7 +137,7 @@ docs-check: docs docs-links
 docs-links:
     lychee --offline --include-fragments --no-progress --root-dir "$PWD/target/book" --exclude-path target/book/api --exclude-path target/book/404.html 'target/book/**/*.html'
 
-# --- release (see docs/adr/0007-development-workflow.md) ---------------------
+# --- release -----------------------------------------------------------------
 
 changelog:
     git cliff -o CHANGELOG.md
