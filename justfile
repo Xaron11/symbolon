@@ -237,7 +237,7 @@ docs-links:
 # zig's linker ignores the `-O1` rustc passes and warns about it on every link.
 # Build the static aarch64 agent that is pushed to Android phones.
 [group('android')]
-android-scanner:
+build-agent:
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="-A linker_messages" \
         cargo zigbuild --locked -p symbolon-agent --profile release-agent --target {{ agent_target }}
     @echo {{ agent }}
@@ -249,7 +249,7 @@ check-agent:
 
 # Push the agent, list a directory on the device through it (NDJSON), then remove the binary.
 [group('android')]
-android-probe dir="/sdcard/DCIM" serial="": android-scanner
+android-probe dir="/sdcard/DCIM" serial="": build-agent
     scripts/android-probe.sh {{ agent }} {{ quote(dir) }} {{ quote(serial) }}
 
 # --- release -------------------------------------------------------------------
@@ -270,12 +270,12 @@ changelog:
     git cliff -o CHANGELOG.md
     treefmt CHANGELOG.md
 
-# Release archive of the CLI for a target, with the agent from `just android-scanner`, into dist/.
+# Release archive of the CLI for a target, with the agent from `just build-agent`, into dist/.
 [group('release')]
 dist-cli target name="dev":
     scripts/dist-cli.sh {{ quote(target) }} {{ quote(name) }} {{ agent }}
 
-# Release archive of the Android agent from `just android-scanner`, into dist/.
+# Release archive of the Android agent from `just build-agent`, into dist/.
 [group('release')]
 dist-agent name="dev":
     scripts/dist-agent.sh {{ quote(name) }} {{ agent }}

@@ -84,7 +84,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           tauri-libs: "false"
-      # Where `just android-scanner` puts it, so the archive picks it up as in a local build.
+      # Where `just build-agent` puts it, so the archive picks it up as in a local build.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: agent-binary
@@ -113,7 +113,7 @@ jobs:
           SHA: ${{ needs.verify.outputs.sha }}
         run: '[[ "$(git rev-parse HEAD)" == "$SHA" ]] || { echo "::error::$TAG moved after it was verified"; exit 1; }'
       - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
-      - run: nix develop .#android -c just android-scanner check-agent dist-agent "$TAG"
+      - run: nix develop .#android -c just build-agent check-agent dist-agent "$TAG"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-agent

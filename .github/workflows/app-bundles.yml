@@ -91,7 +91,7 @@ jobs:
           echo "$sha  $dir/$asset" | sha256sum -c -
           if [[ "$asset" == *.zip ]]; then 7z x -bd -o"$dir" "$dir/$asset" >/dev/null; else tar -xzf "$dir/$asset" -C "$dir"; fi
           echo "$dir" >> "$GITHUB_PATH"
-      # Where `just android-scanner` puts it, so the release config finds it as in a local build.
+      # Where `just build-agent` puts it, so the release config finds it as in a local build.
       - if: inputs.agent
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

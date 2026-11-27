@@ -7,7 +7,7 @@
 - **Release archives** (Linux x86-64, Windows x86-64) on the [releases page](https://github.com/Xaron11/symbolon/releases) contain the binary, man pages (`man/`), completion scripts (`completions/`), and the Android agent `symbolon-agent-aarch64-linux-musl`, which Symbolon pushes to phones to scan them.
 - **Nix:** `nix run github:Xaron11/symbolon -- --help`, or add the flake's `packages.<system>.symbolon` to your system. The package installs man pages and bash, zsh and fish completions. It does not include the Android agent yet: download it from the releases page and point `SYMBOLON_AGENT` at it, or phones are read with the SHA-256 fallback.
 - **Desktop app:** packages for Linux and Windows and a Nix package are described in [Desktop app](desktop-app.md).
-- **From source:** `cargo build --release -p symbolon-cli` in the dev shell; the binary is `target/release/symbolon`. `just android-scanner` builds the agent (`target/aarch64-unknown-linux-musl/release-agent/symbolon-agent`); set `SYMBOLON_AGENT` to its path.
+- **From source:** `cargo build --release -p symbolon-cli` in the dev shell; the binary is `target/release/symbolon`. `just build-agent` builds the agent (`target/aarch64-unknown-linux-musl/release-agent/symbolon-agent`); set `SYMBOLON_AGENT` to its path.
 
 Shell completions for other setups: `symbolon completions bash|zsh|fish|elvish|powershell` prints the script, for example `symbolon completions zsh > ~/.zfunc/_symbolon`.
 

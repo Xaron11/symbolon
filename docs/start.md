@@ -236,7 +236,7 @@ Requirements: stable exit codes, `--json` for scripting, progress on stderr, res
 ## 12. Repository and tooling setup
 
 - `flake.nix`: `devShell` with Rust toolchain (pinned via `rust-toolchain.toml`), Tauri 2 Linux dependencies, Node/pnpm, `just`, `cargo-deny`, `cargo-nextest`, `adb`; plus a `packages.default` building the CLI. `.envrc` with `use flake`.
-- `justfile`: `build`, `test`, `lint`, `fmt`, `deny`, `ui-dev`, `app-dev`, `bench`, `android-scanner` (cross-compile).
+- `justfile`: `build`, `test`, `lint`, `fmt`, `deny`, `ui-dev`, `app-dev`, `bench`, `build-agent` (cross-compile).
 - **CI (GitHub Actions):** fmt, clippy, nextest, `cargo-deny`, `nix build`; matrix Linux + Windows for `core` and `cli`; frontend lint/typecheck/build; cache with `Swatinem/rust-cache`. Release workflow producing CLI binaries and the Android scanner artifact on tags.
 - **Conventions:** Conventional Commits, `CHANGELOG.md` (Keep a Changelog format, or `git-cliff`), `.github/pull_request_template.md` (summary, motivation, testing, screenshots for UI, schema/migration impact, security impact), `CONTRIBUTING.md` short, `docs/adr/0000-template.md`.
 - Licensing:

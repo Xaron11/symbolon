@@ -32,7 +32,7 @@ Only repository admins can create `v*` tags, and the signing key must be listed 
 The release jobs run the same recipes you can run in the dev shell, each writing into `dist/` (git-ignored):
 
 ```sh
-just android-scanner                                  # the agent the packages carry
+just build-agent                                  # the agent the packages carry
 just dist-cli x86_64-unknown-linux-gnu                # dist/symbolon-dev-x86_64-unknown-linux-gnu.tar.gz
 just dist-agent                                       # dist/symbolon-agent-dev-aarch64-linux-musl.tar.gz
 just dist-app appimage,deb dev true                   # AppImage and .deb with the agent inside
