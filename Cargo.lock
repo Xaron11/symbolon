@@ -4292,7 +4292,7 @@ dependencies = [
 
 [[package]]
 name = "symbolon-agent"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4305,7 +4305,7 @@ dependencies = [
 
 [[package]]
 name = "symbolon-app"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "dirs",
  "serde",
@@ -4322,7 +4322,7 @@ dependencies = [
 
 [[package]]
 name = "symbolon-cli"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4341,7 +4341,7 @@ dependencies = [
 
 [[package]]
 name = "symbolon-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "blake3",
  "criterion",
