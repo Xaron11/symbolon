@@ -15,6 +15,8 @@ The desktop app's interface lives in `crates/symbolon-app/ui` (SvelteKit, Svelte
 | Lints and type checks             | `just lint-ui` (repository root)                      |
 | Tests                             | `just test-ui` (repository root)                      |
 
+ESLint caches its results in `node_modules/.cache/eslint/`, so a lint after a small change takes seconds instead of half a minute. A cached file is not linted again when only a type it imports changes; CI lints without a cache and catches that. Delete the directory to lint everything locally.
+
 ## Letting an agent see the app
 
 `just app-dev-mcp` starts the dev app with the [MCP bridge](../adr/0025-agent-inspection-bridge.md). An agent with the Tauri MCP server (`@hypothesi/tauri-mcp-server`, the same version as the `tauri-plugin-mcp-bridge` crate) can then take screenshots, read the accessibility tree, click, type and read console logs in the real window. For Claude Code, register the server with `claude mcp add tauri -- npx -y @hypothesi/tauri-mcp-server@0.13.2`, then restart it. The bridge listens on 127.0.0.1 only, but any local process can drive the app while it runs.
