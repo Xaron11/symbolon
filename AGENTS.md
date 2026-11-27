@@ -19,7 +19,7 @@ Symbolon compares two or more file locations (directories, disks, pendrives, And
 
 ## Environment and commands
 
-Everything comes from the Nix dev shell (`direnv allow` or `nix develop`), which also installs the git hooks. Run `just` to list recipes. The ones you need:
+Everything comes from the Nix dev shell (`direnv allow` or `nix develop`), which also installs the git hooks. Run `just` to list recipes; anything longer than a few lines lives in `scripts/` (bash, checked by shellcheck and formatted by shfmt). The ones you need:
 
 | Task                            | Command                                          |
 | ------------------------------- | ------------------------------------------------ |

@@ -20,6 +20,12 @@ includes = ["*.rs"]
 command = "nixfmt"
 includes = ["*.nix"]
 
+[formatter.shfmt]
+# Indentation comes from .editorconfig, which bash-language-server's formatting reads too.
+command = "shfmt"
+options = ["--write"]
+includes = ["*.sh"]
+
 [formatter.taplo]
 command = "taplo"
 options = ["format"]
