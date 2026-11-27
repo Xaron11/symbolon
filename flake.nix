@@ -234,7 +234,7 @@
               inherit (finalAttrs) pname version src;
               sourceRoot = "${finalAttrs.src.name}/${uiRoot}";
               fetcherVersion = 5;
-              hash = "sha256-LAHz3Qu//oOuKdD59O/vWAgq11QZPgww5/1SSthdLKI=";
+              hash = "sha256-/5GEZR7+cST/YuutYQ8cWkU/Y/XF1vrztQs8vJj1CCc=";
             };
             nativeBuildInputs = with pkgs; [
               cargo-tauri.hook
