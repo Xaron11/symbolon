@@ -4,17 +4,17 @@ The desktop app's interface lives in `crates/symbolon-app/ui` (SvelteKit, Svelte
 
 ## Running it
 
-| Task                              | Command (in `crates/symbolon-app/ui` unless noted)    |
+| Task                              | Command (repository root)                             |
 | --------------------------------- | ----------------------------------------------------- |
-| Desktop app with hot reload       | `just app-dev` (repository root)                      |
-| Same, drivable by agents          | `just app-dev-mcp` (repository root; see below)       |
-| Demo data to look at              | `just demo` (repository root; see below)              |
-| Interface alone in a browser      | `pnpm dev`                                            |
-| Rebuild tokens after editing JSON | `pnpm tokens` (`dev`, `build`, `lint`, `test` run it) |
-| Regenerate the keyboard page      | `pnpm keymap-doc`                                     |
-| Regenerate the command bindings   | `just bindings` (repository root)                     |
-| Lints and type checks             | `just lint-ui` (repository root)                      |
-| Tests                             | `just test-ui` (repository root)                      |
+| Desktop app with hot reload       | `just app-dev`                                        |
+| Same, drivable by agents          | `just app-dev-mcp` (see below)                        |
+| Demo data to look at              | `just demo` (see below)                               |
+| Interface alone in a browser      | `just ui-dev`                                         |
+| Rebuild tokens after editing JSON | `just tokens` (`ui-dev`, `lint-ui`, `test-ui` run it) |
+| Regenerate the keyboard page      | `just keymap-doc`                                     |
+| Regenerate the command bindings   | `just bindings`                                       |
+| Lints and type checks             | `just lint-ui`                                        |
+| Tests                             | `just test-ui`                                        |
 
 ESLint caches its results in `node_modules/.cache/eslint/`, so a lint after a small change takes seconds instead of half a minute. A cached file is not linted again when only a type it imports changes; CI lints without a cache and catches that. Delete the directory to lint everything locally.
 

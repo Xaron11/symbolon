@@ -7,12 +7,13 @@ The bar comes from spec §11. This document says where each kind of test lives a
 | Command                  | What                                                                     |
 | ------------------------ | ------------------------------------------------------------------------ |
 | `just test`              | All Rust tests with nextest, then doctests.                              |
+| `just test-ci`           | What CI runs: on Linux instrumented, with the ignored acceptance tests.  |
 | `just test-ui`           | Frontend unit tests (vitest).                                            |
 | `just coverage [--html]` | Instrumented nextest run with a line-coverage summary (cargo-llvm-cov).  |
 | `just bench`             | criterion benchmarks; results and method in [Benchmarks](benchmarks.md). |
 | `just test-acceptance`   | Slow acceptance tests (100k-file scan); CI runs them on Linux.           |
 
-nextest profiles live in `.config/nextest.toml`; CI uses `--profile ci` (no fail-fast, JUnit output, published as an artifact). On Linux CI runs the suite once, instrumented, and writes the coverage summary to the job page.
+nextest profiles live in `.config/nextest.toml`; `just test-ci` uses `--profile ci` (no fail-fast, JUnit output, published as an artifact). On Linux CI runs the suite once, instrumented, and writes the coverage summary to the job page.
 
 ## Kinds of tests
 

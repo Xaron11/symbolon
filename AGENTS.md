@@ -19,21 +19,23 @@ Symbolon compares two or more file locations (directories, disks, pendrives, And
 
 ## Environment and commands
 
-Everything comes from the Nix dev shell (`direnv allow` or `nix develop`), which also installs the git hooks. Run `just` to list recipes; anything longer than a few lines lives in `scripts/` (bash, checked by shellcheck and formatted by shfmt). The ones you need:
+Everything comes from the Nix dev shell (`direnv allow` or `nix develop`), which also installs the git hooks. `just` is the one entry point, locally and in CI: every workflow job runs a recipe, and the workflows only set up tools, caches and artifacts. Run `just` to list the recipes by group; anything longer than a few lines lives in `scripts/` (bash, checked by shellcheck and formatted by shfmt). The ones you need:
 
 | Task                            | Command                                          |
 | ------------------------------- | ------------------------------------------------ |
 | Format everything               | `just fmt`                                       |
-| All lints (what CI runs)        | `just lint`                                      |
+| Everything CI checks            | `just check`                                     |
+| All lints                       | `just lint`                                      |
 | Rust lints only / frontend only | `just lint-rust` / `just lint-ui`                |
 | Tests                           | `just test` and `just test-ui`                   |
+| Nix packages (slow)             | `just nix-check`                                 |
 | Coverage                        | `just coverage` (`--html` for a report)          |
 | Licenses and advisories         | `just deny`                                      |
 | Desktop app with hot reload     | `just app-dev`                                   |
 | Android agent                   | `just android-scanner check-agent`               |
 | Docs (book + API, link check)   | `just docs-check` (`just docs-serve` to preview) |
 
-Before you say a change is done: `just fmt lint test` (plus `just test-ui` for frontend changes, `just docs-check` for docs changes) must pass. The pre-push hook runs the same checks for the parts a push touches; CI runs all of them.
+Before you say a change is done: `just fmt check` must pass (plus `just nix-check` when the flake, Cargo manifests or packaging change). The pre-push hook runs the Rust and frontend checks for the parts a push touches; CI runs all of them. A new CI step is a recipe first, then a workflow line that calls it.
 
 Language servers for every file type come from the dev shell; see `docs/development/editor.md`. The book in `docs/` (mdBook) explains concepts and architecture; start there when the code alone does not tell you why.
 
