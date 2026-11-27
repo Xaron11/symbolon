@@ -105,6 +105,7 @@
           nixfmt
           taplo
           shfmt
+          just
         ];
       treefmtFor =
         pkgs:

@@ -20,7 +20,7 @@ After M0 the project needs a workflow that scales past a single bootstrap sessio
 
 - **treefmt** (`treefmt.toml`) formats everything: rustfmt, nixfmt, taplo, and Prettier for Markdown/YAML/JSON/TS/Svelte. Prettier is the frontend's locked version, so editors, hooks and CI agree.
 - **Rust:** clippy `pedantic` plus restriction lints (`unwrap_used`, `expect_used`, `panic`, `todo`, `unimplemented`, `dbg_macro`, `undocumented_unsafe_blocks`, `allow_attributes_without_reason`), rustc lints (`unreachable_pub`, `rust_2018_idioms`, …), `missing_docs` and no printing in `core`; `cargo shear` for unused dependencies; rustdoc with `-D warnings`. This supersedes the lint paragraph of ADR-0001.
-- **Frontend:** `typescript-eslint` strict-type-checked + stylistic, stricter `tsconfig` flags, `svelte-check`.
+- **Frontend:** `typescript-eslint` strict-type-checked + stylistic, stricter `tsconfig` flags, `svelte-check`, Stylelint; warnings fail like errors, as in Rust.
 - **Hooks** via `git-hooks.nix`, installed by the dev shell:
   - `pre-commit`: treefmt, typos, statix, deadnix, actionlint, zizmor, merge-conflict and private-key detection;
   - `commit-msg`: convco (Conventional Commits);
