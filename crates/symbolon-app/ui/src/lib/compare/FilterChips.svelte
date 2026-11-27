@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/compare-screen.md -->
+<!-- Spec: docs/design/screens/compare-screen.md -->
 <script lang="ts">
 	import type { CategoryName } from '../api/index.ts';
 	import { Check } from '@lucide/svelte';

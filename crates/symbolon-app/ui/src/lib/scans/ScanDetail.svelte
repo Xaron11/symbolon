@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/scan-detail.md -->
+<!-- Spec: docs/design/screens/scan-detail.md -->
 <script lang="ts">
 	import {
 		backend,

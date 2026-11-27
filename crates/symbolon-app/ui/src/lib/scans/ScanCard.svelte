@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/scan-card.md -->
+<!-- Spec: docs/design/screens/scan-card.md -->
 <script lang="ts">
 	import type { ScanUpdate } from '../api/index.ts';
 	import Badge from '../components/Badge/Badge.svelte';

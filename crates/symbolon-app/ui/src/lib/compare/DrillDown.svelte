@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/drill-down.md -->
+<!-- Spec: docs/design/screens/drill-down.md -->
 <script lang="ts">
 	import { File, Folder, Link } from '@lucide/svelte';
 	import {

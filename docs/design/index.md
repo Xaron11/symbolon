@@ -1,6 +1,6 @@
 # Design system
 
-Symbolon's interface is built from one platform-neutral design system: design tokens, component specs and a keymap. The desktop app implements it in Svelte; future Android and web clients implement the same specs ([ADR-0021](../adr/0021-gui-clients.md), [ADR-0022](../adr/0022-design-system.md)).
+Symbolon's interface is built from one platform-neutral design system: design tokens, component and screen specs, and a keymap. The desktop app implements it in Svelte; future Android and web clients implement the same specs ([ADR-0021](../adr/0021-gui-clients.md), [ADR-0022](../adr/0022-design-system.md)).
 
 ## Principles
 

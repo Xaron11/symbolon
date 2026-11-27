@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/location-table.md -->
+<!-- Spec: docs/design/screens/location-table.md -->
 <script lang="ts">
 	import { Ellipsis } from '@lucide/svelte';
 	import type { HashPolicy, LocationView } from '../api/index.ts';
