@@ -26,6 +26,7 @@ Do not install these servers with a separate manager (Mason, VS Code extensions 
 | Markdown           | `marksman server` (links, headings); `rumdl server` (lint)                                 | `.rumdl.toml`                                                                        |
 | Spelling (all)     | `typos-lsp`                                                                                | `_typos.toml`                                                                        |
 | `justfile`         | `just-lsp`                                                                                 | —                                                                                    |
+| Shell (`scripts/`) | `bash-language-server start` (runs `shellcheck`, formats with `shfmt`)                     | `.editorconfig`                                                                      |
 
 The frontend servers need `node_modules`; run `just ui-install` once.
 
@@ -99,7 +100,7 @@ vim.lsp.config("rumdl", {
 
 vim.lsp.enable({
   "rust_analyzer", "nixd", "taplo", "svelte", "vtsls", "eslint",
-  "jsonls", "cssls", "html", "yamlls", "marksman", "rumdl", "typos_lsp", "just",
+  "jsonls", "cssls", "html", "yamlls", "marksman", "rumdl", "typos_lsp", "just", "bashls",
 })
 ```
 

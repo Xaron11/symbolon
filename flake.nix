@@ -87,6 +87,8 @@
           rumdl
           typos-lsp
           just-lsp
+          bash-language-server
+          shellcheck
         ];
 
       docsTools =
@@ -102,6 +104,7 @@
           (hostRust pkgs)
           nixfmt
           taplo
+          shfmt
         ];
       treefmtFor =
         pkgs:
@@ -125,6 +128,11 @@
               settings.formatters = formatters pkgs;
             };
             typos.enable = true;
+            shellcheck = {
+              enable = true;
+              # direnv runs .envrc; editing it to add a shell directive would make everyone re-allow it.
+              excludes = [ "^\\.envrc$" ];
+            };
             rumdl.enable = true;
             statix.enable = true;
             deadnix.enable = true;

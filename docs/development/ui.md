@@ -8,12 +8,17 @@ The desktop app's interface lives in `crates/symbolon-app/ui` (SvelteKit, Svelte
 | --------------------------------- | ----------------------------------------------------- |
 | Desktop app with hot reload       | `just app-dev` (repository root)                      |
 | Same, drivable by agents          | `just app-dev-mcp` (repository root; see below)       |
+| Demo data to look at              | `just demo` (repository root; see below)              |
 | Interface alone in a browser      | `pnpm dev`                                            |
 | Rebuild tokens after editing JSON | `pnpm tokens` (`dev`, `build`, `lint`, `test` run it) |
 | Regenerate the keyboard page      | `pnpm keymap-doc`                                     |
 | Regenerate the command bindings   | `just bindings` (repository root)                     |
 | Lints and type checks             | `just lint-ui` (repository root)                      |
 | Tests                             | `just test-ui` (repository root)                      |
+
+## Demo data
+
+`just demo` writes two generated locations, Laptop and Backup, to `target/demo/` and scans them into `target/demo/catalog.db`. Their comparison has identical, different, only-in, moved and renamed files, duplicates, and several extensions and sizes. Start the app on it with `SYMBOLON_CATALOG=target/demo/catalog.db just app-dev` (or `app-dev-mcp`). `just demo 200000` makes a large comparison instead (about 40 s); running `just demo` again replaces the data.
 
 ## Letting an agent see the app
 
