@@ -47,7 +47,8 @@ pub fn run() -> Result<(), tauri::Error> {
         .setup(|app| {
             #[cfg(feature = "mcp-bridge")]
             app.add_capability(MCP_CAPABILITY)?;
-            let state = AppState::open_default().map_err(|e| e.message)?;
+            let resources = app.path().resource_dir().ok();
+            let state = AppState::open_default(resources.as_deref()).map_err(|e| e.message)?;
             app.manage(Arc::new(state));
             Ok(())
         })
