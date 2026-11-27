@@ -7,6 +7,7 @@
 	import DropdownMenu from '../components/DropdownMenu/DropdownMenu.svelte';
 	import type { MenuItem } from '../components/menu';
 	import { formatAgo, formatBytes } from '../format';
+	import { outcomeLabel } from '../scans/progress';
 	import { scanBlocked, statusInfo } from './status';
 
 	interface Props {
@@ -122,12 +123,18 @@
 					{#if blocked}<p class="note">{blocked}</p>{/if}
 				</td>
 				<td>
-					{#if last}
-						<span title={new Date(last.finishedMs ?? last.startedMs).toLocaleString()}>
+					{#if scanning.includes(location.label)}
+						<a class="scan-link" href="/scans" aria-label="Scanning {location.label}">Scanning…</a>
+					{:else if last}
+						<a
+							class="scan-link"
+							href="/scans/{last.scanId}"
+							title={new Date(last.finishedMs ?? last.startedMs).toLocaleString()}
+						>
 							{formatAgo(last.finishedMs ?? last.startedMs)}
-						</span>
+						</a>
 						{#if last.status !== 'Completed'}<span class="note">
-								{last.status.toLowerCase()}
+								{outcomeLabel(last.status).toLowerCase()}
 							</span>{/if}
 					{:else}
 						<span class="muted">Never</span>
@@ -138,21 +145,18 @@
 				<td>{location.hashPolicy === 'Eager' ? 'Every scan' : 'When compared'}</td>
 				<td class="end">
 					<div class="row-actions">
-						{#if scanning.includes(location.label)}
-							<a class="scanning" href="/scans" aria-label="Scanning {location.label}">Scanning…</a>
-						{:else}
-							<Button
-								size="sm"
-								variant="secondary"
-								aria-label="Scan {location.label}"
-								disabled={blocked !== undefined}
-								onclick={() => {
-									onscan(location.label);
-								}}
-							>
-								Scan
-							</Button>
-						{/if}
+						<Button
+							size="sm"
+							variant="secondary"
+							aria-label="Scan {location.label}"
+							loading={scanning.includes(location.label)}
+							disabled={blocked !== undefined}
+							onclick={() => {
+								onscan(location.label);
+							}}
+						>
+							Scan
+						</Button>
 						<DropdownMenu label="Actions for {location.label}" items={items(location)} size="sm">
 							{#snippet trigger()}<Ellipsis aria-hidden="true" />{/snippet}
 						</DropdownMenu>
@@ -232,10 +236,14 @@
 		gap: var(--sy-space-4);
 	}
 
-	.scanning {
-		color: var(--sy-color-text-secondary);
-		font-size: var(--sy-font-size-small);
-		white-space: nowrap;
+	.scan-link {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.scan-link:hover {
+		color: var(--sy-color-accent-default);
+		text-decoration: underline;
 	}
 
 	.note,

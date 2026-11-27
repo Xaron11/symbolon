@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { EntryView, MemorySeed } from '../api/index.ts';
 import { expectNoAxeViolations } from '../../test/axe';
 import { location, renderWithBackend } from '../../test/backend';
+import { formatAgo } from '../format';
 import LocationDetail from './LocationDetail.svelte';
 
 const entry = (key: string, folder = false): EntryView => ({
@@ -47,7 +48,8 @@ const seed = (): MemorySeed => ({
 	recentScans: [
 		{
 			label: 'Photos',
-			scan: lastScan
+			scan: lastScan,
+			latest: true
 		}
 	],
 	warnings: { 9: [{ path: '2024/locked.jpg', kind: 'permission', message: 'permission denied' }] }
@@ -66,6 +68,27 @@ describe('LocationDetail', () => {
 			'/locations'
 		);
 		expect(within(trail).getByText('Photos').getAttribute('aria-current')).toBe('page');
+	});
+
+	it('says when it was last scanned, linking to that scan', async () => {
+		detail();
+		const last = await screen.findByRole('link', { name: formatAgo(lastScan.finishedMs) });
+		expect(last.getAttribute('href')).toBe('/scans/9');
+		expect(screen.getByText(/Hashed when compared/)).toBeTruthy();
+	});
+
+	it('renames and removes the location from its own page', async () => {
+		const user = userEvent.setup({ pointerEventsCheck: 0 });
+		const { navigate } = detail();
+		await user.click(await screen.findByRole('button', { name: 'Actions for Photos' }));
+		await user.click(await screen.findByRole('menuitem', { name: 'Rename…' }));
+		const rename = await screen.findByRole('dialog', { name: 'Rename Photos' });
+		await user.clear(within(rename).getByLabelText('New label'));
+		await user.type(within(rename).getByLabelText('New label'), 'Pics');
+		await user.click(within(rename).getByRole('button', { name: 'Rename' }));
+		await waitFor(() => {
+			expect(navigate).toHaveBeenCalledWith('/locations/Pics');
+		});
 	});
 
 	it('shows what the catalog holds', async () => {
@@ -98,7 +121,7 @@ describe('LocationDetail', () => {
 			elapsedMs: 10
 		});
 		expect(await screen.findByText('Scanning Photos — 40 files')).toBeTruthy();
-		expect(screen.getByRole('button', { name: 'Scan' }).hasAttribute('disabled')).toBe(true);
+		expect(screen.getByRole('button', { name: 'Scan' }).getAttribute('aria-busy')).toBe('true');
 	});
 
 	it('browses the catalog and follows a running scan', async () => {
@@ -129,13 +152,16 @@ describe('LocationDetail', () => {
 
 	it('lists past scans and the warnings of the last one', async () => {
 		const user = userEvent.setup();
-		detail();
+		const { navigate } = detail();
 		await user.click(await screen.findByRole('tab', { name: 'Scans' }));
 		const history = await screen.findByRole('grid', { name: 'Scans of Photos' });
 		await waitFor(() => {
-			expect(within(history).getByText('Completed')).toBeTruthy();
+			expect(within(history).getByText('Complete')).toBeTruthy();
 		});
-		await user.click(screen.getByRole('tab', { name: 'Warnings' }));
+		expect(within(history).getByText('Latest')).toBeTruthy();
+		await user.click(within(history).getByText('Complete'));
+		expect(navigate).toHaveBeenCalledWith('/scans/9');
+		await user.click(screen.getByRole('tab', { name: 'Warnings 1' }));
 		const warnings = await screen.findByRole('grid', { name: 'Warnings of the last scan' });
 		await waitFor(() => {
 			expect(within(warnings).getByText('permission denied')).toBeTruthy();
@@ -163,7 +189,7 @@ describe('LocationDetail after a scan', () => {
 		});
 		await scans.start('Photos');
 		data.recentScans = [
-			{ label: 'Photos', scan: { ...lastScan, scanId: 10 } },
+			{ label: 'Photos', scan: { ...lastScan, scanId: 10 }, latest: true },
 			...(data.recentScans ?? [])
 		];
 		backend.emitScan('Photos', {

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use specta_typescript::Number;
 use symbolon_core::catalog::Catalog;
-use symbolon_core::query::{Page, Query};
+use symbolon_core::query::{Page, Query, RecentScan};
 use symbolon_core::scan::{
     ScanError, ScanEvent, ScanHandle, ScanId, ScanOptions, ScanPhase, ScanProgress, ScanSummary,
     Scanner,
@@ -101,6 +101,18 @@ pub(crate) enum ScanUpdate {
 pub(crate) struct RecentScanView {
     pub(crate) label: String,
     pub(crate) scan: ScanBrief,
+    /// Its location's newest scan that has ended.
+    pub(crate) latest: bool,
+}
+
+impl From<&RecentScan> for RecentScanView {
+    fn from(recent: &RecentScan) -> Self {
+        Self {
+            label: recent.label.clone(),
+            scan: ScanBrief::from(&recent.scan),
+            latest: recent.latest,
+        }
+    }
 }
 
 /// A problem a scan recorded.
@@ -468,11 +480,16 @@ impl AppState {
             .recent_scans(&Page::at(offset, limit))?
             .items
             .iter()
-            .map(|recent| RecentScanView {
-                label: recent.label.clone(),
-                scan: ScanBrief::from(&recent.scan),
-            })
+            .map(RecentScanView::from)
             .collect())
+    }
+
+    /// The scan with id `id`, if there is one.
+    pub(crate) fn scan_get(&self, id: i64) -> Result<Option<RecentScanView>, ApiError> {
+        Ok(Query::open(&self.catalog)?
+            .scan(ScanId::from_i64(id))?
+            .as_ref()
+            .map(RecentScanView::from))
     }
 
     pub(crate) fn scans_recent_count(&self) -> Result<u64, ApiError> {
@@ -828,6 +845,13 @@ mod tests {
         assert_eq!(f.state.scans_recent_count().unwrap(), 3);
         let recent = f.state.scans_recent(0, 10).unwrap();
         assert_eq!(recent[0].label, "Photos");
+        assert_eq!(
+            recent.iter().map(|r| r.latest).collect::<Vec<_>>(),
+            [true, false, false]
+        );
+        let older = f.state.scan_get(recent[2].scan.scan_id).unwrap().unwrap();
+        assert_eq!((older.label.as_str(), older.latest), ("Photos", false));
+        assert_eq!(f.state.scan_get(9999).unwrap(), None);
         let id = recent[0].scan.scan_id;
         assert_eq!(f.state.scan_warning_count(id).unwrap(), 0);
         assert_eq!(f.state.scan_warnings(id, 0, 10).unwrap(), []);

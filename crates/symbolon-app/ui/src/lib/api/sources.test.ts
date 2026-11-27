@@ -134,9 +134,9 @@ describe('history sources', () => {
 	it('locationScans pages one location history', async () => {
 		const b = createMemoryBackend({
 			recentScans: [
-				{ label: 'Photos', scan: brief(3) },
-				{ label: 'Stick', scan: brief(2) },
-				{ label: 'Photos', scan: brief(1) }
+				{ label: 'Photos', scan: brief(3), latest: true },
+				{ label: 'Stick', scan: brief(2), latest: true },
+				{ label: 'Photos', scan: brief(1), latest: false }
 			]
 		});
 		const source = locationScans(b, 'Photos');

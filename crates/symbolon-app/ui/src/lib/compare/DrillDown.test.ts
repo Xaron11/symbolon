@@ -269,6 +269,25 @@ describe('row details', () => {
 	});
 });
 
+describe('drill-down details', () => {
+	it('follow the current row while they are open', async () => {
+		const user = userEvent.setup();
+		open();
+		const grid = await list();
+		await waitFor(() => {
+			expect(within(grid).getByText('a.jpg')).toBeTruthy();
+		});
+		grid.focus();
+		await user.keyboard('{Enter}');
+		expect(await screen.findByRole('complementary', { name: 'a.jpg' })).toBeTruthy();
+		grid.focus();
+		await user.keyboard('j');
+		expect(await screen.findByRole('complementary', { name: 'b.jpg' })).toBeTruthy();
+		await user.click(within(grid).getByText('c.jpg'));
+		expect(await screen.findByRole('complementary', { name: 'c.jpg' })).toBeTruthy();
+	});
+});
+
 describe('drill-down focus', () => {
 	it('returns focus to the list when the row panel closes', async () => {
 		const user = userEvent.setup();

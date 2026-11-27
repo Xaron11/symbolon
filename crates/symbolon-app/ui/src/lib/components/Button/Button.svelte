@@ -8,6 +8,8 @@
 		size?: 'sm' | 'md';
 		type?: 'button' | 'submit';
 		loading?: boolean;
+		/** Makes it a link that looks like a button, for actions that go to a page. */
+		href?: string;
 		children: Snippet;
 	}
 
@@ -16,6 +18,7 @@
 		size = 'md',
 		type = 'button',
 		loading = false,
+		href,
 		disabled = false,
 		class: className,
 		onclick,
@@ -24,26 +27,33 @@
 	}: Props = $props();
 </script>
 
-<button
-	{...rest}
-	{type}
-	class={['sy-button', className]}
-	data-variant={variant}
-	data-size={size}
-	disabled={disabled ?? false}
-	aria-busy={loading || undefined}
-	aria-disabled={loading || undefined}
-	onclick={(event) => {
-		// While loading the button keeps focus, so it only ignores activation.
-		if (!loading) onclick?.(event);
-	}}
->
-	{#if loading}<span class="spinner" aria-hidden="true"></span>{/if}
-	{@render children()}
-</button>
+{#if href !== undefined}
+	<a {href} class={['sy-button', className]} data-variant={variant} data-size={size}>
+		{@render children()}
+	</a>
+{:else}
+	<button
+		{...rest}
+		{type}
+		class={['sy-button', className]}
+		data-variant={variant}
+		data-size={size}
+		disabled={disabled ?? false}
+		aria-busy={loading || undefined}
+		aria-disabled={loading || undefined}
+		onclick={(event) => {
+			// While loading the button keeps focus, so it only ignores activation.
+			if (!loading) onclick?.(event);
+		}}
+	>
+		{#if loading}<span class="spinner" aria-hidden="true"></span>{/if}
+		{@render children()}
+	</button>
+{/if}
 
 <style>
 	.sy-button {
+		box-sizing: border-box;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -56,6 +66,7 @@
 		color: var(--sy-color-text-primary);
 		font: inherit;
 		font-weight: var(--sy-font-weight-medium);
+		text-decoration: none;
 		white-space: nowrap;
 		cursor: pointer;
 		transition:

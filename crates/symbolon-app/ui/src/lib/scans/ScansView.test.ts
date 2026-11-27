@@ -34,7 +34,8 @@ const recent = (label: string, status: RecentScanView['scan']['status']): Recent
 		bytes: 2048,
 		warnings: 0,
 		error: null
-	}
+	},
+	latest: false
 });
 
 function view(seed = {}) {
@@ -70,10 +71,11 @@ describe('ScansView', () => {
 		expect(
 			inCard.getByRole('progressbar', { name: 'Scanning Photos' }).getAttribute('aria-valuenow')
 		).toBe('50');
-		expect(inCard.getByText('1,204 files')).toBeTruthy();
-		expect(inCard.getByText('64.0 MiB/s')).toBeTruthy();
-		expect(inCard.getByText('1 min 5 s')).toBeTruthy();
-		expect(inCard.getByText('8 s left')).toBeTruthy();
+		const fact = (name: string) => inCard.getByText(name).nextElementSibling?.textContent;
+		expect(fact('Files')).toBe('1,204');
+		expect(fact('Speed')).toBe('64.0 MiB/s');
+		expect(fact('Elapsed')).toBe('1 min 5 s');
+		expect(fact('Time left')).toBe('8 s');
 		await user.click(inCard.getByRole('button', { name: 'Pause' }));
 		expect(await inCard.findByRole('button', { name: 'Resume' })).toBeTruthy();
 		await user.click(inCard.getByRole('button', { name: 'Cancel' }));
@@ -137,7 +139,7 @@ describe('ScansView details', () => {
 			expect(within(card).getByRole('button', { name: 'Resume' })).toBe(document.activeElement);
 		});
 		expect(within(card).getByText('Paused')).toBeTruthy();
-		expect(within(card).queryByText('8 s left')).toBeNull();
+		expect(within(card).queryByText('Time left')).toBeNull();
 		await user.keyboard('{Enter}');
 		expect(backend.calls.map((c) => c.method)).toContain('scans.resume');
 	});
@@ -163,16 +165,47 @@ describe('ScansView details', () => {
 		expect(screen.getByRole('heading', { level: 2, name: 'Recent scans' })).toBeTruthy();
 	});
 
-	it('opens the location of a recent scan from the keyboard', async () => {
+	it('opens a recent scan with one click or Enter', async () => {
 		const user = userEvent.setup();
 		const { navigate } = view({ recentScans: [recent('My Photos', 'Completed')] });
 		const table = await screen.findByRole('grid', { name: 'Recent scans' });
 		await waitFor(() => {
 			expect(within(table).getByText('My Photos')).toBeTruthy();
 		});
+		await user.click(within(table).getByText('My Photos'));
+		expect(navigate).toHaveBeenLastCalledWith('/scans/1');
+		navigate.mockClear();
 		table.focus();
 		await user.keyboard('{Enter}');
-		expect(navigate).toHaveBeenCalledWith('/locations/My%20Photos');
+		expect(navigate).toHaveBeenLastCalledWith('/scans/1');
+	});
+
+	it('marks each location latest scan and says how long scans took', async () => {
+		const latest = { ...recent('Photos', 'Completed'), latest: true };
+		view({ recentScans: [latest, recent('Photos', 'Completed')] });
+		const table = await screen.findByRole('grid', { name: 'Recent scans' });
+		await waitFor(() => {
+			expect(within(table).getAllByText('Latest')).toHaveLength(1);
+		});
+		expect(within(table).getAllByText('3 min 20 s')).toHaveLength(2);
+	});
+
+	it('sums up the history above it', async () => {
+		view({
+			locations: [location('Photos'), location('Stick')],
+			recentScans: [recent('Photos', 'Completed'), recent('Stick', 'Completed')]
+		});
+		expect(await screen.findByText('2 scans of 2 locations')).toBeTruthy();
+	});
+
+	it('starts a scan from the screen', async () => {
+		const user = userEvent.setup({ pointerEventsCheck: 0 });
+		const { backend } = view({ recentScans: [recent('Photos', 'Completed')] });
+		await user.click(await screen.findByRole('button', { name: 'Scan location' }));
+		await user.click(await screen.findByRole('menuitem', { name: 'Photos' }));
+		await waitFor(() => {
+			expect(backend.calls.some((c) => c.method === 'scans.start')).toBe(true);
+		});
 	});
 
 	it('shows the history once the first scan ends', async () => {

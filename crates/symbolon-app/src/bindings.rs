@@ -22,6 +22,7 @@ pub(crate) fn builder() -> Builder<tauri::Wry> {
         scans::scan_resume,
         scans::scan_cancel,
         scans::scans_recent,
+        scans::scan_get,
         scans::scans_recent_count,
         scans::location_scans,
         scans::location_scan_count,

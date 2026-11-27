@@ -27,7 +27,7 @@ describe('progressOf', () => {
 	it('gives a percentage and the time left while hashing', () => {
 		expect(
 			progressOf(progress({ phase: 'Hashing', hashedBytes: 42, toHashBytes: 100, bytesPerSec: 29 }))
-		).toEqual({ label: 'Hashing', percent: 42, remaining: '2 s left' });
+		).toEqual({ label: 'Hashing', percent: 42, remaining: '2 s' });
 	});
 
 	it('leaves the time out when the rate is unknown', () => {
@@ -57,5 +57,13 @@ describe('outcomeLabel', () => {
 		expect(outcomeLabel('Completed')).toBe('Complete');
 		expect(outcomeLabel('Interrupted')).toBe('Partial');
 		expect(outcomeLabel('Cancelled')).toBe('Cancelled');
+	});
+});
+
+describe('formatDuration under a second', () => {
+	it('says less than a second instead of zero', () => {
+		expect(formatDuration(400)).toBe('< 1 s');
+		expect(formatDuration(0)).toBe('< 1 s');
+		expect(formatDuration(1000)).toBe('1 s');
 	});
 });

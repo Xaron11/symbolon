@@ -21,6 +21,7 @@ export const commands = {
 	scanResume: (label: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("scan_resume", { label }, options),
 	scanCancel: (label: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("scan_cancel", { label }, options),
 	scansRecent: (offset: Num, limit: number, options?: InvokeOptions) => __TAURI_INVOKE<RecentScanView_Serialize[]>("scans_recent", { offset, limit }, options),
+	scanGet: (scanId: Num, options?: InvokeOptions) => __TAURI_INVOKE<RecentScanView_Serialize | null>("scan_get", { scanId }, options),
 	scansRecentCount: (options?: InvokeOptions) => __TAURI_INVOKE<Num>("scans_recent_count", undefined, options),
 	locationScans: (label: string, offset: Num, limit: number, options?: InvokeOptions) => __TAURI_INVOKE<ScanBrief_Serialize[]>("location_scans", { label, offset, limit }, options),
 	locationScanCount: (label: string, options?: InvokeOptions) => __TAURI_INVOKE<Num>("location_scan_count", { label }, options),
@@ -389,12 +390,16 @@ export type RecentScanView = RecentScanView_Serialize | RecentScanView_Deseriali
 export type RecentScanView_Deserialize = {
 	label: string,
 	scan: ScanBrief_Deserialize,
+	/**  Its location's newest scan that has ended. */
+	latest: boolean,
 };
 
 /**  A recorded scan of any location. */
 export type RecentScanView_Serialize = {
 	label: string,
 	scan: ScanBrief_Serialize,
+	/**  Its location's newest scan that has ended. */
+	latest: boolean,
 };
 
 /**  A row order: by path or size, ascending unless `desc`. */

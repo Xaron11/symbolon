@@ -209,3 +209,13 @@ describe('DataTable states', () => {
 		expect(grid.parentElement?.style.height).toContain('min(100%');
 	});
 });
+
+describe('DataTable as a list of links', () => {
+	it('opens a row on a single click when rows lead somewhere', async () => {
+		const user = userEvent.setup();
+		const onopen = vi.fn();
+		await table(files(3), { onopen, openOnClick: true });
+		await user.click(screen.getByText('file1.jpg'));
+		expect(onopen).toHaveBeenCalledWith({ name: 'file1.jpg', size: 10 }, 1);
+	});
+});

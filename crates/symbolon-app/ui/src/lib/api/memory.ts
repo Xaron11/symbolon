@@ -205,6 +205,8 @@ export function createMemoryBackend(seed: MemorySeed = {}): MemoryBackend {
 					() => (record('scans.recent', offset, limit), page(seed.recentScans ?? [], offset, limit))
 				),
 			recentCount: () => resolve(() => (seed.recentScans ?? []).length),
+			get: (scanId) =>
+				resolve(() => (seed.recentScans ?? []).find((r) => r.scan.scanId === scanId)),
 			ofLocation: (label, offset, limit) =>
 				resolve(() =>
 					page(

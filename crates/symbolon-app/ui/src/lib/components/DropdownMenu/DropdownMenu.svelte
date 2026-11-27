@@ -12,9 +12,11 @@
 		items: readonly MenuItem[];
 		/** `sm` matches small buttons in table rows. */
 		size?: 'sm' | 'md';
+		/** Which edge of the trigger the menu lines up with; `end` keeps it inside the window. */
+		align?: 'start' | 'end';
 	}
 
-	let { label, trigger, items, size = 'md' }: Props = $props();
+	let { label, trigger, items, size = 'md', align = 'end' }: Props = $props();
 </script>
 
 <DropdownMenu.Root>
@@ -22,7 +24,7 @@
 		{@render trigger()}
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Portal>
-		<DropdownMenu.Content class="sy-floating" sideOffset={4} align="start">
+		<DropdownMenu.Content class="sy-floating" sideOffset={4} {align}>
 			{#each items as item, i (i)}
 				{#if 'separator' in item}
 					<DropdownMenu.Separator class="sy-separator" />

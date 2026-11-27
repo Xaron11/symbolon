@@ -194,6 +194,8 @@ pub struct RecentScan {
     pub label: String,
     /// The scan.
     pub scan: ScanInfo,
+    /// Whether it is its location's newest scan that has ended; a running scan never is.
+    pub latest: bool,
 }
 
 /// A warning recorded by a scan.
@@ -363,32 +365,31 @@ impl Query {
                 "recent scans are read by offset".into(),
             ));
         }
-        let columns = SCAN_COLUMNS
-            .split(", ")
-            .map(|c| format!("s.{}", c.trim()))
-            .collect::<Vec<_>>()
-            .join(", ");
         let mut stmt = self.conn.prepare_cached(&format!(
-            "SELECT {columns}, s.location_id, l.label FROM scans s \
-             JOIN locations l ON l.id = s.location_id \
-             ORDER BY s.started_at DESC, s.id DESC LIMIT ?1 OFFSET ?2"
+            "{} ORDER BY s.started_at DESC, s.id DESC LIMIT ?1 OFFSET ?2",
+            recent_select()
         ))?;
-        let rows = stmt.query_map(params![page.effective_limit(), page.skip()?], |row| {
-            Ok((
-                RawScan::from_row(row)?,
-                row.get::<_, i64>(13)?,
-                row.get::<_, String>(14)?,
-            ))
-        })?;
+        let rows = stmt.query_map(params![page.effective_limit(), page.skip()?], recent_row)?;
         let mut items = Vec::new();
         for row in rows {
-            let (raw, location_id, label) = row?;
-            items.push(RecentScan {
-                label,
-                scan: raw.into_info(location_id)?,
-            });
+            items.push(into_recent(row?)?);
         }
         Ok(PageOf { items, next: None })
+    }
+
+    /// The scan with id `scan`, with its location's label; `None` if there is none.
+    ///
+    /// # Errors
+    ///
+    /// A database error, or [`CatalogError::Corrupt`] for an unreadable row.
+    pub fn scan(&self, scan: ScanId) -> Result<Option<RecentScan>, CatalogError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!("{} WHERE s.id = ?1", recent_select()))?;
+        stmt.query_row([scan.get()], recent_row)
+            .optional()?
+            .map(into_recent)
+            .transpose()
     }
 
     /// Number of scans of every location.
@@ -642,6 +643,41 @@ impl Query {
 /// The columns of `scans` a [`ScanInfo`] is built from, in [`RawScan::from_row`] order.
 const SCAN_COLUMNS: &str = "id, status, started_at, finished_at, files, dirs, symlinks, bytes, \
     hashed_files, hashed_bytes, reused_hashes, warnings, error";
+
+/// `SELECT` of a scan with its location's label and whether it is that location's latest
+/// ended scan; `recent_row` reads it.
+fn recent_select() -> String {
+    let columns = SCAN_COLUMNS
+        .split(", ")
+        .map(|c| format!("s.{}", c.trim()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "SELECT {columns}, s.location_id, l.label, \
+                s.id = (SELECT max(id) FROM scans \
+                        WHERE location_id = s.location_id AND status != 'running') \
+         FROM scans s JOIN locations l ON l.id = s.location_id"
+    )
+}
+
+type RecentRow = (RawScan, i64, String, bool);
+
+fn recent_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecentRow> {
+    Ok((
+        RawScan::from_row(row)?,
+        row.get(13)?,
+        row.get(14)?,
+        row.get::<_, Option<bool>>(15)?.unwrap_or(false),
+    ))
+}
+
+fn into_recent((raw, location_id, label, latest): RecentRow) -> Result<RecentScan, CatalogError> {
+    Ok(RecentScan {
+        label,
+        scan: raw.into_info(location_id)?,
+        latest,
+    })
+}
 
 /// A `scans` row as stored.
 struct RawScan {

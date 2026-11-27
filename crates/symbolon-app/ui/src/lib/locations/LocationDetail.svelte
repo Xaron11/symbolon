@@ -1,6 +1,6 @@
 <!-- Spec: docs/design/components/location-detail.md -->
 <script lang="ts">
-	import { File, Folder } from '@lucide/svelte';
+	import { Ellipsis, File, Folder, Link } from '@lucide/svelte';
 	import {
 		backend,
 		catalogTree,
@@ -14,7 +14,9 @@
 	} from '../api/index.ts';
 	import Alert from '../components/Alert/Alert.svelte';
 	import Badge from '../components/Badge/Badge.svelte';
+	import Breadcrumb from '../components/Breadcrumb/Breadcrumb.svelte';
 	import Button from '../components/Button/Button.svelte';
+	import DropdownMenu from '../components/DropdownMenu/DropdownMenu.svelte';
 	import DataTable, { type Column } from '../components/DataTable/DataTable.svelte';
 	import EmptyState from '../components/EmptyState/EmptyState.svelte';
 	import Spinner from '../components/Spinner/Spinner.svelte';
@@ -23,7 +25,10 @@
 	import TreeView from '../components/TreeView/TreeView.svelte';
 	import { toasts } from '../feedback/toasts.svelte';
 	import { formatAgo, formatBytes } from '../format';
+	import { outcomeColor, outcomeLabel, scanDuration } from '../scans/progress';
 	import { scans, statusText } from '../scans/scans.svelte';
+	import RemoveDialog from './RemoveDialog.svelte';
+	import RenameDialog from './RenameDialog.svelte';
 	import { explain, scanBlocked, statusInfo } from './status';
 
 	interface Props {
@@ -41,6 +46,8 @@
 	let location = $state<LocationView | null | undefined>(undefined);
 	let loadError = $state<string | undefined>(undefined);
 	let tab = $state<'browse' | 'scans' | 'warnings'>('browse');
+	let renaming = $state<string | undefined>(undefined);
+	let removing = $state<string | undefined>(undefined);
 
 	async function load() {
 		try {
@@ -74,6 +81,22 @@
 			? '0%'
 			: `${String(Math.floor((l.stats.verifiedFiles / l.stats.files) * 100))}%`;
 
+	async function setPolicy(eager: boolean) {
+		try {
+			await api.locations.setHashPolicy(label, eager ? 'Eager' : 'Lazy');
+			await load();
+		} catch (e) {
+			toasts.show(explain(toApiError(e)), 'error');
+		}
+	}
+
+	// The latest ended scan: a running one is not it, its counts are not final.
+	const latestId = $derived(
+		location?.lastScan && location.lastScan.status !== 'Running'
+			? location.lastScan.scanId
+			: undefined
+	);
+
 	async function scan() {
 		try {
 			await scanState.start(label);
@@ -84,9 +107,26 @@
 		}
 	}
 
-	const scanColumns: Column<ScanBrief>[] = [
-		{ id: 'started', header: 'Started', cell: (s: ScanBrief) => formatAgo(s.startedMs) },
-		{ id: 'status', header: 'Outcome', cell: (s: ScanBrief) => s.status, width: 120 },
+	const scanColumns = $derived<Column<ScanBrief>[]>([
+		{
+			id: 'started',
+			header: 'Started',
+			cell: (s: ScanBrief) => formatAgo(s.startedMs),
+			badge: (s: ScanBrief) => (s.scanId === latestId ? 'Latest' : undefined)
+		},
+		{
+			id: 'took',
+			header: 'Took',
+			cell: (s: ScanBrief) => scanDuration(s) ?? '—',
+			width: 100
+		},
+		{
+			id: 'status',
+			header: 'Outcome',
+			cell: (s: ScanBrief) => outcomeLabel(s.status),
+			marker: (s: ScanBrief) => outcomeColor(s.status),
+			width: 120
+		},
 		{
 			id: 'files',
 			header: 'Files',
@@ -111,7 +151,7 @@
 			align: 'end',
 			width: 110
 		}
-	];
+	]);
 	const warningColumns: Column<WarningView>[] = [
 		{
 			id: 'path',
@@ -132,7 +172,7 @@
 			label={(entry: EntryView) => entry.name}
 			aside={(entry: EntryView) => (entry.folder ? undefined : formatBytes(entry.size))}
 			empty="Nothing scanned here yet."
-			icon={(entry: EntryView) => (entry.folder ? Folder : File)}
+			icon={(entry: EntryView) => (entry.folder ? Folder : entry.kind === 'Symlink' ? Link : File)}
 		/>
 	</div>
 {/snippet}
@@ -146,6 +186,10 @@
 				label="Scans of {label}"
 				empty="Not scanned yet."
 				fit
+				openOnClick
+				onopen={(s: ScanBrief) => {
+					navigate(`/scans/${String(s.scanId)}`);
+				}}
 			/>
 		{/key}
 	</div>
@@ -169,11 +213,9 @@
 	</div>
 {/snippet}
 
-<nav class="trail" aria-label="Breadcrumb">
-	<a href="/locations">Locations</a>
-	<span aria-hidden="true">›</span>
-	<span aria-current="page">{label}</span>
-</nav>
+<div class="trail">
+	<Breadcrumb trail={[{ label: 'Locations', href: '/locations' }]} current={label} />
+</div>
 
 {#if loadError}
 	<Alert tone="error" title="Could not read the location">{loadError}</Alert>
@@ -187,26 +229,65 @@
 	{@const status = statusInfo(location.status)}
 	{@const blocked = scanBlocked(location.status)}
 	{@const Icon = status.icon}
+	{@const last = location.lastScan}
 	<div class="detail">
 		<header class="head">
-			<div>
-				<h2>{location.label}</h2>
-				<p class="sy-mono muted root">{location.root}</p>
+			<div class="title">
+				<div class="name">
+					<h2>{location.label}</h2>
+					<Badge tone={status.tone}><Icon aria-hidden="true" />{status.label}</Badge>
+				</div>
+				<p class="sy-mono root" title={location.root}>{location.root}</p>
+				<p class="meta">
+					{#if running.length > 0}
+						<span>{statusText(running)}</span>
+					{:else if last}
+						<span>
+							Last scanned <a href="/scans/{last.scanId}">
+								{formatAgo(last.finishedMs ?? last.startedMs)}
+							</a>
+						</span>
+						<span>{outcomeLabel(last.status)}</span>
+					{:else}
+						<span>Never scanned</span>
+					{/if}
+					<span>
+						Hashed {location.hashPolicy === 'Eager' ? 'during every scan' : 'when compared'}
+					</span>
+				</p>
 			</div>
-			<Badge tone={status.tone}><Icon aria-hidden="true" />{status.label}</Badge>
-			<div class="spacer"></div>
-			{#if running.length > 0}<p class="muted">{statusText(running)}</p>{/if}
-			<Button
-				variant="primary"
-				disabled={running.length > 0 || blocked !== undefined}
-				title={blocked}
-				onclick={() => {
-					void scan();
-				}}
-			>
-				Scan
-			</Button>
+			<div class="actions">
+				<Button
+					variant="primary"
+					loading={running.length > 0}
+					disabled={blocked !== undefined}
+					title={blocked}
+					onclick={() => {
+						void scan();
+					}}
+				>
+					Scan
+				</Button>
+				<DropdownMenu
+					label="Actions for {location.label}"
+					items={[
+						{ label: 'Rename…', onSelect: () => (renaming = location?.label) },
+						{
+							label:
+								location.hashPolicy === 'Eager'
+									? 'Hash only when compared'
+									: 'Hash during every scan',
+							onSelect: () => void setPolicy(location?.hashPolicy !== 'Eager')
+						},
+						{ separator: true },
+						{ label: 'Remove…', danger: true, onSelect: () => (removing = location?.label) }
+					]}
+				>
+					{#snippet trigger()}<Ellipsis aria-hidden="true" />{/snippet}
+				</DropdownMenu>
+			</div>
 		</header>
+		{#if blocked}<p class="blocked">{blocked}</p>{/if}
 		<div class="tiles">
 			<StatTile label="Files" value={count.format(location.stats.files)} />
 			<StatTile label="Folders" value={count.format(location.stats.dirs)} />
@@ -219,29 +300,32 @@
 			tabs={[
 				{ value: 'browse', label: 'Browse', content: browse },
 				{ value: 'scans', label: 'Scans', content: scanList },
-				{ value: 'warnings', label: 'Warnings', content: warningList }
+				{
+					value: 'warnings',
+					label: last && last.warnings > 0 ? `Warnings ${count.format(last.warnings)}` : 'Warnings',
+					content: warningList
+				}
 			]}
 		/>
 	</div>
 {/if}
 
+<RenameDialog
+	bind:label={renaming}
+	onrenamed={(to: string) => {
+		navigate(`/locations/${encodeURIComponent(to)}`);
+	}}
+/>
+<RemoveDialog
+	bind:label={removing}
+	onremoved={() => {
+		navigate('/locations');
+	}}
+/>
+
 <style>
 	.trail {
-		display: flex;
-		gap: var(--sy-space-8);
 		margin-bottom: var(--sy-space-12);
-		color: var(--sy-color-text-muted);
-		font-size: var(--sy-font-size-small);
-	}
-
-	.trail a {
-		color: var(--sy-color-text-secondary);
-		text-decoration: none;
-	}
-
-	.trail a:hover {
-		color: var(--sy-color-text-primary);
-		text-decoration: underline;
 	}
 
 	.detail {
@@ -254,6 +338,21 @@
 
 	.head {
 		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: var(--sy-space-16);
+	}
+
+	.title {
+		display: grid;
+		gap: var(--sy-space-8);
+		min-width: 0;
+		flex: 1;
+	}
+
+	.name {
+		display: flex;
 		align-items: center;
 		gap: var(--sy-space-12);
 	}
@@ -263,18 +362,37 @@
 		font-size: var(--sy-font-size-heading);
 	}
 
+	/* One line; the full path is in the tooltip. */
 	.root {
 		margin: 0;
+		overflow: hidden;
+		color: var(--sy-color-text-secondary);
+		font-size: var(--sy-font-size-small);
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.spacer {
-		flex: 1;
+	.meta,
+	.blocked {
+		margin: 0;
+		color: var(--sy-color-text-muted);
+		font-size: var(--sy-font-size-small);
+	}
+
+	.meta span + span::before {
+		content: ' · ';
+	}
+
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: var(--sy-space-8);
 	}
 
 	.tiles {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(var(--sy-table-column-min), 1fr));
-		gap: var(--sy-space-12);
+		grid-template-columns: repeat(auto-fit, minmax(var(--sy-stat-tile-min-width), 1fr));
+		gap: var(--sy-space-8);
 	}
 
 	.pane {

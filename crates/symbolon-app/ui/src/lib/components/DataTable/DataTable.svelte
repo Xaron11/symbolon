@@ -13,6 +13,8 @@
 		sortable?: boolean;
 		/** A color (CSS value) for a dot before the text, such as a category's. */
 		marker?: (row: R) => string | undefined;
+		/** A short flat badge after the text, such as "Latest". */
+		badge?: (row: R) => string | undefined;
 	}
 </script>
 
@@ -37,7 +39,11 @@
 		empty?: string;
 		/** Shrink to the rows when they need less than the space given. */
 		fit?: boolean;
+		/** Rows lead somewhere (a scan, a location): one click opens them, not two. */
+		openOnClick?: boolean;
 		onopen?: (row: Row, index: number) => void;
+		/** Called when someone moves to another row (a click or the keys). */
+		onactive?: (row: Row, index: number) => void;
 	}
 
 	let {
@@ -47,7 +53,9 @@
 		selection = $bindable(new Set()),
 		empty = 'Nothing here.',
 		fit = false,
-		onopen
+		openOnClick = false,
+		onopen,
+		onactive
 	}: Props = $props();
 
 	const rowHeight = parseFloat(component['table.row.height']);
@@ -101,6 +109,8 @@
 	function moveTo(index: number) {
 		if (total === 0) return;
 		active = Math.min(total - 1, Math.max(0, index));
+		const row = rows.rows[active - rows.start];
+		if (row !== undefined) onactive?.(row, active);
 		if (scroller) {
 			scroller.scrollTop = revealScroll({
 				index: active,
@@ -224,6 +234,7 @@
 		aria-rowcount={total + 1}
 		aria-colcount={columns.length}
 		aria-multiselectable="true"
+		data-open-on-click={openOnClick || undefined}
 		aria-activedescendant={activeLoaded
 			? `${id}-r${String(active)}-c${String(activeColumn)}`
 			: undefined}
@@ -294,14 +305,17 @@
 							chosen = true;
 							columnCursor = false;
 							grid?.focus();
+							if (row !== undefined) onactive?.(row, index);
+							if (openOnClick && row !== undefined) onopen?.(row, index);
 						}}
 						ondblclick={() => {
-							if (row !== undefined) onopen?.(row, index);
+							if (!openOnClick && row !== undefined) onopen?.(row, index);
 						}}
 					>
 						{#each columns as column, c (column.id)}
 							{@const text = row === undefined ? '' : column.cell(row)}
 							{@const marker = row === undefined ? undefined : column.marker?.(row)}
+							{@const badge = row === undefined ? undefined : column.badge?.(row)}
 							<div
 								id="{id}-r{index}-c{c}"
 								class="cell truncate"
@@ -312,7 +326,7 @@
 								title={text}
 							>
 								{#if marker}<span class="marker" style:background={marker} aria-hidden="true"
-									></span>{/if}{text}
+									></span>{/if}{text}{#if badge}<span class="badge">{badge}</span>{/if}
 							</div>
 						{/each}
 					</div>
@@ -410,6 +424,10 @@
 		background: var(--sy-color-surface-hover);
 	}
 
+	.sy-table[data-open-on-click] .row {
+		cursor: pointer;
+	}
+
 	/* The chosen row stays gray when focus goes elsewhere (the details, another window); the
 	   accent bar shows where keys act. Clicks and keys mark it alike. */
 	.row[aria-selected='true'],
@@ -444,6 +462,16 @@
 		margin-right: var(--sy-space-8);
 		border-radius: var(--sy-radius-full);
 		vertical-align: middle;
+	}
+
+	.badge {
+		margin-left: var(--sy-space-8);
+		padding: 0 var(--sy-space-8);
+		border-radius: var(--sy-radius-full);
+		background: var(--sy-color-surface-sunken);
+		color: var(--sy-color-text-secondary);
+		font-family: var(--sy-font-family-ui);
+		font-size: var(--sy-font-size-small);
 	}
 
 	.end {

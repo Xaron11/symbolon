@@ -124,6 +124,18 @@ describe('tauriBackend releases what it opened', () => {
 	});
 });
 
+describe('tauriBackend scans', () => {
+	it('get reads one scan, and undefined for none', async () => {
+		let seen: unknown;
+		mockIPC((cmd, payload) => {
+			seen = [cmd, payload];
+			return null;
+		});
+		await expect(createTauriBackend().scans.get(4)).resolves.toBeUndefined();
+		expect(seen).toEqual(['scan_get', { scanId: 4 }]);
+	});
+});
+
 describe('tauriBackend system', () => {
 	it('pickFolder opens a directory picker and returns its path', async () => {
 		let seen: [string, unknown] | undefined;

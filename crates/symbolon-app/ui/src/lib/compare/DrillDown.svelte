@@ -1,6 +1,6 @@
 <!-- Spec: docs/design/components/drill-down.md -->
 <script lang="ts">
-	import { File, Folder } from '@lucide/svelte';
+	import { File, Folder, Link } from '@lucide/svelte';
 	import {
 		backend,
 		comparisonRows,
@@ -84,7 +84,11 @@
 				: undefined;
 	// A folder that is itself a row (an empty folder on one side) is still a folder.
 	const nodeIcon = (node: TreeNodeView) =>
-		node.folder || node.row?.cells.some((c) => c.kind === 'Dir') ? Folder : File;
+		node.folder || node.row?.cells.some((c) => c.kind === 'Dir')
+			? Folder
+			: node.row?.cells.every((c) => c.kind === 'Symlink')
+				? Link
+				: File;
 </script>
 
 <section class="sy-drill-down" aria-label="Rows">
@@ -126,6 +130,9 @@
 							label="Rows"
 							empty="Nothing matches the filters."
 							onopen={(row: CompareRowView) => (selected = row)}
+							onactive={(row: CompareRowView) => {
+								if (selected) selected = row;
+							}}
 						/>
 					{:else}
 						<TreeView

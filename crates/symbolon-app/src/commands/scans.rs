@@ -68,6 +68,15 @@ pub(crate) async fn scans_recent(
 
 #[tauri::command]
 #[specta::specta]
+pub(crate) async fn scan_get(
+    state: State<'_>,
+    scan_id: Num<i64>,
+) -> Result<Option<RecentScanView>, ApiError> {
+    blocking(&state, move |s| s.scan_get(scan_id.0)).await
+}
+
+#[tauri::command]
+#[specta::specta]
 pub(crate) async fn scans_recent_count(state: State<'_>) -> Result<Num<u64>, ApiError> {
     blocking(&state, |s| s.scans_recent_count().map(Num)).await
 }
