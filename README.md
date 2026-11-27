@@ -20,6 +20,8 @@ symbolon dupes laptop
 
 The [command-line chapter](docs/cli.md) covers installing, output formats for scripts (`--json`, `--format csv`) and exit codes.
 
+The documentation, with concepts, the desktop app, the architecture and the API reference, is published at <https://xaron11.github.io/symbolon/>.
+
 ## Layout
 
 | Path                    | Purpose                                                                        |

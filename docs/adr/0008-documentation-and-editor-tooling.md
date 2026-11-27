@@ -15,7 +15,7 @@ The project needs documentation that stays correct as code lands (API docs, conc
 - **Frontend:** TSDoc on exported code in `ui/src/lib` and `ui/scripts`, enforced by `eslint-plugin-jsdoc` (`require-jsdoc` for public items; parameter and return tags not required, types carry that).
 - **Book:** mdBook with `docs/` as its source, so existing documents (spec, ADRs, schema, testing) are chapters without duplication. Mermaid diagrams via `mdbook-mermaid` (the JS assets are generated at build time and git-ignored). The rustdoc output is copied into the book under `api/`.
 - **Checks:** lychee checks every internal link and anchor in the built HTML (offline); rumdl lints Markdown structure in pre-commit (MD013 line length disabled, Prettier owns wrapping).
-- **Publishing:** CI builds the site and uploads it as an artifact; nothing is published while the repository is private. Enable GitHub Pages when it becomes public.
+- **Publishing:** CI builds the site and uploads it as an artifact. Nothing was published while the repository was private. The repository became public on 2026-11-24; since 2026-11-27 every push to `main` that passes CI publishes the book and the API reference to GitHub Pages at <https://xaron11.github.io/symbolon/>. The site follows `main`; unreleased work is marked _(planned)_ as usual.
 - **Process:** docs change in the same PR as the code (AGENTS.md, PR template).
 
 ### Editor tooling

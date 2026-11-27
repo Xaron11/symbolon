@@ -15,6 +15,8 @@ command = "mdbook-mermaid"
 # Follows the system light/dark preference; readers can switch themes from the brush menu.
 default-theme = "light"
 preferred-dark-theme = "navy"
+# Published at https://xaron11.github.io/symbolon/; the 404 page needs the path to find its assets.
+site-url = "/symbolon/"
 git-repository-url = "https://github.com/Xaron11/symbolon"
 edit-url-template = "https://github.com/Xaron11/symbolon/edit/main/docs/{path}"
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
