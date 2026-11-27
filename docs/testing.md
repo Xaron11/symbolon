@@ -35,7 +35,7 @@ These crates are added as dev-dependencies when the first test needs them (M1).
 
 - **Deterministic.** No sleeps, no wall-clock or network dependence, no reliance on directory iteration order. Seed randomness; proptest regressions files are committed.
 - **Hermetic.** Tests create their own trees in tempdirs and never touch the user's home or real devices.
-- **Frontend tests share state.** For speed, vitest runs the test files of a worker in one jsdom and with the dependencies loaded once, instead of a fresh environment per file. A test that changes globals, the DOM or a dependency's state restores it (`afterEach`, `vi.restoreAllMocks()`), or the leak fails another file.
+- **Frontend tests share state.** For speed, vitest runs the test files of a worker in one jsdom instead of a fresh one per file. The setup file reloads the app's own modules for each file, so `vi.mock` works as usual; a test that changes globals, the DOM or a package's state restores it (`afterEach`, `vi.restoreAllMocks()`), or the leak fails another file.
 - **Edge cases are first-class.** Integration trees cover moves, renames, duplicates, Unicode NFC/NFD, case collisions, non-UTF-8 names (Unix), symlinks and cycles, permission errors, files changing during hashing, and empty files.
 - **Failures and partial states.** Cancellation, crashes mid-scan (resume) and vanished devices are tested, not just happy paths. Write operations (M7) get fault-injection tests.
 - **Bug fixes start with a failing test.**
