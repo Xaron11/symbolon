@@ -2,7 +2,7 @@
 
 The list of saved locations and what can be done with each.
 
-**Anatomy:** an "Add location" button above a table with one row per location: the label (in medium weight; a link to the location's page), its root in monospace (cut with an ellipsis, full in a tooltip), a status badge, the last scan ("3 hours ago", "Never", and the outcome when it did not complete), file count and size in monospace, when files are hashed ("When compared" or "Every scan"), a small **Scan** button ("Scan Photos"; while the location is being scanned, a "Scanning…" link to Scans instead) and an actions menu of the same height. Cells stay on one line; the root takes the room the other columns leave.
+**Anatomy:** an "Add location" button above a table with one row per location: the label (in medium weight; a link to the location's page), its root in monospace (cut with an ellipsis, full in a tooltip), a status badge, the last scan ("3 hours ago", "Never", and the outcome when it did not complete), file count and size in monospace, when files are hashed ("When compared" or "Every scan"), a small **Scan** button ("Scan Photos"; busy while the location is being scanned) and an actions menu of the same height, which opens aligned to its right edge so it stays in the window. The last scan's time links to [its page](scan-detail.md); while a scan runs the column says "Scanning…" and links to Scans. Cells stay on one line; the root takes the room the other columns leave.
 
 **Rows:** clicking anywhere on a row that is not a button or link opens the location's page; rows show the hover tint and a pointer, and the label is underlined on hover.
 

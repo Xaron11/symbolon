@@ -2,7 +2,7 @@
 
 A text button for actions.
 
-**Anatomy:** optional busy indicator, label.
+**Anatomy:** optional busy indicator, label. With `href` it is a link that looks like a button, for actions that go to a page ("Open Photos").
 
 **Variants:** `primary` (the one main action of a view: accent fill, on-accent text), `secondary` (default: base surface, strong border), `ghost` (no fill or border until hovered), `danger` (destructive actions: error fill).
 
