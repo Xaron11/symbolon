@@ -245,7 +245,7 @@
 		background: var(--sy-color-surface-hover);
 	}
 
-	.sy-tree:focus-visible .item.active {
+	.sy-tree:focus .item.active {
 		border-left-color: var(--sy-color-accent-default);
 		background: var(--sy-color-surface-selected);
 	}

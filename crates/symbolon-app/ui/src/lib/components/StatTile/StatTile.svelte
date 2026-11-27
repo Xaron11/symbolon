@@ -20,7 +20,7 @@
 </script>
 
 <div class={['sy-stat', className]} style:--stat-accent={accent}>
-	<span class="label">{label}</span>
+	<span class="label" title={label}>{label}</span>
 	<span class="value sy-mono">{value}</span>
 	{#if detail}<span class="detail sy-mono">{detail}</span>{/if}
 </div>
@@ -28,12 +28,22 @@
 <style>
 	.sy-stat {
 		display: grid;
+		align-content: start;
+		min-width: 0;
 		gap: var(--sy-space-2);
 		padding: var(--sy-space-12);
 		border: var(--sy-border-width-default) solid var(--sy-color-border-default);
 		border-left: var(--sy-border-width-strong) solid var(--stat-accent);
 		border-radius: var(--sy-panel-radius);
 		background: var(--sy-color-surface-base);
+	}
+
+	/* One line each, so tiles in a row keep one height. */
+	.label,
+	.detail {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.label {

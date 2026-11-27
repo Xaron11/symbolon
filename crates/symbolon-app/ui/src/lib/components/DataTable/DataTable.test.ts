@@ -131,6 +131,29 @@ describe('DataTable', () => {
 	});
 });
 
+describe('DataTable current row', () => {
+	it('keeps the chosen row marked after focus leaves, but marks none before a choice', async () => {
+		const user = userEvent.setup();
+		const { grid } = await table(files(5));
+		expect(grid.querySelector('.row.marked')).toBeNull();
+		await user.click(screen.getByText('file2.jpg'));
+		grid.blur();
+		expect(grid.querySelector('.row.marked')?.textContent).toContain('file2.jpg');
+	});
+
+	it('outlines a cell only after moving between columns', async () => {
+		const user = userEvent.setup();
+		const { grid } = await table(files(5));
+		await user.click(screen.getByText('file2.jpg'));
+		await user.keyboard('j');
+		expect(grid.querySelector('.cell.current')).toBeNull();
+		await user.keyboard('l');
+		expect(grid.querySelector('.cell.current')?.textContent.trim()).toBe('30');
+		await user.click(screen.getByText('file1.jpg'));
+		expect(grid.querySelector('.cell.current')).toBeNull();
+	});
+});
+
 describe('DataTable live updates', () => {
 	it('selection clears and the active row stays on the list when it shrinks', async () => {
 		const user = userEvent.setup();

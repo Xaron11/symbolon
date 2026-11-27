@@ -235,6 +235,30 @@ describe('drill-down', () => {
 	});
 });
 
+describe('row details', () => {
+	it('say what the row means and which locations lack the file', async () => {
+		const user = userEvent.setup();
+		const data = seed();
+		const onlyInBackup: CompareRowView = {
+			...row('b.jpg', 'only_in', 20),
+			presence: [1],
+			cells: row('b.jpg', 'only_in', 20).cells.filter((c) => c.side === 1)
+		};
+		if (data.comparison) data.comparison.rows = [onlyInBackup];
+		renderWithBackend(CompareView, { query: new URLSearchParams('sides=Photos%2CBackup') }, data);
+		const grid = await list();
+		await waitFor(() => {
+			expect(within(grid).getByText('b.jpg')).toBeTruthy();
+		});
+		grid.focus();
+		await user.keyboard('{Enter}');
+		const panel = await screen.findByRole('complementary', { name: 'b.jpg' });
+		expect(within(panel).getByText('Only in Backup')).toBeTruthy();
+		expect(within(panel).getByText('Not on Photos')).toBeTruthy();
+		expect(within(panel).getByRole('heading', { name: 'Backup' })).toBeTruthy();
+	});
+});
+
 describe('drill-down focus', () => {
 	it('returns focus to the list when the row panel closes', async () => {
 		const user = userEvent.setup();

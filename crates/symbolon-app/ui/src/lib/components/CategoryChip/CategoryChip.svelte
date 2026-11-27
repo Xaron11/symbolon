@@ -21,7 +21,6 @@
 	data-category={category}
 	style:--chip-fg="var(--sy-category-{shown.tokenKey}-fg)"
 	style:--chip-bg="var(--sy-category-{shown.tokenKey}-bg)"
-	style:--chip-border="var(--sy-category-{shown.tokenKey}-border)"
 	role={compact ? 'img' : undefined}
 	aria-label={compact
 		? count === undefined
@@ -40,8 +39,7 @@
 		align-items: center;
 		gap: var(--sy-space-4);
 		padding: 0 var(--sy-space-8) 0 var(--sy-space-4);
-		border: var(--sy-border-width-default) solid var(--chip-border);
-		border-radius: var(--sy-radius-sm);
+		border-radius: var(--sy-radius-full);
 		background: var(--chip-bg);
 		color: var(--sy-color-text-primary);
 		font-size: var(--sy-font-size-small);

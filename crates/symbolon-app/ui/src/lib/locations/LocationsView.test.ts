@@ -159,6 +159,20 @@ describe('LocationsView', () => {
 		expect(screen.getByRole('button', { name: 'Scan Stick' })).toBeTruthy();
 	});
 
+	it('opens a location from anywhere on its row, but not from its buttons', async () => {
+		const user = userEvent.setup({ pointerEventsCheck: 0 });
+		const { navigate, backend } = view([location('P')]);
+		const row = (await screen.findByRole('link', { name: 'P' })).closest('tr') as HTMLElement;
+		await user.click(within(row).getByText('When compared'));
+		expect(navigate).toHaveBeenCalledWith('/locations/P');
+		navigate.mockClear();
+		await user.click(within(row).getByRole('button', { name: 'Scan P' }));
+		await waitFor(() => {
+			expect(backend.calls.some((c) => c.method === 'scans.start')).toBe(true);
+		});
+		expect(navigate).not.toHaveBeenCalled();
+	});
+
 	it('renames, changes the hash policy and removes from the row menu', async () => {
 		const { backend } = view([location('Photos')]);
 		let { user, menu } = await openActions('Photos');

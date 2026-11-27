@@ -82,6 +82,16 @@
 	cursor: pointer;
 }
 
+.sy-menu-trigger[data-size='sm'] {
+	height: var(--sy-control-height-sm);
+	padding: 0 var(--sy-space-8);
+}
+
+.sy-menu-trigger :where(svg) {
+	width: var(--sy-icon-size-sm);
+	height: var(--sy-icon-size-sm);
+}
+
 .sy-menu-trigger:hover {
 	background: var(--sy-color-surface-hover);
 }

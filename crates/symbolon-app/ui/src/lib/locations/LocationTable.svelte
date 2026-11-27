@@ -19,6 +19,8 @@
 		onremove: (label: string) => void;
 		/** Points a moved location at its new place, or at candidate `choice`. */
 		onfollow: (label: string, choice?: number) => void;
+		/** Opens a location's page; the whole row is a target, the label link is for keyboards. */
+		onopen: (label: string) => void;
 	}
 
 	let {
@@ -28,7 +30,8 @@
 		onrename,
 		onpolicy,
 		onremove,
-		onfollow
+		onfollow,
+		onopen
 	}: Props = $props();
 	const count = new Intl.NumberFormat('en-US');
 
@@ -89,7 +92,13 @@
 			{@const blocked = scanBlocked(location.status)}
 			{@const Icon = status.icon}
 			{@const last = location.lastScan}
-			<tr>
+			<!-- The label link gives keyboards the same target; this only widens it for pointers. -->
+			<tr
+				onclick={(event) => {
+					const target = event.target as Element;
+					if (!target.closest('a, button, [role="menuitem"]')) onopen(location.label);
+				}}
+			>
 				<th scope="row">
 					<a href="/locations/{encodeURIComponent(location.label)}">{location.label}</a>
 				</th>
@@ -144,7 +153,7 @@
 								Scan
 							</Button>
 						{/if}
-						<DropdownMenu label="Actions for {location.label}" items={items(location)}>
+						<DropdownMenu label="Actions for {location.label}" items={items(location)} size="sm">
 							{#snippet trigger()}<Ellipsis aria-hidden="true" />{/snippet}
 						</DropdownMenu>
 					</div>
@@ -167,6 +176,7 @@
 		border-bottom: var(--sy-border-width-default) solid var(--sy-color-border-default);
 		text-align: start;
 		vertical-align: middle;
+		white-space: nowrap;
 	}
 
 	thead th {
@@ -179,12 +189,27 @@
 		font-weight: var(--sy-font-weight-medium);
 	}
 
-	a {
-		color: var(--sy-color-text-primary);
+	tbody tr {
+		cursor: pointer;
 	}
 
+	tbody tr:hover {
+		background: var(--sy-color-surface-hover);
+	}
+
+	th a {
+		color: var(--sy-color-text-primary);
+		text-decoration: none;
+	}
+
+	tr:hover th a {
+		text-decoration: underline;
+	}
+
+	/* Takes what the other columns leave and cuts the path there. */
 	.root {
-		max-width: var(--sy-table-column-min);
+		width: 100%;
+		max-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

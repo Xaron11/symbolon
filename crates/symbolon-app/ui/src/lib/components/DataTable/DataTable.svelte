@@ -11,6 +11,8 @@
 		/** Fixed width in pixels; columns without one share the rest. */
 		width?: number;
 		sortable?: boolean;
+		/** A color (CSS value) for a dot before the text, such as a category's. */
+		marker?: (row: R) => string | undefined;
 	}
 </script>
 
@@ -43,6 +45,10 @@
 	const id = $props.id();
 	let active = $state(0);
 	let activeColumn = $state(0);
+	// The cell cursor only matters once someone moves between columns (h and l).
+	let columnCursor = $state(false);
+	// Row 0 is active from the start; it is only marked once someone chose a row.
+	let chosen = $state(false);
 	let grid = $state<HTMLDivElement>();
 	let scroller = $state<HTMLDivElement>();
 	let height = $state(0);
@@ -96,6 +102,7 @@
 	}
 
 	function onAction(action: Action) {
+		if (action.startsWith('list.')) chosen = true;
 		switch (action) {
 			case 'list.down':
 				moveTo(active + 1);
@@ -123,9 +130,11 @@
 				break;
 			case 'list.collapse':
 				activeColumn = Math.max(0, activeColumn - 1);
+				columnCursor = true;
 				break;
 			case 'list.expand':
 				activeColumn = Math.min(columns.length - 1, activeColumn + 1);
+				columnCursor = true;
 				break;
 			case 'list.toggleSelect': {
 				const next = new SvelteSet(selection);
@@ -254,6 +263,7 @@
 				<div
 					class="row"
 					class:active={index === active}
+					class:marked={chosen && index === active}
 					role="row"
 					aria-rowindex={index + 2}
 					aria-selected={selection.has(index)}
@@ -262,6 +272,8 @@
 					style:min-width={minWidth}
 					onclick={() => {
 						active = index;
+						chosen = true;
+						columnCursor = false;
 						grid?.focus();
 					}}
 					ondblclick={() => {
@@ -270,16 +282,18 @@
 				>
 					{#each columns as column, c (column.id)}
 						{@const text = row === undefined ? '' : column.cell(row)}
+						{@const marker = row === undefined ? undefined : column.marker?.(row)}
 						<div
 							id="{id}-r{index}-c{c}"
 							class="cell truncate"
 							class:sy-mono={column.mono}
 							class:end={column.align === 'end'}
-							class:current={index === active && c === activeColumn}
+							class:current={columnCursor && index === active && c === activeColumn}
 							role="gridcell"
 							title={text}
 						>
-							{text}
+							{#if marker}<span class="marker" style:background={marker} aria-hidden="true"
+								></span>{/if}{text}
 						</div>
 					{/each}
 				</div>
@@ -365,11 +379,15 @@
 		background: var(--sy-color-surface-hover);
 	}
 
-	.row[aria-selected='true'] {
+	/* The chosen row stays gray when focus goes elsewhere (the details, another window); the
+	   accent bar shows where keys act. Clicks and keys mark it alike. */
+	.row[aria-selected='true'],
+	.row.marked,
+	.sy-table:focus .row.active {
 		background: var(--sy-color-surface-selected);
 	}
 
-	.sy-table:focus-visible .row.active {
+	.sy-table:focus .row.active {
 		border-left-color: var(--sy-color-accent-default);
 	}
 
@@ -388,12 +406,21 @@
 		white-space: nowrap;
 	}
 
+	.marker {
+		display: inline-block;
+		width: var(--sy-space-8);
+		height: var(--sy-space-8);
+		margin-right: var(--sy-space-8);
+		border-radius: var(--sy-radius-full);
+		vertical-align: middle;
+	}
+
 	.end {
 		justify-content: flex-end;
 		text-align: end;
 	}
 
-	.sy-table:focus-visible .current {
+	.sy-table:focus .current {
 		outline: var(--sy-border-width-default) solid var(--sy-color-focus);
 		outline-offset: calc(var(--sy-border-width-default) * -1);
 	}

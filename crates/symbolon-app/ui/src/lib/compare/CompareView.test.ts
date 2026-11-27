@@ -132,7 +132,7 @@ describe('CompareView', () => {
 		expect(within(photos).getByText('3')).toBeTruthy();
 		const backup = await tile('Only in Backup');
 		expect(within(backup).getByText('2')).toBeTruthy();
-		expect(within(await tile('Moved')).getByText(/Photos → Backup/)).toBeTruthy();
+		expect(screen.getByText('Moved and renamed: path on Photos → path on Backup')).toBeTruthy();
 
 		await user.click(backup);
 		expect(backup.getAttribute('aria-pressed')).toBe('true');

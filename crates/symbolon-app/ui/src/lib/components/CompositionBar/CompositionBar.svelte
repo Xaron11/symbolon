@@ -15,9 +15,11 @@
 		/** Accessible name of the bar, e.g. "Comparison of laptop and backup". */
 		label: string;
 		onselect?: (category: CategoryName) => void;
+		/** Show the table of counts; otherwise only assistive technology reads it. */
+		showTable?: boolean;
 	}
 
-	let { segments, label, onselect }: Props = $props();
+	let { segments, label, onselect, showTable = false }: Props = $props();
 	const shown = $derived(segments.filter((s) => s.count > 0));
 	const total = $derived(shown.reduce((sum, s) => sum + s.count, 0));
 	const number = new Intl.NumberFormat('en-US');
@@ -61,7 +63,7 @@
 			></button>
 		{/each}
 	</div>
-	<table>
+	<table class:sy-visually-hidden={!showTable}>
 		<thead>
 			<tr>
 				<th scope="col">Category</th>

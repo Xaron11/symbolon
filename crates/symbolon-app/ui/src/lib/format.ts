@@ -33,3 +33,13 @@ export function formatAgo(ms: number, now: number = Date.now()): string {
 	}
 	return 'just now';
 }
+
+/** A round axis step for byte values up to `max`: 1, 2 or 5 times a power of ten of one binary unit. */
+export function byteStep(max: number, ticks = 5): number {
+	if (max <= 0) return 1;
+	const unit = 1024 ** Math.max(0, Math.min(4, Math.floor(Math.log(max) / Math.log(1024))));
+	const raw = max / unit / ticks;
+	const magnitude = 10 ** Math.floor(Math.log10(raw));
+	const nice = [1, 2, 5, 10].map((m) => m * magnitude).find((step) => step >= raw) ?? raw;
+	return nice * unit;
+}

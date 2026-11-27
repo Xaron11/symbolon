@@ -10,13 +10,15 @@
 		label: string;
 		trigger: Snippet;
 		items: readonly MenuItem[];
+		/** `sm` matches small buttons in table rows. */
+		size?: 'sm' | 'md';
 	}
 
-	let { label, trigger, items }: Props = $props();
+	let { label, trigger, items, size = 'md' }: Props = $props();
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger class="sy-menu-trigger" aria-label={label}>
+	<DropdownMenu.Trigger class="sy-menu-trigger" data-size={size} aria-label={label}>
 		{@render trigger()}
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Portal>

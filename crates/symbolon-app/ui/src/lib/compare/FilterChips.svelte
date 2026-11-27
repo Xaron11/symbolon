@@ -1,8 +1,8 @@
 <!-- Spec: docs/design/components/compare-screen.md -->
 <script lang="ts">
 	import type { CategoryName } from '../api/index.ts';
+	import { Check } from '@lucide/svelte';
 	import Button from '../components/Button/Button.svelte';
-	import CategoryChip from '../components/CategoryChip/CategoryChip.svelte';
 	import Checkbox from '../components/Checkbox/Checkbox.svelte';
 	import Input from '../components/Input/Input.svelte';
 	import Select from '../components/Select/Select.svelte';
@@ -56,15 +56,18 @@
 <div class="sy-filters" role="group" aria-label="Filters">
 	<div class="chips">
 		{#each present as info (info.name)}
+			{@const on = selected.includes(info.name)}
+			{@const Icon = on ? Check : info.icon}
 			<button
 				type="button"
 				class="chip"
-				aria-pressed={selected.includes(info.name)}
+				aria-pressed={on}
+				style:--chip-icon="var(--sy-category-{info.tokenKey}-fg)"
 				onclick={() => {
 					toggle(info.name);
 				}}
 			>
-				<CategoryChip category={info.name} />
+				<Icon aria-hidden="true" />{info.label}
 			</button>
 		{/each}
 	</div>
@@ -76,7 +79,7 @@
 		}}
 	>
 		<Input label="Extension" placeholder="jpg" bind:value={extension} />
-		<Button size="sm" variant="secondary" type="submit">Apply</Button>
+		<Button variant="secondary" type="submit">Apply</Button>
 	</form>
 	<Select
 		label="Size"
@@ -116,20 +119,46 @@
 
 	.chips {
 		display: flex;
+		flex-basis: 100%;
 		flex-wrap: wrap;
 		gap: var(--sy-space-4);
 	}
 
+	/* Toggle buttons: outlined and hoverable, unlike the flat category labels elsewhere. */
 	.chip {
-		padding: 0;
-		border: var(--sy-border-width-strong) solid transparent;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--sy-space-4);
+		height: var(--sy-control-height-sm);
+		padding: 0 var(--sy-space-8);
+		border: var(--sy-border-width-default) solid var(--sy-color-border-strong);
 		border-radius: var(--sy-control-radius);
-		background: none;
+		background: var(--sy-color-surface-base);
+		color: var(--sy-color-text-secondary);
+		font: inherit;
+		font-size: var(--sy-font-size-small);
 		cursor: pointer;
+	}
+
+	.chip :global(svg) {
+		width: var(--sy-icon-size-sm);
+		height: var(--sy-icon-size-sm);
+		color: var(--chip-icon);
+	}
+
+	.chip:hover {
+		background: var(--sy-color-surface-hover);
+		color: var(--sy-color-text-primary);
 	}
 
 	.chip[aria-pressed='true'] {
 		border-color: var(--sy-color-accent-default);
+		background: var(--sy-color-surface-selected);
+		color: var(--sy-color-text-primary);
+	}
+
+	.chip[aria-pressed='true'] :global(svg) {
+		color: var(--sy-color-accent-default);
 	}
 
 	.extension {

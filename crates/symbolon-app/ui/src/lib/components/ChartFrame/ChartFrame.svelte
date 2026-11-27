@@ -37,7 +37,10 @@
 
 	$effect(() => {
 		if (!canvas) return;
-		const chart = new Chart(canvas, config(palette));
+		const built = config(palette);
+		// The frame sets the height, so charts side by side line up.
+		built.options = { maintainAspectRatio: false, ...built.options };
+		const chart = new Chart(canvas, built);
 		return () => {
 			chart.destroy();
 		};
@@ -58,7 +61,8 @@
 		margin: 0;
 	}
 
-	canvas {
-		width: 100%;
+	.canvas {
+		position: relative;
+		height: var(--sy-chart-height);
 	}
 </style>
