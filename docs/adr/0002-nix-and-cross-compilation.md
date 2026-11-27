@@ -10,7 +10,7 @@ The spec (§3, §6, §12, open question §15.1) asks for a flake with a devShell
 ## Decision
 
 - **Toolchain source:** `oxalica/rust-overlay`. The flake reads `rust-toolchain.toml` (`builtins.fromTOML`) and builds the same channel, components and targets, adding `rust-src` and `rust-analyzer` for the devShell. One file pins the toolchain for Nix, rustup and CI.
-- **Package:** `crane` builds `packages.default` (`symbolon`, the CLI) with `-p symbolon-cli --locked`, with dependency artifacts cached separately. Tests are not rerun inside the Nix build; CI runs them via nextest.
+- **Package:** `crane` builds `packages.default` (`symbolon`, the CLI) with `-p symbolon-cli --locked`, with dependency artifacts cached separately (built with `cargo build` only, no test or bench targets). Tests are not rerun inside the Nix build; CI runs them via nextest.
 - **Cross-compilation:** `cargo-zigbuild` with `zig` as C compiler and linker for `aarch64-unknown-linux-musl` (`just android-scanner`). Zig ships musl headers and libc for every target, works the same inside and outside Nix, and avoids building a cross GCC from `pkgsCross`. The Android NDK is not needed.
 - **Page size:** the agent must run on devices with 16 KiB pages (newer Pixels, Android 15+ 16 KB mode). The zig/lld output has `LOAD` segments aligned to 64 KiB (`readelf -lW`), which satisfies 4, 16 and 64 KiB page sizes. Verify this when the toolchain changes.
 - **Tauri system libraries** (webkitgtk 4.1, gtk3, libsoup 3, librsvg, …) and `gsettings` schemas are in the devShell. On Arch with X11 the Nix-built webkitgtk renders without extra GL setup (verified at bootstrap).

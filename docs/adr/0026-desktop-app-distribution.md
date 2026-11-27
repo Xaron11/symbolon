@@ -14,7 +14,7 @@ Releases shipped the CLI and the Android agent only ([ADR-0007](0007-development
   - `symbolon-app-<tag>-amd64.deb`: Debian and Ubuntu, using the system's WebKitGTK;
   - `symbolon-app-<tag>-x86_64-setup.exe`: an NSIS installer for Windows that installs for the current user and fetches WebView2 when it is missing.
 - The packages carry the agent as a Tauri resource (`tauri.release.conf.json`, added only for releases so development builds do not need it). The app looks for the agent in `SYMBOLON_AGENT`, then next to its executable, then in its resource directory (`/usr/lib/Symbolon` on Linux; next to the executable on Windows).
-- The flake has a `symbolon-app` package (nixpkgs' Tauri and pnpm hooks, the pinned toolchain), built by `nix flake check` in CI whenever its inputs change. Like the CLI package, it does not include the agent yet.
+- The flake has a `symbolon-app` package (nixpkgs' Tauri and pnpm hooks on crane, the pinned toolchain; its Rust dependencies are cached separately, as for the CLI), built by `nix flake check` in CI whenever its inputs change. Like the CLI package, it does not include the agent yet.
 - The same workflow runs on pull requests that change the packaging, without the agent, so a broken bundle shows before a release.
 - The workflow uses Tauri's prebuilt `cargo-tauri` release binary, the dev shell's version, checked against a SHA-256 pinned in the workflow. Compiling it took 6 to 10 minutes per job, and release builds use no caches. Tauri publishes no checksums or attestations for these binaries, so the first hash was trusted on download (2026-11-27).
 - Not shipped: `.rpm`, MSI, and macOS, which needs paid signing and notarization to open without warnings. The Windows installer is unsigned, and there is no auto-update.
