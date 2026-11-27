@@ -18,13 +18,24 @@
 		aside?: (node: Node) => string | undefined;
 		/** What an empty tree means, e.g. "Nothing matches the filters." */
 		empty?: string;
+		/** Shrink to the items when they need less than the space given. */
+		fit?: boolean;
 		icon?: (node: Node) => IconComponent | undefined;
 		onopen?: (node: Node) => void;
 		/** Accessible name of the tree. */
 		name: string;
 	}
 
-	let { source, label, aside, empty = 'Nothing here.', icon, onopen, name }: Props = $props();
+	let {
+		source,
+		label,
+		aside,
+		empty = 'Nothing here.',
+		fit = false,
+		icon,
+		onopen,
+		name
+	}: Props = $props();
 
 	const rowHeight = parseFloat(component['table.row.height']);
 	const overscan = 10;
@@ -145,7 +156,12 @@
 </script>
 
 <!-- Messages sit beside the tree: a tree may only hold its items. -->
-<div class="frame">
+<div
+	class="frame"
+	style:height={fit
+		? `calc(${String(Math.max(1, items.length) * rowHeight)}px + 2 * var(--sy-border-width-default))`
+		: undefined}
+>
 	<div
 		bind:this={view}
 		class="sy-tree"
@@ -219,8 +235,10 @@
 </div>
 
 <style>
+	/* A fitted tree asks for its items' height; a column flex parent with a max-height caps it. */
 	.frame {
 		position: relative;
+		flex-shrink: 1;
 		height: 100%;
 		min-height: 0;
 	}

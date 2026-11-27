@@ -164,3 +164,10 @@ describe('TreeView clicks', () => {
 		expect(await screen.findByText('2024')).toBeTruthy();
 	});
 });
+
+describe('TreeView fit', () => {
+	it('is only as tall as its items when asked to fit them', async () => {
+		const { view } = await tree({ fit: true });
+		expect(view.parentElement?.style.height).toContain('calc(');
+	});
+});

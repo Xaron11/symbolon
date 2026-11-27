@@ -15,10 +15,12 @@ export {
 	comparisonRows,
 	comparisonTree,
 	createChangeHub,
+	duplicateGroups,
 	locationScans,
 	recentScans,
 	rowOrder,
 	scanWarnings,
-	type ChangeHub
+	type ChangeHub,
+	type DuplicateNode
 } from './sources';
 export type * from './types';

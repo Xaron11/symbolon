@@ -5,6 +5,7 @@ import {
 	comparisonRows,
 	comparisonTree,
 	createChangeHub,
+	duplicateGroups,
 	locationScans,
 	rowOrder,
 	scanWarnings
@@ -150,5 +151,41 @@ describe('history sources', () => {
 		const source = scanWarnings(b, 7);
 		await expect(source.count()).resolves.toBe(1);
 		await expect(source.rows(0, 10)).resolves.toEqual([warning]);
+	});
+});
+
+describe('duplicateGroups', () => {
+	it("reads groups by page and lists each group's copies as its children", async () => {
+		const cell = (path: string) => ({
+			side: 0,
+			path,
+			kind: 'File' as const,
+			size: 1,
+			mtimeMs: null,
+			hashState: 'Verified' as const,
+			digestShort: 'aa'
+		});
+		const set = { digestShort: 'aa', size: 1, redundantBytes: 1, cells: [cell('x'), cell('y')] };
+		const b = createMemoryBackend({
+			comparison: {
+				summary: { categories: [], onlyIn: [] },
+				rows: [],
+				duplicates: [[set]],
+				duplicateTotals: [{ groups: 1, files: 2, redundantBytes: 1 }]
+			}
+		});
+		const { id } = await b.compare.open(
+			{ sides: [{ label: 'Photos' }], nfc: false, caseInsensitive: false, duplicates: true },
+			() => undefined
+		);
+		const source = duplicateGroups(b, id, 0);
+		await expect(source.rootCount()).resolves.toBe(1);
+		const [group] = await source.roots(0, 10);
+		if (!group) throw new Error('one group');
+		expect(source.hasChildren(group)).toBe(true);
+		await expect(source.childCount(group)).resolves.toBe(2);
+		const copies = await source.children(group, 1, 10);
+		expect(copies.map((c) => source.key(c))).toEqual(['aa/1']);
+		expect(source.hasChildren(copies[0] ?? group)).toBe(false);
 	});
 });

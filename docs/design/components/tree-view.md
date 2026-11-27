@@ -14,6 +14,8 @@ A source whose nodes can change (a location being scanned) offers `subscribe(onC
 
 Rows of `table.row.height`, indented by `tree.indent` per level; a chevron for folders (rotated when open), an optional icon, the name on one line with an ellipsis and in full as its tooltip, and an optional `aside` at the end in small muted text (a file's size, a folder's count, what a comparison row says). Only the visible rows exist, so a folder with tens of thousands of entries scrolls smoothly.
 
+With `fit` the tree asks for its rows' height, so a short tree stays short; inside a column flex container with a max-height it stops there and scrolls.
+
 **States:** hovered row · active row (accent bar and selected tint while the tree has focus) · "Loading…" until the first level arrives · `empty` text ("Nothing matches the filters.") when there is nothing to show. The messages sit beside the tree, not in it.
 
 ## Keyboard

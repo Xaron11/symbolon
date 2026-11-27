@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/svelte';
+import { screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { DuplicateSetView, MemorySeed } from '../api/index.ts';
@@ -60,40 +60,26 @@ describe('duplicates', () => {
 		expect(await inSection.findByText('130 groups · 390 files · 260 MiB redundant')).toBeTruthy();
 		expect(inSection.getByRole('heading', { name: 'Photos' })).toBeTruthy();
 		expect(inSection.getByText('No duplicates')).toBeTruthy();
-		const first = await inSection.findByText('d00000000000');
-		const summary = first.closest<HTMLElement>('summary');
-		if (!summary) throw new Error('a group is a summary');
-		expect(within(summary).getByText('3 copies')).toBeTruthy();
-		expect(within(summary).getByText('2.0 MiB redundant')).toBeTruthy();
-		await user.click(summary);
-		expect(inSection.getByText('copies/0/file2.jpg')).toBeTruthy();
+		expect(inSection.queryByRole('tree', { name: 'Duplicates in Backup' })).toBeNull();
+		const tree = await inSection.findByRole('tree', { name: 'Duplicates in Photos' });
+		const first = await within(tree).findByText('copies/0/file0.jpg');
+		const item = first.closest<HTMLElement>('[role=treeitem]');
+		if (!item) throw new Error('a group is a tree item');
+		expect(within(item).getByText('3 copies · 2.0 MiB redundant')).toBeTruthy();
+		await user.click(first);
+		expect(await within(tree).findByText('copies/0/file2.jpg')).toBeTruthy();
 		await expectNoAxeViolations(container);
 	});
 
-	it('read more groups on request', async () => {
+	it('reach every group without a Show more button', async () => {
 		const user = userEvent.setup();
 		open('sides=Photos%2CBackup&dupes=1');
-		await screen.findByText('d00000000099');
-		expect(screen.queryByText('d00000000100')).toBeNull();
-		await user.click(screen.getByRole('button', { name: 'Show more' }));
-		await waitFor(() => {
-			expect(screen.getByText('d00000000129')).toBeTruthy();
-		});
+		const tree = await screen.findByRole('tree', { name: 'Duplicates in Photos' });
+		await within(tree).findByText('copies/0/file0.jpg');
 		expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
-	});
-});
-
-describe('duplicates paging', () => {
-	it('a double click on Show more reads the next page once', async () => {
-		const { fireEvent } = await import('@testing-library/svelte');
-		open('sides=Photos%2CBackup&dupes=1');
-		await screen.findByText('d00000000099');
-		const more = screen.getByRole('button', { name: 'Show more' });
-		await fireEvent.click(more);
-		await fireEvent.click(more);
-		await waitFor(() => {
-			expect(screen.getByText('d00000000129')).toBeTruthy();
-		});
-		expect(screen.getAllByText('d00000000100')).toHaveLength(1);
+		expect(within(tree).getAllByRole('treeitem')[0]?.getAttribute('aria-setsize')).toBe('130');
+		tree.focus();
+		await user.keyboard('{Shift>}G{/Shift}');
+		expect(await within(tree).findByText('copies/129/file0.jpg')).toBeTruthy();
 	});
 });
