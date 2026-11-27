@@ -150,11 +150,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # symbolon-app has no tests until M6; clippy --all-targets already compiles it. Leaving it
-        # out spares this job the Tauri/GTK build and the webkitgtk install.
+        # Windows covers core and cli until the Windows milestone (M8), as in clippy.
         include:
           - os: ubuntu-latest
-            packages: -p symbolon-core -p symbolon-cli -p symbolon-agent
+            packages: --workspace
           - os: windows-latest
             packages: -p symbolon-core -p symbolon-cli
     steps:
@@ -164,7 +163,6 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           components: llvm-tools-preview
-          tauri-libs: "false"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: test

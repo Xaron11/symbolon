@@ -24,12 +24,12 @@ After M0 the project needs a workflow that scales past a single bootstrap sessio
 - **Hooks** via `git-hooks.nix`, installed by the dev shell:
   - `pre-commit`: treefmt, typos, statix, deadnix, actionlint, zizmor, merge-conflict and private-key detection;
   - `commit-msg`: convco (Conventional Commits);
-  - `pre-push`: `just lint-rust test` and `just lint-ui test-ui`.
+  - `pre-push`: `just lint-rust test` and `just lint-ui test-ui`, each only when the pushed commits change files it covers (Rust crates and workspace files; the frontend, design tokens and their docs).
 - Hooks need `node_modules` and the cargo registry, so they are not run inside the Nix sandbox; CI runs the same hook set with `pre-commit run --all-files`.
 
 ### CI
 
-- `ci.yml` jobs: `hooks`, `clippy` (Linux workspace, Windows core+cli), `test` (Linux: instrumented nextest with coverage summary; Windows: nextest; doctests for library crates; `symbolon-app` joins when it has tests), `frontend`, `deny`, `nix` (`nix flake check`), `android-agent` (cross-build and `check-agent`), `docs`, and `ci-ok`, which fails unless every job succeeded and is the single required check.
+- `ci.yml` jobs: `hooks`, `clippy` (Linux workspace, Windows core+cli), `test` (Linux: instrumented nextest with coverage summary; Windows: nextest; doctests for library crates; Linux tests the whole workspace, `symbolon-app` included), `frontend`, `deny`, `nix` (`nix flake check`), `android-agent` (cross-build and `check-agent`), `docs`, and `ci-ok`, which fails unless every job succeeded and is the single required check.
 - **Security:** all third-party actions pinned by SHA with a version comment, `permissions: {}` at workflow level and minimal per-job grants, `persist-credentials: false`, untrusted values passed via `env:`, no `pull_request_target`, zizmor (online audits in CI) and actionlint on every change.
 - **Caching:** `Swatinem/rust-cache` per job type, `nix-community/cache-nix-action` keyed on the flake (and `Cargo.lock` for builds), the pnpm store via `setup-node`, prebuilt tools via `taiki-e/install-action`. Caches are saved only from `main`; PRs restore but never write, so they cannot evict or poison main's caches. Runs on PR branches are cancelled when superseded; runs on `main` are not.
 - **Speed:** Nix jobs use lean dev shells (`.#ci` for hooks and docs, `.#android` for the agent) instead of the full developer shell, so they download and cache well under half as much. CI builds without debug info (`CARGO_PROFILE_DEV_DEBUG=0`). The agent's `target/` is cached with `actions/cache`, saved from `main` only.
