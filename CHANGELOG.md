@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-27
+
+### Added
+
+- **ui:** Design tokens (#149)
+- **ui:** Base and overlay components (#150)
+- **ui:** Keymap and command palette (#151)
+- **ui:** Data components (#152)
+- **ui:** App shell, routes, theming and component gallery (#153)
+- **core:** Offset paging, sorting, comparison tree and chart queries (#159)
+- **app:** App–core bridge (#160)
+- **ui:** Locations screen (#161)
+- **ui:** Scans screen (#162)
+- **ui:** Compare screen (#163)
+- **app:** Debug-only MCP bridge so agents can see and drive the app (#164)
+- **release:** Ship the desktop app as an AppImage, a .deb, a Windows installer and a Nix package (#166)
+
+### Changed
+
+- Relicense under MIT OR Apache-2.0 (#143)
+
+### Fixed
+
+- **ui:** Professional pass over every screen (#165)
+
 ## [0.7.0] - 2026-11-26
 
 ### Added
