@@ -99,6 +99,19 @@ describe.each(THEMES)('%s theme', (theme) => {
 		}
 	});
 
+	it('links (accent text) have 4.5:1 on the surfaces they sit on', () => {
+		for (const bg of [
+			'color.surface.canvas',
+			'color.surface.base',
+			'color.surface.raised',
+			'status.error.bg',
+			'status.warning.bg',
+			'status.info.bg'
+		] as const) {
+			expect(contrast(theme, 'color.accent.default', bg), bg).toBeGreaterThanOrEqual(4.5);
+		}
+	});
+
 	it('danger buttons have 4.5:1 text', () => {
 		expect(contrast(theme, 'color.surface.base', 'status.error.fg')).toBeGreaterThanOrEqual(4.5);
 	});

@@ -6,6 +6,7 @@
 		type DuplicateSetView,
 		type DuplicateTotalsView
 	} from '../api/index.ts';
+	import { ChevronRight } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import Alert from '../components/Alert/Alert.svelte';
 	import Button from '../components/Button/Button.svelte';
@@ -72,20 +73,24 @@
 		{@const label = session.sides[side]?.label ?? `Side ${String(side + 1)}`}
 		{@const shown = groups[side] ?? []}
 		<div class="side">
-			<p class="total">
-				{total.groups === 0
-					? `${label}: no duplicates`
-					: `${label}: ${count.format(total.groups)} groups, ${count.format(total.files)} files, ${formatBytes(total.redundantBytes)} redundant`}
-			</p>
+			<header class="side-head">
+				<h3>{label}</h3>
+				<p class="total">
+					{total.groups === 0
+						? 'No duplicates'
+						: `${count.format(total.groups)} groups · ${count.format(total.files)} files · ${formatBytes(total.redundantBytes)} redundant`}
+				</p>
+			</header>
 			{#if shown.length > 0}
-				<ul>
+				<ul class="groups">
 					{#each shown as set (set.digestShort)}
 						<li>
 							<details>
 								<summary>
-									<span class="sy-mono">{set.digestShort}</span>
+									<ChevronRight class="chevron" aria-hidden="true" />
+									<span class="sy-mono digest">{set.digestShort}</span>
 									<span>{set.cells.length} copies</span>
-									<span>{formatBytes(set.redundantBytes)} redundant</span>
+									<span class="redundant">{formatBytes(set.redundantBytes)} redundant</span>
 								</summary>
 								<ul class="paths">
 									{#each set.cells as cell, i (i)}<li class="sy-mono">{cell.path}</li>{/each}
@@ -95,15 +100,17 @@
 					{/each}
 				</ul>
 				{#if shown.length < total.groups}
-					<Button
-						size="sm"
-						variant="secondary"
-						onclick={() => {
-							void more(side);
-						}}
-					>
-						Show more
-					</Button>
+					<div class="more">
+						<Button
+							size="sm"
+							variant="secondary"
+							onclick={() => {
+								void more(side);
+							}}
+						>
+							Show more
+						</Button>
+					</div>
 				{/if}
 			{/if}
 		</div>
@@ -112,26 +119,39 @@
 
 <style>
 	.sy-duplicates {
-		display: flex;
-		flex-direction: column;
+		display: grid;
 		gap: var(--sy-space-12);
 	}
 
 	h2 {
 		margin: 0;
-		font-size: var(--sy-font-size-body);
-		font-weight: var(--sy-font-weight-medium);
+		font-size: var(--sy-font-size-title);
+		font-weight: var(--sy-font-weight-semibold);
 	}
 
 	.side {
+		border: var(--sy-border-width-default) solid var(--sy-color-border-default);
+		border-radius: var(--sy-panel-radius);
+		background: var(--sy-color-surface-base);
+	}
+
+	.side-head {
 		display: flex;
-		flex-direction: column;
-		gap: var(--sy-space-8);
+		align-items: baseline;
+		gap: var(--sy-space-12);
+		padding: var(--sy-space-12) var(--sy-space-16);
+	}
+
+	h3 {
+		margin: 0;
+		font-size: var(--sy-font-size-body);
+		font-weight: var(--sy-font-weight-semibold);
 	}
 
 	.total {
 		margin: 0;
-		font-weight: var(--sy-font-weight-medium);
+		color: var(--sy-color-text-secondary);
+		font-size: var(--sy-font-size-small);
 	}
 
 	ul {
@@ -140,16 +160,61 @@
 		list-style: none;
 	}
 
+	.groups > li {
+		border-top: var(--sy-border-width-default) solid var(--sy-color-border-default);
+	}
+
 	summary {
-		display: flex;
+		display: grid;
+		grid-template-columns: var(--sy-icon-size-sm) minmax(0, 1fr) auto auto;
 		gap: var(--sy-space-16);
-		padding: var(--sy-space-4) 0;
+		align-items: center;
+		height: var(--sy-table-row-height);
+		padding: 0 var(--sy-space-16);
+		font-size: var(--sy-font-size-small);
 		cursor: pointer;
+		list-style: none;
+	}
+
+	summary::-webkit-details-marker {
+		display: none;
+	}
+
+	summary:hover {
+		background: var(--sy-color-surface-hover);
+	}
+
+	summary :global(.chevron) {
+		width: var(--sy-icon-size-sm);
+		height: var(--sy-icon-size-sm);
+		color: var(--sy-color-text-muted);
+		transition: transform var(--sy-motion-duration-state);
+	}
+
+	details[open] summary :global(.chevron) {
+		transform: rotate(90deg);
+	}
+
+	.digest {
+		color: var(--sy-color-text-secondary);
+	}
+
+	.redundant {
+		min-width: var(--sy-table-column-min);
+		text-align: end;
 	}
 
 	.paths {
-		padding: var(--sy-space-4) 0 var(--sy-space-8) var(--sy-space-24);
+		display: grid;
+		gap: var(--sy-space-4);
+		padding: var(--sy-space-4) var(--sy-space-16) var(--sy-space-12)
+			calc(var(--sy-space-16) * 2 + var(--sy-icon-size-sm));
 		color: var(--sy-color-text-secondary);
 		font-size: var(--sy-font-size-small);
+	}
+
+	.more {
+		padding: var(--sy-space-8) var(--sy-space-16) var(--sy-space-12);
+		border-top: var(--sy-border-width-default) solid var(--sy-color-border-default);
 	}
 </style>

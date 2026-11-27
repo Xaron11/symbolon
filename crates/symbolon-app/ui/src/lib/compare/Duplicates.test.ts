@@ -57,10 +57,9 @@ describe('duplicates', () => {
 		const user = userEvent.setup();
 		const { container } = open('sides=Photos%2CBackup&dupes=1');
 		const inSection = within(await screen.findByRole('region', { name: 'Duplicates' }));
-		expect(
-			await inSection.findByText('Photos: 130 groups, 390 files, 260 MiB redundant')
-		).toBeTruthy();
-		expect(inSection.getByText('Backup: no duplicates')).toBeTruthy();
+		expect(await inSection.findByText('130 groups · 390 files · 260 MiB redundant')).toBeTruthy();
+		expect(inSection.getByRole('heading', { name: 'Photos' })).toBeTruthy();
+		expect(inSection.getByText('No duplicates')).toBeTruthy();
 		const first = await inSection.findByText('d00000000000');
 		const summary = first.closest<HTMLElement>('summary');
 		if (!summary) throw new Error('a group is a summary');

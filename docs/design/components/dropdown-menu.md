@@ -2,7 +2,7 @@
 
 A list of actions opened from a button, such as a location's actions.
 
-**Anatomy:** trigger button; floating menu (raised surface, overlay shadow) of items, each with an optional icon, a label and an optional shortcut hint; separators between groups. Destructive items use the error color.
+**Anatomy:** trigger button (`size` `md`, or `sm` to match small buttons in table rows); floating menu (raised surface, overlay shadow) of items, each with an optional icon, a label and an optional shortcut hint; separators between groups. Destructive items use the error color.
 
 **Highlight:** the active item has an accent bar on its leading edge; a hover tint is added where it shows.
 
