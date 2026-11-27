@@ -1,3 +1,9 @@
+import { vi } from 'vitest';
+
+// Test files share a worker (isolate: false). Without this, a module an earlier file imported
+// stays loaded, and a later file's vi.mock of one of its imports never reaches it.
+vi.resetModules();
+
 // jsdom lacks APIs the app reads at import time or that Bits UI uses.
 if (typeof window.matchMedia !== 'function') {
 	window.matchMedia = (query: string): MediaQueryList =>
