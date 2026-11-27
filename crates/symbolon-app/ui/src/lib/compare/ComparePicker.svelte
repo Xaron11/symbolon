@@ -128,7 +128,7 @@
 							class:on
 							onclick={(event) => {
 								const target = event.target as Element;
-								if (!target.closest('label, input')) toggle(location.label, !on);
+								if (!target.closest('label, input, .sy-field')) toggle(location.label, !on);
 							}}
 						>
 							<Checkbox

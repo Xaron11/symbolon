@@ -112,6 +112,18 @@ describe('ComparePicker layout', () => {
 		expect(within(card).getByLabelText('Only this subfolder (optional)')).toBeTruthy();
 	});
 
+	it('keeps a chosen card chosen when its subfolder field is clicked', async () => {
+		const user = userEvent.setup();
+		picker();
+		await user.click(await screen.findByRole('checkbox', { name: 'Photos' }));
+		const field = within(cardOf('Photos'))
+			.getByLabelText('Only this subfolder (optional)')
+			.closest<HTMLElement>('.sy-field');
+		if (!field) throw new Error('no field');
+		await user.click(field);
+		expect(screen.getByRole<HTMLInputElement>('checkbox', { name: 'Photos' }).checked).toBe(true);
+	});
+
 	it('keeps the options apart from the locations, each explained', async () => {
 		picker();
 		const options = await screen.findByRole('group', { name: 'Comparison options' });

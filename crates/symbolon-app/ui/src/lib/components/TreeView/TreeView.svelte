@@ -210,6 +210,10 @@
 							// The whole row opens and closes a folder, not only its chevron.
 							if (item.hasChildren) void tree.toggle(item.key);
 						}}
+						ondblclick={() => {
+							// Folders open and close on click; files open on a double-click, as in tables.
+							if (!item.hasChildren) onopen?.(item.node);
+						}}
 					>
 						<span class="chevron" class:open={item.expanded} aria-hidden="true">
 							{#if item.hasChildren}<ChevronRight />{/if}

@@ -20,7 +20,7 @@ With `fit` the tree asks for its rows' height, so a short tree stays short; insi
 
 ## Keyboard
 
-Focus the tree with Tab; then the [list keys](../keyboard.md#in-tables-and-trees) apply: `j`/`k` or ↓/↑ move; `l` or → expands a closed folder, or in an open one moves to its first child; `h` or ← collapses an open folder, or moves to the parent; `g g`/`G`, `Ctrl+D`/`Ctrl+U` and PageUp/PageDown move as in tables; Enter or `o` opens the item. Clicking a folder (its row or its chevron) opens or closes it; clicking any row also makes it active.
+Focus the tree with Tab; then the [list keys](../keyboard.md#in-tables-and-trees) apply: `j`/`k` or ↓/↑ move; `l` or → expands a closed folder, or in an open one moves to its first child; `h` or ← collapses an open folder, or moves to the parent; `g g`/`G`, `Ctrl+D`/`Ctrl+U` and PageUp/PageDown move as in tables; Enter or `o` opens the item. Clicking a folder (its row or its chevron) opens or closes it; double-clicking a file opens it, as Enter does; clicking any row also makes it active.
 
 ## Accessibility
 

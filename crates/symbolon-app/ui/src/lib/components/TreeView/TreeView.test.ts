@@ -171,3 +171,13 @@ describe('TreeView fit', () => {
 		expect(view.parentElement?.style.height).toContain('calc(');
 	});
 });
+
+describe('TreeView double-click', () => {
+	it('opens a leaf on double-click', async () => {
+		const user = userEvent.setup();
+		const onopen = vi.fn();
+		await tree({ onopen });
+		await user.dblClick(screen.getByText('notes.txt'));
+		expect(onopen).toHaveBeenCalledWith(expect.objectContaining({ key: 'notes.txt' }));
+	});
+});
