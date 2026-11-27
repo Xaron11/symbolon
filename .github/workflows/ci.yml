@@ -174,9 +174,11 @@ jobs:
       - name: tests with coverage
         if: runner.os == 'Linux'
         run: |
-          # Ignored tests run here too (the 100k-file acceptance test), except the fixture writer.
+          # Ignored tests run here too (the 100k-file acceptance test), except the two that rewrite
+          # committed files: the schema fixture writer, and the bindings writer, which would race
+          # `bindings_are_current` reading the same file.
           cargo llvm-cov nextest ${{ matrix.packages }} --locked --profile ci --no-tests=warn \
-            --run-ignored all -E 'not test(=write_fixture)'
+            --run-ignored all -E 'not (test(=write_fixture) | test(=bindings::tests::write))'
           {
             echo '### Coverage'
             echo '```'
