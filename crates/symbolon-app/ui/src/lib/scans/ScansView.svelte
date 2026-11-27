@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/scan-card.md -->
+<!-- Spec: docs/design/screens/scan-card.md -->
 <script lang="ts">
 	import { ChevronDown, ScanSearch } from '@lucide/svelte';
 	import {

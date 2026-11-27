@@ -45,4 +45,6 @@ Component and screen tests render against `createMemoryBackend(seed)`, which rec
 4. Test behaviour through roles and keys (Testing Library), and run `expectNoAxeViolations` on it.
 5. Add it to the gallery.
 
+Screens and dialogs follow the same pattern with their pages in `docs/design/screens/` and their code in `src/lib/<area>/`.
+
 Keyboard shortcuts go in `src/lib/keyboard/keymap.ts` only; the dispatcher, shortcut help, command palette and [keyboard page](../design/keyboard.md) all read it.

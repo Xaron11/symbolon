@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/add-location-dialog.md -->
+<!-- Spec: docs/design/screens/add-location-dialog.md -->
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import {

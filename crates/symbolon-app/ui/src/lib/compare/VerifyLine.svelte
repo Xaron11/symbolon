@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/compare-screen.md -->
+<!-- Spec: docs/design/screens/compare-screen.md -->
 <script lang="ts">
 	import Button from '../components/Button/Button.svelte';
 	import type { VerifyState } from './session.svelte';

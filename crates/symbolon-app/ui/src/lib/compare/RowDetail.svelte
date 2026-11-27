@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/row-detail.md -->
+<!-- Spec: docs/design/screens/row-detail.md -->
 <script lang="ts">
 	import { X } from '@lucide/svelte';
 	import type { CompareRowView, SideRequest } from '../api/index.ts';

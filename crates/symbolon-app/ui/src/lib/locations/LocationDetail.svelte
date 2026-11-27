@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/location-detail.md -->
+<!-- Spec: docs/design/screens/location-detail.md -->
 <script lang="ts">
 	import { Ellipsis, File, Folder, Link } from '@lucide/svelte';
 	import {

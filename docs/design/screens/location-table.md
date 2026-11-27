@@ -6,7 +6,7 @@ The list of saved locations and what can be done with each.
 
 **Rows:** clicking anywhere on a row that is not a button or link opens the location's page; rows show the hover tint and a pointer, and the label is underlined on hover.
 
-**Status badges** are flat (see [Badge](badge.md)) and pair an icon with a word, so color is never the only signal: Connected, Missing, Moved, Several places, Other device, Phone not attached, Imported. A moved location offers **Use new path**, which points it at where its device is now; one found at several places lists them in its actions menu. Imported locations say "Imported locations cannot be scanned." and their Scan button is disabled.
+**Status badges** are flat (see [Badge](../components/badge.md)) and pair an icon with a word, so color is never the only signal: Connected, Missing, Moved, Several places, Other device, Phone not attached, Imported. A moved location offers **Use new path**, which points it at where its device is now; one found at several places lists them in its actions menu. Imported locations say "Imported locations cannot be scanned." and their Scan button is disabled.
 
 **Actions menu** ("Actions for Photos"): the places of an ambiguous location · Rename… · Hash during every scan / Hash only when compared · Remove…. Removing asks "Remove Photos from the catalog? Files on disk are not touched." with **Remove Photos** and **Keep Photos**.
 
@@ -14,6 +14,6 @@ The list of saved locations and what can be done with each.
 
 **Empty state:** "No locations yet", one sentence on what a location is, and **Add location**.
 
-**Keyboard:** the label link is the keyboard's way to a location's page; Tab reaches each location link, Use new path button, Scan button and actions menu; the palette's "Add location" (`Ctrl+K`) opens the dialog from anywhere. Locations are few, so this is a plain table, not a virtualized [DataTable](data-table.md).
+**Keyboard:** the label link is the keyboard's way to a location's page; Tab reaches each location link, Use new path button, Scan button and actions menu; the palette's "Add location" (`Ctrl+K`) opens the dialog from anywhere. Locations are few, so this is a plain table, not a virtualized [DataTable](../components/data-table.md).
 
 **Accessibility:** a table with column headers and the label as each row's header; the actions button is named after its location.

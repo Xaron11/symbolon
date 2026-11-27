@@ -1,4 +1,4 @@
-<!-- Spec: docs/design/components/compare-screen.md -->
+<!-- Spec: docs/design/screens/compare-screen.md -->
 <script lang="ts">
 	import Alert from '../components/Alert/Alert.svelte';
 	import Button from '../components/Button/Button.svelte';
