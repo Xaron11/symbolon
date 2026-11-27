@@ -99,7 +99,7 @@ hooks: ui-install
 lint-rust:
     cargo clippy --workspace --all-targets --locked -- -D warnings
     cargo clippy -p symbolon-core --no-default-features --all-targets --locked -- -D warnings
-    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+    just rustdoc
     cargo shear
 
 # Clippy for the crates Windows covers.
@@ -201,10 +201,14 @@ docs: docs-api docs-book
 # survive rebuilds, including `docs-serve`.
 # Build the API reference into docs/api (git-ignored).
 [group('docs')]
-docs-api:
-    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+docs-api: rustdoc
     rm -rf docs/api
     cp -r target/doc docs/api
+
+# Readers are contributors, so private items are in too; the binaries and the app have little else.
+[private]
+rustdoc:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked --document-private-items
 
 # Build the book alone.
 [group('docs')]

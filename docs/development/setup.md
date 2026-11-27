@@ -27,9 +27,11 @@ Entering the shell installs the git hooks (pre-commit, commit-msg, pre-push); se
 | `just fmt`                         | Format every file (Rust, Nix, TOML, Markdown, YAML, JSON, TS, Svelte). |
 | `just check`                       | Everything CI checks: lints, tests, frontend build, licenses, docs.    |
 | `just lint`                        | Hooks, clippy, rustdoc, unused deps, frontend lints.                   |
+| `just lint-rust` / `just lint-ui`  | Only the Rust lints / only the frontend lints.                         |
 | `just test` / `just test-ui`       | Rust tests (nextest + doctests) / frontend tests (vitest).             |
 | `just coverage --html`             | Coverage report in `target/llvm-cov/html`.                             |
 | `just docs` / `just docs-serve`    | Build this book and the API reference / serve both with live reload.   |
+| `just docs-check`                  | Build the book and the API reference and check every link and anchor.  |
 | `just deny` / `just deny-ui`       | License and advisory checks for Rust / npm dependencies.               |
 | `just app-dev`                     | Run the desktop app with hot reload.                                   |
 | `just android-scanner check-agent` | Cross-compile the Android agent and check it is static.                |
@@ -41,9 +43,9 @@ Entering the shell installs the git hooks (pre-commit, commit-msg, pre-push); se
 1. Pick or open an issue; branch from `main` as `<type>/<short-name>`.
 2. Make the change with tests and docs (see [Testing](../testing.md) and [Writing documentation](documentation.md)).
 3. Commit with a Conventional Commit message; hooks format and lint staged files.
-4. Push (the pre-push hook runs clippy and tests) and open a PR. CI must be green; the PR is squash-merged with its title as the commit message.
+4. Push (the pre-push hook runs the Rust and frontend checks for the parts the push touches) and open a PR. CI must be green; the PR is squash-merged with its title as the commit message.
 
-The full working agreement is `AGENTS.md` at the repository root.
+The full working agreement (code rules, commit types, security) is `AGENTS.md` at the repository root.
 
 ## Troubleshooting
 

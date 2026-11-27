@@ -11,7 +11,6 @@ indent_size = 2
 [*.{rs,toml}]
 indent_size = 4
 
-# shfmt and bash-language-server read these.
 [*.sh]
 indent_size = 4
 switch_case_indent = true

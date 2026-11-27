@@ -10,3 +10,4 @@ disable = ["MD013"]
 "docs/SUMMARY.md" = ["MD025", "MD042"]
 # Links into the generated API reference; lychee checks them in the built book.
 "docs/development/api.md" = ["MD057"]
+"docs/architecture.md" = ["MD057"]
