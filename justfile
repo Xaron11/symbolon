@@ -77,6 +77,13 @@ schema-fixture:
 fmt: ui-install
     treefmt
 
+# Cargo never deletes old builds, so target/ grows by gigabytes; a full rebuild takes minutes.
+# Delete all build output: target/, dist/, the copied API pages and the frontend build.
+[group('develop')]
+clean:
+    cargo clean
+    rm -rf dist docs/api docs/mermaid.min.js docs/mermaid-init.js {{ ui }}/build {{ ui }}/.svelte-kit {{ ui }}/src/lib/design/generated
+
 # --- check ---------------------------------------------------------------------
 
 # Everything CI checks except the Nix build (`just nix-check`); run it before pushing.

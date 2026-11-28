@@ -51,5 +51,6 @@ The full working agreement (code rules, commit types, security) is `AGENTS.md` a
 
 - **The app window is blank or crashes on a non-NixOS distribution.** The Nix-built WebKitGTK needs a working GL stack. Try `WEBKIT_DISABLE_DMABUF_RENDERER=1 just app-dev`.
 - **`adb devices` lists nothing.** Check that the phone shows up in `lsusb` (if not: the cable is charge-only, or USB mode is "charging only"), that your user may access USB devices (udev rules, `plugdev`/`adbusers` group), and that you accepted the debugging prompt on the unlocked phone.
+- **`target/` takes tens of gigabytes.** Cargo keeps every old build. `just clean` deletes all build output; the next `just check` rebuilds it (a few minutes, about 6 GB).
 - **Hooks did not run.** Enter the dev shell once; it (re)installs them. `pre-commit run --all-files` runs them by hand.
 - **A formatter disagrees with your editor.** `treefmt <file>` is the reference; configure your editor to call it (see [Editor and LSP setup](editor.md)).
