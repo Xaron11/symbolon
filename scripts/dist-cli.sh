@@ -11,8 +11,15 @@ agent="$3"
 exe=symbolon
 [[ "$target" == *windows* ]] && exe=symbolon.exe
 
-cargo build --release --locked -p symbolon-cli --target "$target"
-bin="target/$target/release/$exe"
+# For the host itself, build without --target so the release build is shared with
+# `cargo build --release` and the app (target/release) instead of compiled a second time.
+if [[ "$target" == "$(rustc -vV | sed -n 's/^host: //p')" ]]; then
+    cargo build --release --locked -p symbolon-cli
+    bin="target/release/$exe"
+else
+    cargo build --release --locked -p symbolon-cli --target "$target"
+    bin="target/$target/release/$exe"
+fi
 pkg="symbolon-$name-$target"
 dir="dist/$pkg"
 rm -rf "$dir"
