@@ -77,7 +77,7 @@ Building both size indexes with every comparison added 0.28 s to the 2.1 s compa
 
 - **Walk 200k files in seconds on SSD:** met. Walking alone runs at about 540k entries/s, so 200k files take under half a second; a full eager first scan of 200k small files is about 6–7 s.
 - **Diff of two 200k-entry locations in well under a few seconds:** met, 2.1 s with their directories (release build; the acceptance test fails above 3 s).
-- **GUI responsive during scans:** measured in M6.
+- **GUI responsive during scans:** _(planned)_ measured in M8 ([#168](https://github.com/Xaron11/symbolon/issues/168)).
 
 On phones and USB sticks, storage throughput dominates instead; see the next section.
 

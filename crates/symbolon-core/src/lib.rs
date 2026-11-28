@@ -6,31 +6,32 @@
 //!
 //! # Two independent halves
 //!
-//! - **`Scanner`** writes: it scans one location, hashes file contents, stores results in the
-//!   catalog as it goes and streams progress events. It can be cancelled and paused.
-//! - **`Query`** reads: it lists locations, browses and searches scanned trees, groups files by
-//!   hash and runs comparisons. It works while a scan is writing.
+//! - **[`Scanner`](scan::Scanner)** writes: it scans one location, hashes file contents, stores
+//!   results in the catalog as it goes and streams progress events. It can be cancelled and
+//!   paused.
+//! - **[`Query`](query::Query)** reads: it lists locations and scans, browses and searches scanned
+//!   trees and groups files by hash. It works while a scan is writing.
 //!
 //! A client may use both halves in one process or in different processes; this is what makes
-//! browsing partial results during a scan cheap.
+//! browsing partial results during a scan cheap. A [`Comparison`](compare::Comparison) of two or
+//! more locations is built from the catalog on its own connection.
 //!
-//! # Status
+//! # Modules
 //!
-//! Implemented so far (milestones M1 and M2):
+//! | Module        | Responsibility                                                          |
+//! | ------------- | ----------------------------------------------------------------------- |
+//! | [`scan`]      | `Scanner`: walk, store, hash; events, cancel, pause, rescans            |
+//! | [`query`]     | `Query`: browse, search, duplicates, scan history; paginated            |
+//! | [`compare`]   | `Comparison` of two or more sides: categories, summary, rows, resolving |
+//! | [`catalog`]   | SQLite catalog: opening, migrations, locations, export and import       |
+//! | [`pathkey`]   | Lossless relative paths and normalized matching keys                    |
+//! | [`hash`]      | Hash algorithms, streaming full digests and partial digests             |
+//! | [`identity`]  | Device fingerprints: finding a location's device again                  |
+//! | [`source`]    | Walking and reading a location; `LocalSource` (feature `local`)         |
+//! | [`transport`] | `AndroidTransport` over `adb` (feature `android-adb`)                   |
+//! | `agent`       | Host–agent protocol for the Android agent (feature `agent-protocol`)    |
 //!
-//! | Module      | Responsibility                                                     |
-//! | ----------- | ------------------------------------------------------------------ |
-//! | [`catalog`] | SQLite catalog: opening, migrations, locations                     |
-//! | [`compare`] | `Comparison` of two or more sides: categories, summary, paged rows |
-//! | [`hash`]    | Hash algorithms, streaming full digests and partial digests        |
-//! | [`identity`] | Device fingerprints: finding a location's device again (M4)       |
-//! | [`pathkey`] | Lossless relative paths and normalized matching keys               |
-//! | [`query`]   | `Query`: browse, search, duplicates, scan history; paginated       |
-//! | [`scan`]    | `Scanner`: walk, store, hash; events, cancel, pause, rescans       |
-//! | [`source`]  | Walking and reading a location; `LocalSource` (feature `local`)    |
-//! | [`transport`] | `AndroidTransport` over `adb` (feature `android-adb`, M5)        |
-//!
-//! _(planned)_ `plan` (M7). See the book chapter *Architecture* in `docs/`.
+//! _(planned)_ `plan`: write operations (M7). See the book chapter *Architecture* in `docs/`.
 //!
 //! # Guarantees
 //!
