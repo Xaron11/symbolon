@@ -9,7 +9,7 @@ Downloads are on the [releases page](https://github.com/Xaron11/symbolon/release
 | System         | File                                      | How                                                                                                                               |
 | -------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Any Linux      | `symbolon-app-<version>-x86_64.AppImage`  | `chmod +x` it and run it. It needs no installation.                                                                               |
-| Debian, Ubuntu | `symbolon-app-<version>-amd64.deb`        | `sudo apt install ./symbolon-app-<version>-amd64.deb`; Symbolon appears in the applications menu.                                 |
+| Debian, Ubuntu | `symbolon-app-<version>-x86_64.deb`       | `sudo apt install ./symbolon-app-<version>-x86_64.deb`; Symbolon appears in the applications menu.                                |
 | Windows        | `symbolon-app-<version>-x86_64-setup.exe` | Run it; it installs for your user only. Windows may warn that the publisher is unknown, because the installer is not code-signed. |
 | NixOS, Nix     | flake package `symbolon-app`              | `nix run github:Xaron11/symbolon#symbolon-app`, or add `packages.<system>.symbolon-app` to your system.                           |
 

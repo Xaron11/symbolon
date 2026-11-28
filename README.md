@@ -40,7 +40,7 @@ direnv allow          # or: nix develop
 just                  # list recipes
 just fmt check        # format, then everything CI checks
 just app-dev          # desktop app with hot reload
-just android-scanner  # cross-compile the Android agent (aarch64, static musl)
+just build-agent  # cross-compile the Android agent (aarch64, static musl)
 nix build             # CLI package
 ```
 

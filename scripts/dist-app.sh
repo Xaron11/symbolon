@@ -26,7 +26,7 @@ if [[ "$bundles" == *appimage* ]]; then
     cp "$bundle"/appimage/*.AppImage "dist/symbolon-app-$name-x86_64.AppImage"
 fi
 if [[ "$bundles" == *deb* ]]; then
-    deb="dist/symbolon-app-$name-amd64.deb"
+    deb="dist/symbolon-app-$name-x86_64.deb"
     cp "$bundle"/deb/*.deb "$deb"
     # The app looks for the agent here; a release package without it scans phones slowly.
     if [[ "$with_agent" == true ]]; then
